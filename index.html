@@ -717,7 +717,7 @@ const STRIPE_PRICE = 'YOUR_STRIPE_PRICE_ID';
    INIT - check if already logged in
 ═══════════════════════════════════════════════════════ */
 (async () => {
-  if (SUPABASE_URL === 'https://sbwtidnoxtmalmuifdxf.supabase.co') return; // not configured yet
+  if (SUPABASE_URL === 'YOUR_SUPABASE_PROJECT_URL') return; // not configured yet
   try {
     const { data: { session } } = await db.auth.getSession();
     if (session?.user) {
