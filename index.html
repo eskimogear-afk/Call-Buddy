@@ -763,7 +763,7 @@ function toggleAuth() {
 }
 
 async function handleAuth() {
-  if (SUPABASE_URL === 'https://sbwtidnoxtmalmuifdxf.supabase.co') {
+  if (SUPABASE_URL === 'YOUR_SUPABASE_PROJECT_URL') {
     showAlert('auth-alert', '⚠️ Supabase is not configured yet. Open index.html and add your SUPABASE_URL and SUPABASE_ANON_KEY. See README for instructions.');
     return;
   }
@@ -1005,7 +1005,7 @@ async function saveRecord() {
     duration_seconds: seconds
   };
   try {
-    if (SUPABASE_URL !== 'https://sbwtidnoxtmalmuifdxf.supabase.co') {
+    if (SUPABASE_URL !== 'YOUR_SUPABASE_PROJECT_URL') {
       const { data, error } = await db.from('calls').insert([rec]).select().single();
       if (error) throw error;
       records.unshift(data);
@@ -1048,7 +1048,7 @@ function resetRecorder() {
 async function deleteRecord(id) {
   if (!confirm('Delete this call record?')) return;
   try {
-    if (SUPABASE_URL !== 'https://sbwtidnoxtmalmuifdxf.supabase.co') {
+    if (SUPABASE_URL !== 'YOUR_SUPABASE_PROJECT_URL') {
       await db.from('calls').delete().eq('id', id).eq('user_id', currentUser.id);
     }
     records = records.filter(r => r.id !== id);
@@ -1059,7 +1059,7 @@ async function deleteRecord(id) {
 async function clearAllRecords() {
   if (!confirm('Delete ALL call records? This cannot be undone.')) return;
   try {
-    if (SUPABASE_URL !== 'https://sbwtidnoxtmalmuifdxf.supabase.co') {
+    if (SUPABASE_URL !== 'YOUR_SUPABASE_PROJECT_URL') {
       await db.from('calls').delete().eq('user_id', currentUser.id);
     }
     records = [];
