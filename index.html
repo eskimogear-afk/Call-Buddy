@@ -436,7 +436,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Volume discounts</li>
           <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Dedicated support</li>
         </ul>
-        <a href="mailto:support@pitchlog.io" class="btn btn-outline btn-full">Contact us</a>
+        <a href="mailto:eskimogear@gmail.com" class="btn btn-outline btn-full">Contact us</a>
       </div>
     </div>
   </div>
@@ -489,7 +489,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <div class="logo-mark" style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#6366F1,#7C3AED)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg></div>
       PitchLog
     </div>
-    <div class="footer-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="mailto:support@pitchlog.io">Support</a></div>
+    <div class="footer-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="mailto:eskimogear@gmail.com">Support</a></div>
     <div class="footer-copy">© 2026 PitchLog. All rights reserved.</div>
   </footer>
 </div>
@@ -636,6 +636,10 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <h3>Data</h3>
           <div class="settings-row"><div><strong>Export all records</strong><br><span>Download your full call log as Excel.</span></div><button class="btn btn-outline" style="font-size:13px;padding:7px 16px;flex-shrink:0" onclick="exportAll()">Export to Excel</button></div>
           <div class="settings-row"><div><strong>Delete all records</strong><br><span>Permanently remove all your call data. Cannot be undone.</span></div><button class="btn btn-danger" style="font-size:13px;padding:7px 16px;flex-shrink:0" onclick="clearAllRecords()">Delete all</button></div>
+        </div>
+        <div class="settings-section">
+          <h3>Support</h3>
+          <div class="settings-row"><div><strong>Email support</strong><br><span>Get help from the PitchLog team.</span></div><a href="mailto:eskimogear@gmail.com" class="btn btn-outline" style="font-size:13px;padding:7px 16px;flex-shrink:0">Email us</a></div>
         </div>
         <div class="settings-section">
           <h3>Session</h3>
@@ -998,6 +1002,7 @@ async function saveRecord() {
     address: document.getElementById('f-address').value.trim(),
     outcome: document.getElementById('f-outcome').value,
     follow_up_date: followUpRaw || null,
+    heat_score: (document.getElementById('heat-badge-display')?.dataset?.heatScore) || '',
     pain_points: document.getElementById('f-pain').value.trim(),
     next_steps: document.getElementById('f-nextsteps').value.trim(),
     transcript: document.getElementById('final-tx').textContent,
@@ -1206,6 +1211,90 @@ function toggleMobileMenu(){
     m.classList.remove("mobile-open");
     m.removeAttribute("style");
     b.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+  }
+}
+
+
+/* ── AUDIO UPLOAD ── */
+async function handleAudioUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const label = document.getElementById('upload-label');
+  const status = document.getElementById('upload-status');
+  
+  // Check file size (max 25MB)
+  if (file.size > 25 * 1024 * 1024) {
+    status.textContent = 'File too large. Max 25MB.';
+    status.style.color = 'var(--danger)';
+    return;
+  }
+  
+  label.style.borderColor = 'var(--brand)';
+  label.style.color = 'var(--brand)';
+  status.textContent = 'Uploading and transcribing... this may take 30-60 seconds.';
+  status.style.color = 'var(--text2)';
+  
+  try {
+    // Convert audio to base64
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64 = e.target.result.split(',')[1];
+      const mimeType = file.type || 'audio/mp3';
+      
+      // Send to Anthropic for transcription via server
+      const resp = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          type: 'audio',
+          audioData: base64,
+          mimeType: mimeType,
+          fileName: file.name
+        })
+      });
+      
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.error || 'Transcription failed');
+      
+      // Set transcript and switch to review tab
+      fullTranscript = result.transcript || '';
+      document.getElementById('final-tx').textContent = fullTranscript;
+      
+      // Auto-run AI analysis
+      status.textContent = 'Transcribed! Running AI analysis...';
+      switchRecTab('review');
+      document.getElementById('ai-thinking').classList.remove('hidden');
+      
+      // Now analyze the transcript
+      const analyzeResp = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript: fullTranscript, type: 'analyze' })
+      });
+      const p = await analyzeResp.json();
+      
+      document.getElementById('ai-thinking').classList.add('hidden');
+      document.getElementById('ai-summary').textContent = p.summary || 'Analysis complete.';
+      
+      const map = {name:'f-name',company:'f-company',phone:'f-phone',email:'f-email',address:'f-address',outcome:'f-outcome',followUpDate:'f-followup',painPoints:'f-pain',nextSteps:'f-nextsteps'};
+      Object.entries(map).forEach(([k,id]) => { const el=document.getElementById(id); if(el&&p[k]) el.value=p[k]; });
+      
+      if (p.heatScore) {
+        const badge = document.getElementById('heat-badge-display');
+        const cls = {Hot:'heat-hot',Warm:'heat-warm',Cold:'heat-cold'};
+        const icons = {Hot:'&#128293;',Warm:'&#9728;',Cold:'&#10052;'};
+        badge.innerHTML = `<span class="heat-badge ${cls[p.heatScore]||'heat-neutral'}">${icons[p.heatScore]||''} ${p.heatScore}</span>`;
+      }
+      
+      status.textContent = 'Done! Review the fields below and save.';
+      status.style.color = 'var(--brand)';
+    };
+    reader.readAsDataURL(file);
+  } catch(err) {
+    status.textContent = 'Error: ' + err.message;
+    status.style.color = 'var(--danger)';
+    label.style.borderColor = 'var(--border)';
+    label.style.color = 'var(--text2)';
   }
 }
 
