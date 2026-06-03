@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Call Buddy - AI Cold Call Tracker for Loan Officers</title>
-<meta name="description" content="Call Buddy listens to your cold calls, transcribes in real time, and automatically logs every prospect. Built for mortgage and loan officers.">
+<title>PitchLog - AI Cold Call Tracker for Loan Officers</title>
+<meta name="description" content="PitchLog listens to your cold calls, transcribes in real time, and automatically logs every prospect. Built for sales professionals in any industry.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%231D9E75%22/><text y=%22.9em%22 font-size=%2280%22>&#128222;</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -221,7 +221,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     <div class="logo-mark">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.77 9.11 19.79 19.79 0 01.7 6.48A2 2 0 012.68 4h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 11.1a16 16 0 006 6l1.06-1.06a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
     </div>
-    <span class="logo-name">Call Buddy</span>
+    <span class="logo-name">PitchLog</span>
   </div>
   <div class="nav-links" style="display:flex;align-items:center;gap:24px">
     <a style="font-size:14px;color:var(--text2);cursor:pointer" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">Features</a>
@@ -242,7 +242,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       Built for mortgage &amp; loan officers
     </div>
     <h1>Your AI-powered <em>cold call</em> co-pilot</h1>
-    <p>Call Buddy listens to your cold calls, transcribes every word in real time, and automatically logs each prospect with AI. No typing. No forgetting. Close more loans.</p>
+    <p>PitchLog listens to your cold calls, transcribes every word in real time, and automatically logs each prospect with AI. No typing. No forgetting. Close more deals.</p>
     <div class="hero-ctas">
       <button class="btn btn-primary btn-lg" onclick="showAuthModal('signup')">Start free - no card needed</button>
       <button class="btn btn-outline btn-lg" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">See how it works</button>
@@ -262,8 +262,8 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     <div class="section-title">Four steps, zero friction</div>
     <p class="section-sub">From dial to logged prospect in under a minute.</p>
     <div class="steps">
-      <div class="step"><div class="step-num">1</div><h3>Hit record</h3><p>Open Call Buddy, tap record before you dial.</p></div>
-      <div class="step"><div class="step-num">2</div><h3>Make the call</h3><p>Put your phone on speaker near your computer. Call Buddy hears both sides through your mic.</p></div>
+      <div class="step"><div class="step-num">1</div><h3>Hit record</h3><p>Open PitchLog, tap record before you dial.</p></div>
+      <div class="step"><div class="step-num">2</div><h3>Make the call</h3><p>Put your phone on speaker near your computer. PitchLog hears both sides through your mic.</p></div>
       <div class="step"><div class="step-num">3</div><h3>AI analyzes</h3><p>Stop recording when the call ends. AI reads the full transcript and extracts all key details in seconds.</p></div>
       <div class="step"><div class="step-num">4</div><h3>Auto-logged</h3><p>Your prospect is saved to your dashboard automatically. Export to Excel any time.</p></div>
     </div>
@@ -271,13 +271,13 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   <div class="section">
     <div class="section-label">Features</div>
-    <div class="section-title">Everything a loan officer needs</div>
+    <div class="section-title">Everything a sales professional needs</div>
     <p class="section-sub">No bloated CRM. No expensive dialer. Just the tools that move your pipeline.</p>
     <div class="feat-grid">
       <div class="feat-card">
         <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg></div>
         <h3>Live mic recording</h3>
-        <p>Tap record, then make your call on speaker near your computer. Call Buddy captures every word through your microphone. No extra hardware or apps required.</p>
+        <p>Tap record, then make your call on speaker near your computer. PitchLog captures every word through your microphone. No extra hardware or apps required.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
@@ -310,9 +310,9 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   <div class="section section-bg">
     <div class="section-label">What they say</div>
     <div class="section-title">Loan officers love it</div>
-    <p class="section-sub">Trusted by loan officers and mortgage brokers across the United States.</p>
+    <p class="section-sub">Trusted by sales professionals, lenders, and mortgage brokers across the United States.</p>
     <div class="testimonials">
-      <div class="testi"><div class="testi-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div><p>"I used to spend 30 minutes after every calling session just updating my spreadsheet. Call Buddy cut that to zero. The AI notes are actually better than what I wrote myself."</p><div class="testi-author">Marcus T.</div><div class="testi-role">Loan Officer, Phoenix AZ</div></div>
+      <div class="testi"><div class="testi-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div><p>"I used to spend 30 minutes after every calling session just updating my spreadsheet. PitchLog cut that to zero. The AI notes are actually better than what I wrote myself."</p><div class="testi-author">Marcus T.</div><div class="testi-role">Loan Officer, Phoenix AZ</div></div>
       <div class="testi"><div class="testi-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div><p>"The follow-up tracking alone is worth it. I had prospects slipping through the cracks constantly. Now my dashboard tells me exactly who to call every morning."</p><div class="testi-author">Sarah K.</div><div class="testi-role">Mortgage Broker, Dallas TX</div></div>
       <div class="testi"><div class="testi-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div><p>"Skeptical at first but the AI transcript accuracy blew me away. It even caught the property address the prospect mentioned halfway through the call."</p><div class="testi-author">James R.</div><div class="testi-role">Sr. Loan Officer, Atlanta GA</div></div>
     </div>
@@ -353,7 +353,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <div class="price-card" style="border:1.5px solid var(--border)">
         <div class="price-name">Team</div>
         <div class="price-amount" style="font-size:36px">Custom</div>
-        <div class="price-desc">For mortgage teams and branch offices.</div>
+        <div class="price-desc">For sales teams and organizations.</div>
         <ul class="price-features">
           <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Everything in Pro</li>
           <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Shared team dashboard</li>
@@ -361,7 +361,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Volume discounts</li>
           <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Dedicated support</li>
         </ul>
-        <a href="mailto:support@callbuddy.ai" class="btn btn-outline btn-full">Contact us</a>
+        <a href="mailto:support@pitchlog.io" class="btn btn-outline btn-full">Contact us</a>
       </div>
     </div>
   </div>
@@ -373,11 +373,11 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     <div style="max-width:720px;margin:0 auto">
       <details style="border-bottom:1px solid var(--border)" open>
         <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">Do I need any special equipment?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
-        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">No. All you need is a computer with a built-in microphone and your regular phone. Put your phone on speaker near your computer when making calls and Call Buddy picks up both sides of the conversation automatically.</p>
+        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">No. All you need is a computer with a built-in microphone and your regular phone. Put your phone on speaker near your computer when making calls and PitchLog picks up both sides of the conversation automatically.</p>
       </details>
       <details style="border-bottom:1px solid var(--border)">
         <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">Is the transcription accurate?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
-        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">Yes. Call Buddy uses your browser built-in speech recognition powered by the same technology as Google Voice Search. Accuracy is very high in normal conditions. Audio quality improves when your phone is placed close to your computer microphone.</p>
+        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">Yes. PitchLog uses your browser built-in speech recognition powered by the same technology as Google Voice Search. Accuracy is very high in normal conditions. Audio quality improves when your phone is placed close to your computer microphone.</p>
       </details>
       <details style="border-bottom:1px solid var(--border)">
         <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">Is my call data private and secure?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
@@ -385,7 +385,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       </details>
       <details style="border-bottom:1px solid var(--border)">
         <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">Can I export my data to my CRM?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
-        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">Yes. Every call log can be exported as a formatted Excel file with one click. Most CRMs including Salesforce, HubSpot, and Encompass accept Excel imports, so you can bring your Call Buddy data into any system you use.</p>
+        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">Yes. Every call log can be exported as a formatted Excel file with one click. Most CRMs including Salesforce, HubSpot, and Encompass accept Excel imports, so you can bring your PitchLog data into any system you use.</p>
       </details>
       <details style="border-bottom:1px solid var(--border)">
         <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">What happens when I reach 25 calls on the free plan?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
@@ -400,8 +400,8 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   <!-- CTA Banner -->
   <div style="background:linear-gradient(135deg,#085041 0%,#0F6E56 100%);text-align:center;padding:80px 48px">
-    <h2 style="font-family:'DM Serif Display',serif;font-size:44px;font-weight:400;color:#fff;margin-bottom:16px;line-height:1.2">Ready to close more loans?</h2>
-    <p style="font-size:18px;color:rgba(255,255,255,.8);margin-bottom:36px;max-width:480px;margin-left:auto;margin-right:auto">Join loan officers who have stopped wasting time on manual notes and started focusing on building relationships and closing deals.</p>
+    <h2 style="font-family:'DM Serif Display',serif;font-size:44px;font-weight:400;color:#fff;margin-bottom:16px;line-height:1.2">Ready to close more deals?</h2>
+    <p style="font-size:18px;color:rgba(255,255,255,.8);margin-bottom:36px;max-width:480px;margin-left:auto;margin-right:auto">Join sales professionals who have stopped wasting time on manual notes and started focusing on what matters - building relationships and closing deals.</p>
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap">
       <button class="btn btn-lg" style="background:#fff;color:#085041;border-color:#fff" onclick="showAuthModal('signup')">Start free today</button>
       <button class="btn btn-lg" style="background:transparent;border-color:rgba(255,255,255,.4);color:#fff" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">View pricing</button>
@@ -412,10 +412,10 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   <footer>
     <div class="footer-logo">
       <div class="logo-mark" style="width:28px;height:28px;border-radius:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.77 9.11 19.79 19.79 0 01.7 6.48A2 2 0 012.68 4h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 11.1a16 16 0 006 6l1.06-1.06a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></div>
-      Call Buddy
+      PitchLog
     </div>
-    <div class="footer-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="mailto:support@callbuddy.ai">Support</a></div>
-    <div class="footer-copy">© 2026 Call Buddy. All rights reserved.</div>
+    <div class="footer-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="mailto:support@pitchlog.io">Support</a></div>
+    <div class="footer-copy">© 2026 PitchLog. All rights reserved.</div>
   </footer>
 </div>
 
@@ -485,7 +485,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <div id="rec-panel" class="card-body">
             <div class="tip-box">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              Put your phone on <strong>speaker</strong> near your computer. Call Buddy will hear both sides of the conversation.
+              Put your phone on <strong>speaker</strong> near your computer. PitchLog will hear both sides of the conversation.
             </div>
             <div class="rec-center">
               <button class="rec-btn idle" id="rec-btn" onclick="toggleRec()">
@@ -1056,7 +1056,7 @@ function exportAll() {
   const ws = XLSX.utils.json_to_sheet(toRows(records));
   ws['!cols'] = [10,20,20,14,22,22,14,12,32,32,32,50].map(w => ({ wch: w }));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Call Buddy');
+  XLSX.utils.book_append_sheet(wb, ws, 'PitchLog');
   XLSX.writeFile(wb, 'call_buddy_' + new Date().toISOString().slice(0, 10) + '.xlsx');
 }
 function exportOne() {
@@ -1085,7 +1085,7 @@ function exportOne() {
 ═══════════════════════════════════════════════════════ */
 async function handleStripe() {
   if (STRIPE_KEY === 'pk_test_51TdiCs2RgYWz496ckaoC48If1Jfq5sbU8PS8yciSzcEaLYjQB0HCtbYj7zcccIx9UFC12ExbzvC9gFIn6QJfnbBO00TpE7MDuG') {
-    alert('To enable Stripe payments:\n\n1. Go to stripe.com → create a free account\n2. Products → Add product → "Call Buddy Pro" → $29/month\n3. Copy the Price ID and Publishable Key\n4. Open index.html and replace pk_test_51TdiCs2RgYWz496ckaoC48If1Jfq5sbU8PS8yciSzcEaLYjQB0HCtbYj7zcccIx9UFC12ExbzvC9gFIn6QJfnbBO00TpE7MDuG and YOUR_STRIPE_PRICE_ID\n5. Redeploy on Vercel\n\nSee README.md for the full guide.');
+    alert('To enable Stripe payments:\n\n1. Go to stripe.com → create a free account\n2. Products → Add product → "PitchLog Pro" → $29/month\n3. Copy the Price ID and Publishable Key\n4. Open index.html and replace pk_test_51TdiCs2RgYWz496ckaoC48If1Jfq5sbU8PS8yciSzcEaLYjQB0HCtbYj7zcccIx9UFC12ExbzvC9gFIn6QJfnbBO00TpE7MDuG and YOUR_STRIPE_PRICE_ID\n5. Redeploy on Vercel\n\nSee README.md for the full guide.');
     return;
   }
   try {
@@ -1114,7 +1114,7 @@ function showAlert(id, msg) { const el = document.getElementById(id); el.textCon
 if (window.location.search.includes('upgraded=true')) {
   setTimeout(() => {
     if (userProfile) { userProfile.plan = 'pro'; updatePlanBadge(); }
-    alert('🎉 Welcome to Call Buddy Pro! Unlimited calls are now unlocked.');
+    alert('🎉 Welcome to PitchLog Pro! Unlimited calls are now unlocked.');
     window.history.replaceState({}, '', window.location.pathname);
   }, 1000);
 }
