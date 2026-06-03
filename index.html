@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Call Buddy — AI Cold Call Tracker for Loan Officers</title>
+<meta name="description" content="Call Buddy listens to your cold calls, transcribes in real time, and automatically logs every prospect. Built for mortgage and loan officers.">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --brand:#1D9E75;--brand-light:#E1F5EE;--brand-dark:#085041;--brand-mid:#0F6E56;
+  --text:#16191C;--text2:#4B5563;--text3:#9CA3AF;
+  --bg:#FFFFFF;--bg2:#F8FAFB;--bg3:#F1F5F0;
+  --border:#E5E7EB;--danger:#DC2626;--danger-light:#FEE2E2;
+  --radius:12px;--radius-sm:8px;--radius-xs:6px;
+}
+body{font-family:'DM Sans',sans-serif;color:var(--text);background:var(--bg);line-height:1.6;min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+.btn{font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;padding:9px 20px;border-radius:var(--radius-sm);cursor:pointer;border:1.5px solid transparent;transition:all .15s;display:inline-flex;align-items:center;gap:7px;line-height:1}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+.btn-primary:hover{background:var(--brand-dark)}
+.btn-outline{background:transparent;border-color:var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--brand);color:var(--brand)}
+.btn-ghost{background:transparent;border-color:transparent;color:var(--text2);font-size:13px}
+.btn-ghost:hover{color:var(--brand)}
+.btn-danger{background:var(--danger-light);color:var(--danger);border-color:transparent}
+.btn-danger:hover{background:#FCA5A5}
+.btn-lg{font-size:16px;padding:14px 32px;border-radius:var(--radius)}
+.btn-full{width:100%;justify-content:center}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+nav{display:flex;align-items:center;justify-content:space-between;padding:16px 48px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:10px;cursor:pointer}
+.logo-mark{width:36px;height:36px;background:var(--brand);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-name{font-size:18px;font-weight:600}
+.nav-right{display:flex;align-items:center;gap:10px}
+
+.view{display:none}
+.view.active{display:block}
+
+/* Landing */
+.hero{text-align:center;padding:88px 48px 72px}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:var(--brand-light);color:var(--brand-dark);font-size:12px;font-weight:600;padding:5px 14px;border-radius:99px;margin-bottom:28px}
+.hero h1{font-family:'DM Serif Display',serif;font-size:54px;font-weight:400;line-height:1.12;max-width:660px;margin:0 auto 20px}
+.hero h1 em{color:var(--brand);font-style:normal}
+.hero p{font-size:19px;color:var(--text2);max-width:500px;margin:0 auto 40px;line-height:1.7}
+.hero-ctas{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
+.hero-note{font-size:12px;color:var(--text3);margin-top:14px}
+.section{padding:72px 48px}
+.section-bg{background:var(--bg2)}
+.section-label{font-size:11px;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:1.5px;text-align:center;margin-bottom:10px}
+.section-title{font-family:'DM Serif Display',serif;font-size:38px;font-weight:400;text-align:center;margin-bottom:12px}
+.section-sub{font-size:16px;color:var(--text2);text-align:center;max-width:500px;margin:0 auto 52px;line-height:1.7}
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:920px;margin:0 auto}
+.feat-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:28px 24px}
+.feat-icon{width:46px;height:46px;background:var(--brand-light);border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+.feat-card h3{font-size:15px;font-weight:600;margin-bottom:8px}
+.feat-card p{font-size:13px;color:var(--text2);line-height:1.65}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;max-width:860px;margin:0 auto}
+.step{text-align:center;padding:24px 16px}
+.step-num{width:40px;height:40px;border-radius:50%;background:var(--brand);color:#fff;font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+.step h3{font-size:14px;font-weight:600;margin-bottom:6px}
+.step p{font-size:13px;color:var(--text2)}
+.pricing-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:740px;margin:0 auto}
+.price-card{border:1.5px solid var(--border);border-radius:var(--radius);padding:32px 28px}
+.price-card.featured{border-color:var(--brand)}
+.price-popular{display:inline-block;background:var(--brand);color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;margin-bottom:14px}
+.price-name{font-size:16px;font-weight:600;margin-bottom:8px}
+.price-amount{font-family:'DM Serif Display',serif;font-size:44px;line-height:1;margin-bottom:6px}
+.price-amount sub{font-family:'DM Sans',sans-serif;font-size:14px;font-weight:400;color:var(--text2)}
+.price-desc{font-size:13px;color:var(--text2);margin-bottom:24px;line-height:1.5}
+.price-features{list-style:none;margin-bottom:28px;display:flex;flex-direction:column;gap:10px}
+.price-features li{font-size:13px;display:flex;align-items:flex-start;gap:8px}
+.check{width:16px;height:16px;flex-shrink:0;margin-top:1px}
+.testimonials{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:860px;margin:0 auto}
+.testi{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:24px}
+.testi-stars{color:var(--brand);font-size:14px;margin-bottom:10px}
+.testi p{font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px}
+.testi-author{font-size:12px;font-weight:600}
+footer{background:var(--text);padding:48px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px}
+.footer-logo{display:flex;align-items:center;gap:8px;color:#fff;font-size:15px;font-weight:600}
+.footer-links{display:flex;gap:28px}
+.footer-links a{font-size:13px;color:#9CA3AF}
+.footer-links a:hover{color:#fff}
+.footer-copy{font-size:12px;color:#6B7280}
+
+/* Auth modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999;padding:20px}
+.modal{background:var(--bg);border-radius:var(--radius);padding:36px;width:100%;max-width:420px}
+.modal h2{font-family:'DM Serif Display',serif;font-size:26px;font-weight:400;margin-bottom:6px}
+.modal-sub{font-size:14px;color:var(--text2);margin-bottom:24px}
+.form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.form-group label{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+.form-group input{font-family:'DM Sans',sans-serif;font-size:14px;padding:10px 13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);transition:border-color .15s}
+.form-group input:focus{outline:none;border-color:var(--brand)}
+.auth-switch{font-size:13px;color:var(--text2);text-align:center;margin-top:16px}
+.auth-switch span{color:var(--brand);cursor:pointer;font-weight:500}
+.modal-close{float:right;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text2);line-height:1;padding:0}
+.modal-close:hover{color:var(--text)}
+.alert{padding:10px 14px;border-radius:var(--radius-xs);font-size:13px;margin-bottom:14px;line-height:1.5}
+.alert-error{background:var(--danger-light);color:var(--danger)}
+.alert-success{background:var(--brand-light);color:var(--brand-dark)}
+
+/* App */
+.app-layout{display:flex;min-height:calc(100vh - 69px)}
+.sidebar{width:224px;flex-shrink:0;border-right:1px solid var(--border);padding:20px 14px;display:flex;flex-direction:column;gap:2px}
+.sidebar-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);font-size:14px;color:var(--text2);cursor:pointer;border:none;background:none;font-family:'DM Sans',sans-serif;width:100%;text-align:left;transition:all .15s}
+.sidebar-item:hover{background:var(--bg2);color:var(--text)}
+.sidebar-item.active{background:var(--brand-light);color:var(--brand-dark);font-weight:500}
+.sidebar-item svg{width:17px;height:17px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sidebar-divider{height:1px;background:var(--border);margin:6px 0}
+.sidebar-plan{margin-top:auto;padding:14px;background:var(--bg2);border-radius:var(--radius-sm);font-size:12px;color:var(--text2)}
+.sidebar-plan strong{display:block;color:var(--text);font-size:13px;margin-bottom:4px}
+.main-content{flex:1;padding:32px;overflow-y:auto;background:var(--bg2);min-width:0}
+
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+.stat-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px 18px}
+.stat-val{font-family:'DM Serif Display',serif;font-size:32px;color:var(--text)}
+.stat-lbl{font-size:12px;color:var(--text2);margin-top:2px}
+
+.recorder-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:24px}
+.card-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg2)}
+.card-tab{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:13px 20px;cursor:pointer;border:none;background:none;color:var(--text2);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
+.card-tab.active{color:var(--brand);border-bottom-color:var(--brand);background:var(--bg)}
+.card-body{padding:28px}
+
+.rec-center{text-align:center;padding:12px 0 24px}
+.rec-btn{width:90px;height:90px;border-radius:50%;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .2s;margin-bottom:18px}
+.rec-btn.idle{background:var(--brand)}
+.rec-btn.recording{background:var(--danger);animation:pulse 1.4s ease-in-out infinite}
+.rec-btn.processing{background:var(--text3);cursor:not-allowed}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.3)}50%{box-shadow:0 0 0 16px rgba(220,38,38,0)}}
+.rec-timer{font-family:'DM Serif Display',serif;font-size:44px;color:var(--text);margin:10px 0;display:none}
+.rec-wave{display:flex;align-items:center;justify-content:center;gap:3px;height:34px;margin:6px 0;display:none}
+.rec-wave span{display:inline-block;width:4px;background:var(--brand);border-radius:2px;animation:wave 1s ease-in-out infinite}
+.rec-wave span:nth-child(1){animation-delay:0s;height:8px}
+.rec-wave span:nth-child(2){animation-delay:.1s;height:20px}
+.rec-wave span:nth-child(3){animation-delay:.2s;height:28px}
+.rec-wave span:nth-child(4){animation-delay:.3s;height:16px}
+.rec-wave span:nth-child(5){animation-delay:.4s;height:24px}
+.rec-wave span:nth-child(6){animation-delay:.15s;height:12px}
+.rec-wave span:nth-child(7){animation-delay:.25s;height:20px}
+@keyframes wave{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+.rec-status{font-size:16px;font-weight:500;color:var(--text)}
+.rec-sub{font-size:13px;color:var(--text2);margin-top:5px}
+
+.tip-box{background:var(--brand-light);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;color:var(--brand-dark);margin-bottom:20px;display:flex;align-items:flex-start;gap:8px;line-height:1.6}
+.transcript-area{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;font-size:13px;line-height:1.8;color:var(--text2);min-height:90px;max-height:180px;overflow-y:auto;margin-bottom:16px;white-space:pre-wrap}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.field-group{display:flex;flex-direction:column;gap:5px}
+.field-group.full{grid-column:1/-1}
+.field-label{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+.field-group input,.field-group select,.field-group textarea{font-family:'DM Sans',sans-serif;font-size:14px;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);transition:border-color .15s}
+.field-group input:focus,.field-group select:focus,.field-group textarea:focus{outline:none;border-color:var(--brand)}
+.field-group textarea{resize:vertical;min-height:70px}
+.ai-thinking{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--brand-dark);padding:14px 16px;background:var(--brand-light);border-radius:var(--radius-sm);margin-bottom:16px}
+.dot-pulse{width:8px;height:8px;border-radius:50%;background:var(--brand);animation:dotPulse 1.2s infinite}
+@keyframes dotPulse{0%,80%,100%{opacity:.2}40%{opacity:1}}
+
+.table-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.table-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px}
+.table-header h2{font-size:16px;font-weight:600}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px}
+th{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:top;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg2)}
+.empty-state{text-align:center;padding:52px 20px;color:var(--text3);font-size:14px}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px}
+.b-green{background:#D1FAE5;color:#065F46}
+.b-red{background:var(--danger-light);color:#991B1B}
+.b-amber{background:#FEF3C7;color:#92400E}
+.b-blue{background:#DBEAFE;color:#1E40AF}
+.b-gray{background:#F3F4F6;color:#374151}
+
+.settings-section{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:20px}
+.settings-section h3{font-size:15px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);font-size:14px;gap:12px}
+.settings-row:last-child{border-bottom:none}
+.settings-row span{color:var(--text2);font-size:13px}
+
+.upgrade-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.upgrade-card{border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:20px}
+.upgrade-card.featured{border-color:var(--brand);background:var(--brand-light)}
+.upgrade-price{font-family:'DM Serif Display',serif;font-size:32px;margin:8px 0 4px}
+.upgrade-price sub{font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text2)}
+
+.spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle}
+.spinner-dark{border-color:rgba(0,0,0,.15);border-top-color:var(--text)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+.page-spinner{display:flex;align-items:center;justify-content:center;min-height:60vh;font-size:14px;color:var(--text2);gap:12px}
+</style>
+</head>
+<body>
+
+<!-- ══ SUPABASE CONFIG ══════════════════════════════════════════════════════ -->
+<script>
+// ⚠️  REPLACE THESE WITH YOUR SUPABASE PROJECT VALUES
+// Find them at: Supabase Dashboard → Settings → API
+const SUPABASE_URL = 'YOUR_SUPABASE_PROJECT_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const FREE_LIMIT = 25;
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+</script>
+
+<!-- ══ NAV ══════════════════════════════════════════════════════════════════ -->
+<nav id="main-nav">
+  <div class="logo" onclick="showView('landing')">
+    <div class="logo-mark">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.77 9.11 19.79 19.79 0 01.7 6.48A2 2 0 012.68 4h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 11.1a16 16 0 006 6l1.06-1.06a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+    </div>
+    <span class="logo-name">Call Buddy</span>
+  </div>
+  <div class="nav-right" id="nav-right">
+    <button class="btn btn-ghost" onclick="showAuthModal('login')">Log in</button>
+    <button class="btn btn-primary" onclick="showAuthModal('signup')">Start free</button>
+  </div>
+</nav>
+
+<!-- ══ LANDING ══════════════════════════════════════════════════════════════ -->
+<div id="view-landing" class="view active">
+  <div class="hero">
+    <div class="hero-badge">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      Built for mortgage &amp; loan officers
+    </div>
+    <h1>Your AI-powered <em>cold call</em> co-pilot</h1>
+    <p>Call Buddy listens to your calls, transcribes in real time, and automatically logs every prospect. Syncs across all your devices.</p>
+    <div class="hero-ctas">
+      <button class="btn btn-primary btn-lg" onclick="showAuthModal('signup')">Start free — no card needed</button>
+      <button class="btn btn-outline btn-lg" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">See how it works</button>
+    </div>
+    <p class="hero-note">Free plan: 25 calls/month · Pro plan: $29/month unlimited · Cancel anytime</p>
+  </div>
+
+  <div class="section section-bg" id="features">
+    <div class="section-label">How it works</div>
+    <div class="section-title">Four steps, zero friction</div>
+    <p class="section-sub">From dial to logged prospect in under a minute.</p>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><h3>Hit record</h3><p>Open Call Buddy, tap record before you dial.</p></div>
+      <div class="step"><div class="step-num">2</div><h3>Make the call</h3><p>Phone on speaker — Call Buddy listens through your mic.</p></div>
+      <div class="step"><div class="step-num">3</div><h3>AI analyzes</h3><p>Stop recording — AI reads the transcript instantly.</p></div>
+      <div class="step"><div class="step-num">4</div><h3>Auto-logged</h3><p>Prospect saved to your account. Export to Excel anytime.</p></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Features</div>
+    <div class="section-title">Everything a loan officer needs</div>
+    <p class="section-sub">No bloated CRM. No expensive dialer. Just the tools that move your pipeline.</p>
+    <div class="feat-grid">
+      <div class="feat-card">
+        <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg></div>
+        <h3>Live mic recording</h3>
+        <p>Tap record, call on speaker. Call Buddy captures every word through your computer mic — no extra hardware needed.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+        <h3>Real-time transcription</h3>
+        <p>Watch your conversation appear as text while you talk. Review the full word-for-word transcript after every call.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg></div>
+        <h3>AI auto-fill</h3>
+        <p>AI reads the transcript and fills in name, company, pain points, next steps, outcome, and follow-up date automatically.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></div>
+        <h3>Syncs across devices</h3>
+        <p>Your call log lives in the cloud. Start on your laptop, check follow-ups on your phone. Always in sync.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
+        <h3>Excel export</h3>
+        <p>Download your full pipeline as a formatted Excel file anytime. Drop it into any CRM or share with your team.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <h3>Secure &amp; private</h3>
+        <p>Powered by Supabase — enterprise-grade encryption. Your call data is yours alone, protected with row-level security.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section section-bg">
+    <div class="section-label">What they say</div>
+    <div class="section-title">Loan officers love it</div>
+    <p class="section-sub">Real results from real users.</p>
+    <div class="testimonials">
+      <div class="testi"><div class="testi-stars">★★★★★</div><p>"I used to spend 30 minutes after every calling session just updating my spreadsheet. Call Buddy cut that to zero. The AI notes are actually better than what I wrote myself."</p><div class="testi-author">Marcus T. — Loan Officer, Phoenix AZ</div></div>
+      <div class="testi"><div class="testi-stars">★★★★★</div><p>"The follow-up tracking alone is worth it. I had prospects slipping through the cracks constantly. Now my dashboard tells me exactly who to call every morning."</p><div class="testi-author">Sarah K. — Mortgage Broker, Dallas TX</div></div>
+      <div class="testi"><div class="testi-stars">★★★★★</div><p>"Skeptical at first but the AI transcript accuracy blew me away. It even caught the property address the prospect mentioned halfway through the call."</p><div class="testi-author">James R. — Sr. Loan Officer, Atlanta GA</div></div>
+    </div>
+  </div>
+
+  <div class="section" id="pricing">
+    <div class="section-label">Pricing</div>
+    <div class="section-title">Start free, scale when ready</div>
+    <p class="section-sub">No contracts. No surprise fees.</p>
+    <div class="pricing-grid">
+      <div class="price-card">
+        <div class="price-name">Free</div>
+        <div class="price-amount">$0<sub>/month</sub></div>
+        <div class="price-desc">Everything you need to get started.</div>
+        <ul class="price-features">
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>25 recorded calls/month</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Live mic recording</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>AI transcription &amp; auto-fill</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Cloud sync across devices</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Excel export</li>
+        </ul>
+        <button class="btn btn-outline btn-full" onclick="showAuthModal('signup')">Get started free</button>
+      </div>
+      <div class="price-card featured">
+        <div class="price-popular">MOST POPULAR</div>
+        <div class="price-name">Pro</div>
+        <div class="price-amount">$29<sub>/month</sub></div>
+        <div class="price-desc">For loan officers serious about their pipeline.</div>
+        <ul class="price-features">
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg><strong>Unlimited</strong> calls</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Everything in Free</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>AI call summaries</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Priority support</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Early access to new features</li>
+        </ul>
+        <button class="btn btn-primary btn-full" onclick="showAuthModal('signup')">Start 7-day free trial</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-logo">
+      <div class="logo-mark" style="width:28px;height:28px;border-radius:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.77 9.11 19.79 19.79 0 01.7 6.48A2 2 0 012.68 4h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 11.1a16 16 0 006 6l1.06-1.06a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></div>
+      Call Buddy
+    </div>
+    <div class="footer-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="mailto:support@callbuddy.ai">Support</a></div>
+    <div class="footer-copy">© 2026 Call Buddy. All rights reserved.</div>
+  </footer>
+</div>
+
+<!-- ══ APP ══════════════════════════════════════════════════════════════════ -->
+<div id="view-app" class="view">
+  <div class="app-layout">
+    <div class="sidebar">
+      <button class="sidebar-item active" id="nav-dashboard" onclick="switchPanel('dashboard')">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>Dashboard
+      </button>
+      <button class="sidebar-item" id="nav-recorder" onclick="switchPanel('recorder')">
+        <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>New call
+      </button>
+      <button class="sidebar-item" id="nav-log" onclick="switchPanel('log')">
+        <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Call log
+      </button>
+      <div class="sidebar-divider"></div>
+      <button class="sidebar-item" id="nav-settings" onclick="switchPanel('settings')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>Settings
+      </button>
+      <button class="sidebar-item" onclick="logout()">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>Log out
+      </button>
+      <div class="sidebar-plan" id="sidebar-plan">
+        <strong id="plan-name">Free plan</strong>
+        <span id="plan-usage">0 / 25 calls used</span>
+        <button class="btn btn-primary" style="margin-top:10px;font-size:12px;padding:7px 14px;width:100%;justify-content:center" onclick="showUpgradeModal()">Upgrade to Pro →</button>
+      </div>
+    </div>
+
+    <div class="main-content">
+
+      <!-- Dashboard -->
+      <div id="panel-dashboard">
+        <div style="margin-bottom:24px">
+          <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400" id="dash-greeting">Dashboard</h1>
+          <p style="font-size:14px;color:var(--text2);margin-top:4px" id="dash-date"></p>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-val" id="st-total">—</div><div class="stat-lbl">Total calls</div></div>
+          <div class="stat-card"><div class="stat-val" id="st-int">—</div><div class="stat-lbl">Interested</div></div>
+          <div class="stat-card"><div class="stat-val" id="st-cb">—</div><div class="stat-lbl">Callbacks</div></div>
+          <div class="stat-card"><div class="stat-val" id="st-fu">—</div><div class="stat-lbl">Follow-ups due</div></div>
+        </div>
+        <div class="table-card">
+          <div class="table-header">
+            <h2>Recent calls</h2>
+            <button class="btn btn-outline" onclick="exportAll()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export to Excel
+            </button>
+          </div>
+          <div id="dash-table"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div>
+        </div>
+      </div>
+
+      <!-- Recorder -->
+      <div id="panel-recorder" class="hidden">
+        <div style="margin-bottom:20px">
+          <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">New call</h1>
+          <p style="font-size:14px;color:var(--text2);margin-top:4px">Record your call and let AI do the rest.</p>
+        </div>
+        <div class="recorder-card">
+          <div class="card-tabs">
+            <button class="card-tab active" id="tab-record" onclick="switchRecTab('record')">Record</button>
+            <button class="card-tab" id="tab-review" onclick="switchRecTab('review')">Review &amp; save</button>
+          </div>
+          <div id="rec-panel" class="card-body">
+            <div class="tip-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Put your phone on <strong>speaker</strong> near your computer. Call Buddy will hear both sides of the conversation.
+            </div>
+            <div class="rec-center">
+              <button class="rec-btn idle" id="rec-btn" onclick="toggleRec()">
+                <svg id="rec-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+              </button>
+              <div class="rec-timer" id="rec-timer">0:00</div>
+              <div class="rec-wave" id="rec-wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+              <div class="rec-status" id="rec-status">Ready to record</div>
+              <div class="rec-sub" id="rec-sub">Tap the mic to begin</div>
+            </div>
+            <div id="live-tx-wrap" class="hidden">
+              <div class="field-label" style="margin-bottom:8px">Live transcript</div>
+              <div class="transcript-area" id="live-tx">Listening...</div>
+            </div>
+          </div>
+          <div id="review-panel" class="card-body hidden">
+            <div id="ai-thinking" class="ai-thinking hidden"><div class="dot-pulse"></div> AI is analyzing your call...</div>
+            <div class="field-label" style="margin-bottom:8px">Full transcript</div>
+            <div class="transcript-area" id="final-tx">Transcript will appear here after recording.</div>
+            <div class="field-label" style="margin:14px 0 8px">AI summary</div>
+            <div class="transcript-area" id="ai-summary" style="min-height:56px">Summary will appear here.</div>
+            <div style="font-size:15px;font-weight:600;margin:20px 0 14px">Prospect details</div>
+            <div class="field-grid">
+              <div class="field-group"><div class="field-label">Name</div><input id="f-name" type="text" placeholder="Jane Smith"></div>
+              <div class="field-group"><div class="field-label">Company</div><input id="f-company" type="text" placeholder="ABC Realty"></div>
+              <div class="field-group"><div class="field-label">Phone</div><input id="f-phone" type="text" placeholder="(555) 000-0000"></div>
+              <div class="field-group"><div class="field-label">Email</div><input id="f-email" type="text" placeholder="jane@email.com"></div>
+              <div class="field-group full"><div class="field-label">Property address</div><input id="f-address" type="text" placeholder="123 Main St, City, State ZIP"></div>
+              <div class="field-group"><div class="field-label">Outcome</div>
+                <select id="f-outcome">
+                  <option value="">Select...</option>
+                  <option>Interested</option><option>Not interested</option>
+                  <option>Callback</option><option>Voicemail</option><option>No answer</option>
+                </select>
+              </div>
+              <div class="field-group"><div class="field-label">Follow-up date</div><input id="f-followup" type="date"></div>
+              <div class="field-group full"><div class="field-label">Pain points</div><textarea id="f-pain" placeholder="AI will fill this in..."></textarea></div>
+              <div class="field-group full"><div class="field-label">Next steps</div><textarea id="f-nextsteps" placeholder="AI will fill this in..."></textarea></div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+              <button class="btn btn-primary" id="save-btn" onclick="saveRecord()">Save to log</button>
+              <button class="btn btn-outline" onclick="exportOne()">Export this call</button>
+              <button class="btn btn-ghost" onclick="switchRecTab('record')">Back</button>
+              <span id="save-msg" class="hidden" style="font-size:13px;color:var(--brand)">✓ Saved!</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Log -->
+      <div id="panel-log" class="hidden">
+        <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Call log</h1>
+            <p style="font-size:14px;color:var(--text2);margin-top:4px">Every prospect, all in one place.</p>
+          </div>
+          <button class="btn btn-outline" onclick="exportAll()">Export all to Excel</button>
+        </div>
+        <div class="table-card"><div id="log-table"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div></div>
+      </div>
+
+      <!-- Settings -->
+      <div id="panel-settings" class="hidden">
+        <div style="margin-bottom:24px"><h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Settings</h1></div>
+        <div class="settings-section">
+          <h3>Account</h3>
+          <div class="settings-row"><div><strong>Name</strong><br><span id="set-name">—</span></div></div>
+          <div class="settings-row"><div><strong>Email</strong><br><span id="set-email">—</span></div></div>
+          <div class="settings-row"><div><strong>Plan</strong><br><span id="set-plan">Free — 25 calls/month</span></div><button class="btn btn-primary" style="font-size:13px;padding:7px 16px;flex-shrink:0" onclick="showUpgradeModal()">Upgrade to Pro</button></div>
+          <div class="settings-row"><div><strong>Calls this month</strong><br><span id="set-calls">—</span></div></div>
+        </div>
+        <div class="settings-section">
+          <h3>Data</h3>
+          <div class="settings-row"><div><strong>Export all records</strong><br><span>Download your full call log as Excel.</span></div><button class="btn btn-outline" style="font-size:13px;padding:7px 16px;flex-shrink:0" onclick="exportAll()">Export to Excel</button></div>
+          <div class="settings-row"><div><strong>Delete all records</strong><br><span>Permanently remove all your call data. Cannot be undone.</span></div><button class="btn btn-danger" style="font-size:13px;padding:7px 16px;flex-shrink:0" onclick="clearAllRecords()">Delete all</button></div>
+        </div>
+        <div class="settings-section">
+          <h3>Session</h3>
+          <div class="settings-row"><div><strong>Log out</strong><br><span>Sign out of your account.</span></div><button class="btn btn-ghost" onclick="logout()">Log out</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ AUTH MODAL ══════════════════════════════════════════════════════════ -->
+<div id="auth-modal" class="modal-overlay hidden" onclick="bgClose(event,'auth-modal')">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('auth-modal')">×</button>
+    <h2 id="auth-title">Create your account</h2>
+    <p class="modal-sub" id="auth-sub">Free forever. No credit card needed.</p>
+    <div id="auth-alert" class="alert alert-error hidden"></div>
+    <div class="form-group" id="name-row">
+      <label>Full name</label>
+      <input type="text" id="a-name" placeholder="Jane Smith" autocomplete="name">
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="a-email" placeholder="you@email.com" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="a-pass" placeholder="Min. 6 characters" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary btn-full" id="auth-btn" onclick="handleAuth()" style="margin-top:6px">Create account</button>
+    <div class="auth-switch" id="auth-switch">Already have an account? <span onclick="toggleAuth()">Log in</span></div>
+  </div>
+</div>
+
+<!-- ══ UPGRADE MODAL ══════════════════════════════════════════════════════ -->
+<div id="upgrade-modal" class="modal-overlay hidden" onclick="bgClose(event,'upgrade-modal')">
+  <div class="modal" style="max-width:500px">
+    <button class="modal-close" onclick="closeModal('upgrade-modal')">×</button>
+    <h2>Upgrade to Pro</h2>
+    <p class="modal-sub">Unlock unlimited calls for $29/month.</p>
+    <div class="upgrade-grid">
+      <div class="upgrade-card"><div style="font-size:13px;font-weight:600;color:var(--text2)">Free</div><div class="upgrade-price">$0<sub>/mo</sub></div><div style="font-size:13px;color:var(--text2)">25 calls/month</div></div>
+      <div class="upgrade-card featured"><div style="font-size:13px;font-weight:600;color:var(--brand-dark)">Pro</div><div class="upgrade-price">$29<sub>/mo</sub></div><div style="font-size:13px;color:var(--brand-dark)">Unlimited calls + priority support</div></div>
+    </div>
+    <div style="background:var(--bg2);border-radius:var(--radius-sm);padding:16px;margin-bottom:20px;font-size:13px;color:var(--text2);line-height:1.8">
+      <strong style="color:var(--text);display:block;margin-bottom:6px">To activate Stripe payments:</strong>
+      1. Create a free account at <strong>stripe.com</strong><br>
+      2. Create a recurring product → $29/month → copy the <strong>Price ID</strong><br>
+      3. Copy your <strong>Publishable Key</strong> from Stripe Dashboard<br>
+      4. Replace <code>YOUR_STRIPE_PRICE_ID</code> and <code>YOUR_STRIPE_KEY</code> in index.html<br>
+      5. Redeploy — Stripe handles billing, you keep 97%
+    </div>
+    <button class="btn btn-primary btn-full" onclick="handleStripe()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      Start 7-day free trial — $29/mo after
+    </button>
+    <p style="font-size:12px;color:var(--text3);text-align:center;margin-top:12px">Cancel anytime. Billed monthly via Stripe.</p>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════ */
+let currentUser = null;
+let userProfile = null;
+let records = [];
+let isRecording = false;
+let mediaRecorder = null;
+let recognition = null;
+let timerInterval = null;
+let seconds = 0;
+let fullTranscript = '';
+
+const STRIPE_KEY = 'YOUR_STRIPE_PUBLISHABLE_KEY';
+const STRIPE_PRICE = 'YOUR_STRIPE_PRICE_ID';
+
+/* ═══════════════════════════════════════════════════════
+   INIT — check if already logged in
+═══════════════════════════════════════════════════════ */
+(async () => {
+  if (SUPABASE_URL === 'YOUR_SUPABASE_PROJECT_URL') return; // not configured yet
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    if (session?.user) {
+      currentUser = session.user;
+      await loadProfile();
+      enterApp();
+    }
+    db.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        currentUser = session.user;
+        await loadProfile();
+        enterApp();
+      } else if (event === 'SIGNED_OUT') {
+        currentUser = null; userProfile = null; records = [];
+        showView('landing');
+        setNavLoggedOut();
+      }
+    });
+  } catch(e) { console.warn('Supabase not configured yet:', e.message); }
+})();
+
+/* ═══════════════════════════════════════════════════════
+   AUTH
+═══════════════════════════════════════════════════════ */
+let authMode = 'signup';
+
+function showAuthModal(mode) {
+  authMode = mode;
+  const isLogin = mode === 'login';
+  document.getElementById('auth-title').textContent = isLogin ? 'Welcome back' : 'Create your account';
+  document.getElementById('auth-sub').textContent = isLogin ? 'Good to have you back.' : 'Free forever. No credit card needed.';
+  document.getElementById('auth-btn').textContent = isLogin ? 'Log in' : 'Create account';
+  document.getElementById('name-row').style.display = isLogin ? 'none' : '';
+  document.getElementById('auth-switch').innerHTML = isLogin
+    ? 'New here? <span onclick="toggleAuth()">Create account</span>'
+    : 'Already have an account? <span onclick="toggleAuth()">Log in</span>';
+  document.getElementById('auth-alert').classList.add('hidden');
+  document.getElementById('auth-modal').classList.remove('hidden');
+}
+
+function toggleAuth() {
+  showAuthModal(authMode === 'login' ? 'signup' : 'login');
+}
+
+async function handleAuth() {
+  if (SUPABASE_URL === 'YOUR_SUPABASE_PROJECT_URL') {
+    showAlert('auth-alert', '⚠️ Supabase is not configured yet. Open index.html and add your SUPABASE_URL and SUPABASE_ANON_KEY. See README for instructions.');
+    return;
+  }
+  const email = document.getElementById('a-email').value.trim();
+  const pass = document.getElementById('a-pass').value;
+  const name = document.getElementById('a-name').value.trim();
+  document.getElementById('auth-alert').classList.add('hidden');
+  if (!email || !pass) { showAlert('auth-alert', 'Please fill in email and password.'); return; }
+  if (authMode === 'signup' && !name) { showAlert('auth-alert', 'Please enter your name.'); return; }
+  if (pass.length < 6) { showAlert('auth-alert', 'Password must be at least 6 characters.'); return; }
+  const btn = document.getElementById('auth-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> ' + (authMode === 'login' ? 'Logging in...' : 'Creating account...');
+  try {
+    let result;
+    if (authMode === 'signup') {
+      result = await db.auth.signUp({ email, password: pass, options: { data: { full_name: name } } });
+      if (result.error) throw result.error;
+      if (result.data.user && !result.data.session) {
+        showAlert('auth-alert', '✓ Check your email to confirm your account, then log in.');
+        btn.disabled = false; btn.textContent = 'Create account'; return;
+      }
+    } else {
+      result = await db.auth.signInWithPassword({ email, password: pass });
+      if (result.error) throw result.error;
+    }
+    closeModal('auth-modal');
+  } catch(e) {
+    showAlert('auth-alert', e.message || 'Something went wrong. Please try again.');
+    btn.disabled = false;
+    btn.textContent = authMode === 'login' ? 'Log in' : 'Create account';
+  }
+}
+
+async function logout() {
+  await db.auth.signOut();
+}
+
+/* ═══════════════════════════════════════════════════════
+   PROFILE & DATA LOADING
+═══════════════════════════════════════════════════════ */
+async function loadProfile() {
+  try {
+    const { data } = await db.from('profiles').select('*').eq('id', currentUser.id).single();
+    userProfile = data;
+  } catch(e) { console.warn('Profile load error:', e); }
+}
+
+async function loadRecords() {
+  try {
+    const { data, error } = await db.from('calls').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false });
+    if (error) throw error;
+    records = data || [];
+  } catch(e) { console.warn('Records load error:', e); records = []; }
+}
+
+/* ═══════════════════════════════════════════════════════
+   APP ENTRY
+═══════════════════════════════════════════════════════ */
+async function enterApp() {
+  showView('app');
+  setNavLoggedIn();
+  initRecognition();
+  const h = new Date().getHours();
+  const name = userProfile?.full_name || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'there';
+  document.getElementById('dash-greeting').textContent = (h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening') + ', ' + name.split(' ')[0];
+  document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  document.getElementById('set-name').textContent = userProfile?.full_name || name;
+  document.getElementById('set-email').textContent = currentUser.email;
+  document.getElementById('set-plan').textContent = userProfile?.plan === 'pro' ? 'Pro — unlimited calls' : 'Free — 25 calls/month';
+  await loadRecords();
+  refreshDashboard();
+  updatePlanBadge();
+}
+
+function setNavLoggedIn() {
+  const name = userProfile?.full_name || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || '';
+  document.getElementById('nav-right').innerHTML = `<span style="font-size:13px;color:var(--text2)">${name}</span><button class="btn btn-ghost" onclick="showUpgradeModal()">Upgrade</button>`;
+}
+function setNavLoggedOut() {
+  document.getElementById('nav-right').innerHTML = `<button class="btn btn-ghost" onclick="showAuthModal('login')">Log in</button><button class="btn btn-primary" onclick="showAuthModal('signup')">Start free</button>`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PANELS
+═══════════════════════════════════════════════════════ */
+function showView(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.getElementById('view-' + v).classList.add('active');
+}
+
+function switchPanel(p) {
+  ['dashboard','recorder','log','settings'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
+  document.getElementById('panel-' + p).classList.remove('hidden');
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('nav-' + p)?.classList.add('active');
+  if (p === 'dashboard') refreshDashboard();
+  if (p === 'log') renderLog();
+}
+
+/* ═══════════════════════════════════════════════════════
+   RECORDING
+═══════════════════════════════════════════════════════ */
+function initRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  recognition = new SR();
+  recognition.continuous = true; recognition.interimResults = true; recognition.lang = 'en-US';
+  let final = '';
+  recognition.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript + ' ';
+      else interim += e.results[i][0].transcript;
+    }
+    fullTranscript = final;
+    const el = document.getElementById('live-tx');
+    if (el) el.textContent = (final + interim) || 'Listening...';
+  };
+  recognition.onerror = e => console.log('SR error:', e.error);
+  recognition.onend = () => { if (isRecording) try { recognition.start(); } catch(e) {} };
+}
+
+function toggleRec() {
+  if (!isRecording) startRec(); else stopRec();
+}
+
+function startRec() {
+  const isPro = userProfile?.plan === 'pro';
+  if (!isPro && (userProfile?.calls_this_month || 0) >= FREE_LIMIT) { showUpgradeModal(); return; }
+  fullTranscript = '';
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    isRecording = true; seconds = 0;
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.start();
+    if (recognition) try { recognition.start(); } catch(e) {}
+    const btn = document.getElementById('rec-btn');
+    btn.className = 'rec-btn recording';
+    document.getElementById('rec-icon').innerHTML = '<rect x="6" y="6" width="4" height="12" rx="1" fill="#fff"/><rect x="14" y="6" width="4" height="12" rx="1" fill="#fff"/>';
+    document.getElementById('rec-status').textContent = 'Recording...';
+    document.getElementById('rec-sub').textContent = 'Stop when your call ends.';
+    document.getElementById('rec-timer').style.display = 'block';
+    document.getElementById('rec-wave').style.display = 'flex';
+    document.getElementById('live-tx-wrap').classList.remove('hidden');
+    timerInterval = setInterval(() => {
+      seconds++;
+      const m = Math.floor(seconds / 60), s = seconds % 60;
+      const el = document.getElementById('rec-timer');
+      if (el) el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    }, 1000);
+  }).catch(() => alert('Microphone access denied. Please allow mic access in your browser settings.'));
+}
+
+function stopRec() {
+  isRecording = false;
+  clearInterval(timerInterval);
+  if (recognition) try { recognition.stop(); } catch(e) {}
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  }
+  document.getElementById('rec-btn').className = 'rec-btn processing';
+  document.getElementById('rec-status').textContent = 'Processing...';
+  document.getElementById('rec-sub').textContent = 'AI is analyzing your call.';
+  document.getElementById('rec-wave').style.display = 'none';
+  setTimeout(() => processCall(), 700);
+}
+
+async function processCall() {
+  switchRecTab('review');
+  const transcript = fullTranscript.trim() || '[No speech detected — microphone may not have picked up audio clearly. Please fill in prospect details manually below.]';
+  document.getElementById('final-tx').textContent = transcript;
+  document.getElementById('ai-summary').textContent = 'Analyzing...';
+  document.getElementById('ai-thinking').classList.remove('hidden');
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514', max_tokens: 1000,
+        messages: [{ role: 'user', content: `You are a sales assistant for a mortgage/loan officer. Analyze this cold call transcript and return ONLY valid JSON with these keys:
+"summary": 2-3 sentence plain-English summary,
+"name": prospect full name or "",
+"company": company/employer or "",
+"phone": phone number or "",
+"email": email or "",
+"address": property address or "",
+"outcome": one of exactly: Interested, Not interested, Callback, Voicemail, No answer,
+"followUpDate": YYYY-MM-DD or "",
+"painPoints": 1-2 sentences on prospect concerns,
+"nextSteps": 1-2 sentences on agreed next actions.
+Return ONLY JSON. No markdown, no preamble.
+Transcript:\n${transcript}` }]
+      })
+    });
+    const data = await resp.json();
+    let text = data.content.map(b => b.text || '').join('').trim().replace(/```json|```/g, '').trim();
+    const p = JSON.parse(text);
+    document.getElementById('ai-thinking').classList.add('hidden');
+    document.getElementById('ai-summary').textContent = p.summary || '—';
+    const map = { name:'f-name', company:'f-company', phone:'f-phone', email:'f-email', address:'f-address', outcome:'f-outcome', followUpDate:'f-followup', painPoints:'f-pain', nextSteps:'f-nextsteps' };
+    Object.entries(map).forEach(([k, id]) => { const el = document.getElementById(id); if (el && p[k]) el.value = p[k]; });
+  } catch(e) {
+    document.getElementById('ai-thinking').classList.add('hidden');
+    document.getElementById('ai-summary').textContent = 'Could not generate summary — please fill in details manually.';
+  }
+}
+
+function switchRecTab(tab) {
+  document.getElementById('rec-panel').classList.toggle('hidden', tab !== 'record');
+  document.getElementById('review-panel').classList.toggle('hidden', tab !== 'review');
+  document.getElementById('tab-record').classList.toggle('active', tab === 'record');
+  document.getElementById('tab-review').classList.toggle('active', tab === 'review');
+}
+
+/* ═══════════════════════════════════════════════════════
+   SAVE RECORD TO SUPABASE
+═══════════════════════════════════════════════════════ */
+async function saveRecord() {
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) { alert('Please enter the prospect name.'); return; }
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Saving...';
+  const followUpRaw = document.getElementById('f-followup').value;
+  const rec = {
+    user_id: currentUser.id,
+    call_date: new Date().toLocaleDateString('en-US'),
+    prospect_name: name,
+    company: document.getElementById('f-company').value.trim(),
+    phone: document.getElementById('f-phone').value.trim(),
+    email: document.getElementById('f-email').value.trim(),
+    address: document.getElementById('f-address').value.trim(),
+    outcome: document.getElementById('f-outcome').value,
+    follow_up_date: followUpRaw || null,
+    pain_points: document.getElementById('f-pain').value.trim(),
+    next_steps: document.getElementById('f-nextsteps').value.trim(),
+    transcript: document.getElementById('final-tx').textContent,
+    ai_summary: document.getElementById('ai-summary').textContent,
+    duration_seconds: seconds
+  };
+  try {
+    if (SUPABASE_URL !== 'YOUR_SUPABASE_PROJECT_URL') {
+      const { data, error } = await db.from('calls').insert([rec]).select().single();
+      if (error) throw error;
+      records.unshift(data);
+      await db.from('profiles').update({ calls_this_month: (userProfile?.calls_this_month || 0) + 1 }).eq('id', currentUser.id);
+      if (userProfile) userProfile.calls_this_month = (userProfile.calls_this_month || 0) + 1;
+    } else {
+      rec.id = Date.now(); rec.created_at = new Date().toISOString();
+      records.unshift(rec);
+    }
+    document.getElementById('save-msg').classList.remove('hidden');
+    setTimeout(() => document.getElementById('save-msg').classList.add('hidden'), 2500);
+    resetRecorder();
+    updatePlanBadge();
+    refreshDashboard();
+    document.getElementById('set-calls').textContent = (userProfile?.calls_this_month || records.length) + (userProfile?.plan === 'pro' ? ' (unlimited)' : ' / 25');
+  } catch(e) {
+    alert('Error saving record: ' + e.message);
+  }
+  btn.disabled = false; btn.textContent = 'Save to log';
+}
+
+function resetRecorder() {
+  ['f-name','f-company','f-phone','f-email','f-address','f-outcome','f-followup','f-pain','f-nextsteps'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('final-tx').textContent = 'Transcript will appear here after recording.';
+  document.getElementById('ai-summary').textContent = 'Summary will appear here.';
+  document.getElementById('live-tx-wrap').classList.add('hidden');
+  const btn = document.getElementById('rec-btn');
+  if (btn) { btn.className = 'rec-btn idle'; document.getElementById('rec-icon').innerHTML = '<path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>'; }
+  document.getElementById('rec-status').textContent = 'Ready to record';
+  document.getElementById('rec-sub').textContent = 'Tap the mic to begin';
+  document.getElementById('rec-timer').style.display = 'none';
+  document.getElementById('rec-timer').textContent = '0:00';
+  fullTranscript = ''; seconds = 0;
+  switchRecTab('record');
+}
+
+/* ═══════════════════════════════════════════════════════
+   DELETE RECORD
+═══════════════════════════════════════════════════════ */
+async function deleteRecord(id) {
+  if (!confirm('Delete this call record?')) return;
+  try {
+    if (SUPABASE_URL !== 'YOUR_SUPABASE_PROJECT_URL') {
+      await db.from('calls').delete().eq('id', id).eq('user_id', currentUser.id);
+    }
+    records = records.filter(r => r.id !== id);
+    refreshDashboard(); renderLog();
+  } catch(e) { alert('Error deleting: ' + e.message); }
+}
+
+async function clearAllRecords() {
+  if (!confirm('Delete ALL call records? This cannot be undone.')) return;
+  try {
+    if (SUPABASE_URL !== 'YOUR_SUPABASE_PROJECT_URL') {
+      await db.from('calls').delete().eq('user_id', currentUser.id);
+    }
+    records = [];
+    refreshDashboard(); renderLog();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   TABLE RENDERING
+═══════════════════════════════════════════════════════ */
+function badge(o) {
+  const m = { Interested:'b-green', 'Not interested':'b-red', Callback:'b-amber', Voicemail:'b-blue', 'No answer':'b-gray' };
+  return o ? `<span class="badge ${m[o]||'b-gray'}">${o}</span>` : '—';
+}
+
+function buildTable(recs) {
+  if (!recs.length) return `<div class="empty-state"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="margin:0 auto 12px;display:block;color:var(--text3)"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.77 9.11 19.79 19.79 0 01.7 6.48A2 2 0 012.68 4h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 11.1a16 16 0 006 6l1.06-1.06a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>No calls logged yet. Hit "New call" to get started.</div>`;
+  return `<div class="table-wrap"><table>
+    <thead><tr><th>Name</th><th>Company</th><th>Date</th><th>Outcome</th><th>Follow-up</th><th>Pain points</th><th>Next steps</th><th></th></tr></thead>
+    <tbody>${recs.map(r => `<tr>
+      <td title="${r.prospect_name||''}"><strong>${r.prospect_name||'—'}</strong></td>
+      <td>${r.company||'—'}</td>
+      <td style="white-space:nowrap">${r.call_date||new Date(r.created_at).toLocaleDateString('en-US')}</td>
+      <td>${badge(r.outcome)}</td>
+      <td>${r.follow_up_date||'—'}</td>
+      <td title="${r.pain_points||''}">${r.pain_points||'—'}</td>
+      <td title="${r.next_steps||''}">${r.next_steps||'—'}</td>
+      <td><button class="btn btn-danger" style="font-size:12px;padding:4px 10px" onclick="deleteRecord(${r.id})">Delete</button></td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function refreshDashboard() {
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('st-total').textContent = records.length;
+  document.getElementById('st-int').textContent = records.filter(r => r.outcome === 'Interested').length;
+  document.getElementById('st-cb').textContent = records.filter(r => r.outcome === 'Callback').length;
+  document.getElementById('st-fu').textContent = records.filter(r => r.follow_up_date && r.follow_up_date <= today).length;
+  document.getElementById('dash-table').innerHTML = buildTable(records.slice(0, 8));
+}
+
+function renderLog() {
+  document.getElementById('log-table').innerHTML = buildTable(records);
+}
+
+function updatePlanBadge() {
+  const isPro = userProfile?.plan === 'pro';
+  const used = userProfile?.calls_this_month || records.length;
+  document.getElementById('plan-name').textContent = isPro ? 'Pro plan' : 'Free plan';
+  document.getElementById('plan-usage').textContent = isPro ? 'Unlimited calls' : `${used} / ${FREE_LIMIT} calls used`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   EXPORT
+═══════════════════════════════════════════════════════ */
+function toRows(recs) {
+  return recs.map(r => ({
+    'Date': r.call_date || new Date(r.created_at).toLocaleDateString('en-US'),
+    'Name': r.prospect_name, 'Company': r.company,
+    'Phone': r.phone, 'Email': r.email,
+    'Property Address': r.address, 'Outcome': r.outcome,
+    'Follow-up Date': r.follow_up_date, 'Pain Points': r.pain_points,
+    'Next Steps': r.next_steps, 'AI Summary': r.ai_summary,
+    'Transcript': r.transcript
+  }));
+}
+function exportAll() {
+  if (!records.length) { alert('No records to export yet.'); return; }
+  const ws = XLSX.utils.json_to_sheet(toRows(records));
+  ws['!cols'] = [10,20,20,14,22,22,14,12,32,32,32,50].map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Call Buddy');
+  XLSX.writeFile(wb, 'call_buddy_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+}
+function exportOne() {
+  const rec = [{
+    'Date': new Date().toLocaleDateString('en-US'),
+    'Name': document.getElementById('f-name')?.value || '',
+    'Company': document.getElementById('f-company')?.value || '',
+    'Phone': document.getElementById('f-phone')?.value || '',
+    'Email': document.getElementById('f-email')?.value || '',
+    'Property Address': document.getElementById('f-address')?.value || '',
+    'Outcome': document.getElementById('f-outcome')?.value || '',
+    'Follow-up Date': document.getElementById('f-followup')?.value || '',
+    'Pain Points': document.getElementById('f-pain')?.value || '',
+    'Next Steps': document.getElementById('f-nextsteps')?.value || '',
+    'AI Summary': document.getElementById('ai-summary')?.textContent || '',
+    'Transcript': document.getElementById('final-tx')?.textContent || ''
+  }];
+  const ws = XLSX.utils.json_to_sheet(rec);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Call');
+  XLSX.writeFile(wb, 'call_' + (document.getElementById('f-name')?.value || 'prospect').replace(/\s+/g, '_') + '.xlsx');
+}
+
+/* ═══════════════════════════════════════════════════════
+   STRIPE
+═══════════════════════════════════════════════════════ */
+async function handleStripe() {
+  if (STRIPE_KEY === 'YOUR_STRIPE_PUBLISHABLE_KEY') {
+    alert('To enable Stripe payments:\n\n1. Go to stripe.com → create a free account\n2. Products → Add product → "Call Buddy Pro" → $29/month\n3. Copy the Price ID and Publishable Key\n4. Open index.html and replace YOUR_STRIPE_PUBLISHABLE_KEY and YOUR_STRIPE_PRICE_ID\n5. Redeploy on Vercel\n\nSee README.md for the full guide.');
+    return;
+  }
+  try {
+    const stripe = Stripe(STRIPE_KEY);
+    await stripe.redirectToCheckout({
+      lineItems: [{ price: STRIPE_PRICE, quantity: 1 }],
+      mode: 'subscription',
+      clientReferenceId: currentUser?.id,
+      customerEmail: currentUser?.email,
+      successUrl: window.location.origin + '?upgraded=true',
+      cancelUrl: window.location.origin
+    });
+  } catch(e) { alert('Stripe error: ' + e.message); }
+}
+
+function showUpgradeModal() { document.getElementById('upgrade-modal').classList.remove('hidden'); }
+
+/* ═══════════════════════════════════════════════════════
+   MODAL HELPERS
+═══════════════════════════════════════════════════════ */
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+function bgClose(e, id) { if (e.target.id === id) closeModal(id); }
+function showAlert(id, msg) { const el = document.getElementById(id); el.textContent = msg; el.classList.remove('hidden'); }
+
+/* Handle Stripe success redirect */
+if (window.location.search.includes('upgraded=true')) {
+  setTimeout(() => {
+    if (userProfile) { userProfile.plan = 'pro'; updatePlanBadge(); }
+    alert('🎉 Welcome to Call Buddy Pro! Unlimited calls are now unlocked.');
+    window.history.replaceState({}, '', window.location.pathname);
+  }, 1000);
+}
+</script>
+</body>
+</html>
