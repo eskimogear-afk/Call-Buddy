@@ -323,13 +323,13 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <button class="btn btn-outline btn-lg" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">See how it works</button>
     </div>
 
-    <div class="hero-stats" style="margin-top:56px;padding-top:40px;border-top:1px solid var(--border)">
-      <div class="hero-stat"><span class="hero-stat-val">2 min</span><span class="hero-stat-lbl">Average setup time</span></div>
-      <div class="hero-stat"><span class="hero-stat-val">0</span><span class="hero-stat-lbl">Manual notes required</span></div>
-      <div class="hero-stat"><span class="hero-stat-val">100%</span><span class="hero-stat-lbl">Your data, always</span></div>
-      <div class="hero-stat"><span class="hero-stat-val">$0</span><span class="hero-stat-lbl">To get started today</span></div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:48px;margin-top:56px;padding-top:40px;border-top:1px solid var(--border);flex-wrap:wrap">
+      <div style="text-align:center"><div style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);font-weight:400">2 min</div><div style="font-size:13px;color:var(--text2);margin-top:4px">Average setup time</div></div>
+      <div style="text-align:center"><div style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);font-weight:400">0</div><div style="font-size:13px;color:var(--text2);margin-top:4px">Manual notes required</div></div>
+      <div style="text-align:center"><div style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);font-weight:400">100%</div><div style="font-size:13px;color:var(--text2);margin-top:4px">Your data, always</div></div>
+      <div style="text-align:center"><div style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);font-weight:400">$0</div><div style="font-size:13px;color:var(--text2);margin-top:4px">To get started today</div></div>
     </div>
-    <p class="hero-note" style="margin-top:20px">Free plan: 25 calls/month - Pro plan: $29/month unlimited - Cancel anytime</p>
+    <p style="font-size:13px;color:var(--text3);text-align:center;margin-top:20px">Free plan: 25 calls/month - Pro plan: $29/month unlimited - Cancel anytime</p>
   </div>
 
   <div class="section section-bg" id="features">
