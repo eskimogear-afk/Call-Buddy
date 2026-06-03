@@ -6,6 +6,8 @@
 <title>PitchLog - AI Cold Call Tracker for Loan Officers</title>
 <meta name="description" content="PitchLog listens to your cold calls, transcribes in real time, and automatically logs every prospect. Built for sales professionals in any industry.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%236366F1%22/><text y=%22.9em%22 font-size=%2280%22>&#127908;</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -199,6 +201,79 @@ tr:hover td{background:var(--bg2)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .hidden{display:none!important}
 .page-spinner{display:flex;align-items:center;justify-content:center;min-height:60vh;font-size:14px;color:var(--text2);gap:12px}
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  .pricing-grid{grid-template-columns:1fr 1fr!important}
+  .footer-top{grid-template-columns:1fr 1fr!important}
+}
+@media(max-width:768px){
+  #mobile-menu-btn{display:flex!important;align-items:center;justify-content:center}
+  nav{padding:12px 20px}
+  .nav-links{display:none!important}
+  .hero{padding:56px 20px 48px;background:linear-gradient(180deg,#F5F3FF 0%,#fff 100%)}
+  .hero h1{font-size:34px;line-height:1.15}
+  .hero p{font-size:16px;margin-bottom:28px}
+  .hero-ctas{flex-direction:column;align-items:stretch;padding:0 8px}
+  .hero-ctas .btn{justify-content:center;font-size:15px;padding:14px 20px}
+  .hero-note{font-size:12px}
+  .hero-stats{gap:20px!important;grid-template-columns:1fr 1fr!important;display:grid!important;padding:0}
+  .hero-stat-val{font-size:26px!important}
+  .social-bar{padding:16px 20px}
+  .social-bar-inner{gap:12px;flex-direction:column;align-items:flex-start}
+  .social-item{font-size:12px}
+  .section{padding:52px 20px}
+  .section-title{font-size:30px}
+  .section-sub{font-size:15px;margin-bottom:32px}
+  .steps{grid-template-columns:1fr 1fr;gap:24px}
+  .steps::before{display:none}
+  .step{padding:0 8px}
+  .feat-grid{grid-template-columns:1fr}
+  .feat-card{padding:22px 20px}
+  .testi-grid{grid-template-columns:1fr}
+  .testimonials{grid-template-columns:1fr}
+  .pricing-grid{grid-template-columns:1fr!important}
+  .price-card{padding:24px 20px}
+  .price-amount{font-size:40px}
+  .compare-table{overflow-x:auto}
+  .compare-table table{min-width:520px;font-size:12px}
+  .compare-table th,.compare-table td{padding:10px 10px}
+  .cta-banner{padding:56px 20px}
+  .cta-banner h2{font-size:32px}
+  .cta-banner p{font-size:15px}
+  .cta-banner-btns{flex-direction:column;align-items:stretch}
+  .cta-banner-btns .btn{justify-content:center}
+  .footer-top{grid-template-columns:1fr!important;gap:24px}
+  footer{padding:40px 20px 24px}
+  .footer-bottom{flex-direction:column;gap:8px;text-align:center}
+  .app-layout{flex-direction:column}
+  .sidebar{width:100%!important;flex-direction:row;padding:8px 12px;overflow-x:auto;gap:4px;border-right:none;border-bottom:1px solid var(--border);min-height:auto;max-height:56px}
+  .sidebar-item{padding:8px 12px;white-space:nowrap;flex-shrink:0;font-size:13px}
+  .sidebar-divider{display:none}
+  .sidebar-plan{display:none!important}
+  .main-content{padding:20px 16px}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .stat-val{font-size:26px}
+  .chart-grid{grid-template-columns:1fr}
+  .field-grid{grid-template-columns:1fr}
+  .field-group.full{grid-column:1}
+  .page-header{flex-direction:column;align-items:flex-start}
+  .rec-btn{width:76px;height:76px}
+  .rec-timer{font-size:36px}
+  table{min-width:480px;font-size:12px}
+  th,td{padding:9px 10px}
+  .card-tabs{overflow-x:auto}
+  .card-tab{white-space:nowrap;font-size:12px;padding:11px 14px}
+  .modal{padding:24px 20px}
+}
+@media(max-width:480px){
+  .hero h1{font-size:28px}
+  .hero-ctas{gap:10px}
+  .steps{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .hero-stats{grid-template-columns:1fr 1fr!important}
+}
+
 </style>
 </head>
 <body>
@@ -248,11 +323,11 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <button class="btn btn-outline btn-lg" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">See how it works</button>
     </div>
 
-    <div style="display:flex;align-items:center;justify-content:center;gap:40px;margin-top:56px;padding-top:40px;border-top:1px solid var(--border);flex-wrap:wrap">
-      <div style="text-align:center"><span style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);display:block">2 min</span><span style="font-size:13px;color:var(--text2)">Average setup time</span></div>
-      <div style="text-align:center"><span style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);display:block">0</span><span style="font-size:13px;color:var(--text2)">Manual notes required</span></div>
-      <div style="text-align:center"><span style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);display:block">100%</span><span style="font-size:13px;color:var(--text2)">Your data, always</span></div>
-      <div style="text-align:center"><span style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);display:block">$0</span><span style="font-size:13px;color:var(--text2)">To get started today</span></div>
+    <div class="hero-stats" style="margin-top:56px;padding-top:40px;border-top:1px solid var(--border)">
+      <div class="hero-stat"><span class="hero-stat-val">2 min</span><span class="hero-stat-lbl">Average setup time</span></div>
+      <div class="hero-stat"><span class="hero-stat-val">0</span><span class="hero-stat-lbl">Manual notes required</span></div>
+      <div class="hero-stat"><span class="hero-stat-val">100%</span><span class="hero-stat-lbl">Your data, always</span></div>
+      <div class="hero-stat"><span class="hero-stat-val">$0</span><span class="hero-stat-lbl">To get started today</span></div>
     </div>
     <p class="hero-note" style="margin-top:20px">Free plan: 25 calls/month - Pro plan: $29/month unlimited - Cancel anytime</p>
   </div>
@@ -1118,6 +1193,22 @@ if (window.location.search.includes('upgraded=true')) {
     window.history.replaceState({}, '', window.location.pathname);
   }, 1000);
 }
+
+function toggleMobileMenu(){
+  const m=document.getElementById("nav-links-menu");
+  const b=document.getElementById("mobile-menu-btn");
+  const isOpen=m.classList.contains("mobile-open");
+  if(!isOpen){
+    m.classList.add("mobile-open");
+    m.style.cssText="display:flex!important;flex-direction:column;position:fixed;top:57px;left:0;right:0;background:var(--bg);border-bottom:1px solid var(--border);padding:20px 24px;gap:18px;z-index:999;box-shadow:0 8px 24px rgba(0,0,0,.12)";
+    b.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  } else {
+    m.classList.remove("mobile-open");
+    m.removeAttribute("style");
+    b.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+  }
+}
+
 </script>
 </body>
 </html>
