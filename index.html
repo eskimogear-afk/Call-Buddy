@@ -3,11 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Call Buddy | AI Cold Call Tracker for Loan Officers</title>
+<title>Call Buddy - AI Cold Call Tracker for Loan Officers</title>
 <meta name="description" content="Call Buddy listens to your cold calls, transcribes in real time, and automatically logs every prospect. Built for mortgage and loan officers.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%231D9E75%22/><text y=%22.9em%22 font-size=%2280%22>&#128222;</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -34,9 +36,9 @@ a{color:inherit;text-decoration:none}
 .btn-full{width:100%;justify-content:center}
 .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
 
-nav{display:flex;align-items:center;justify-content:space-between;padding:16px 48px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:100}
+nav{display:flex;align-items:center;justify-content:space-between;padding:16px 48px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.95);position:sticky;top:0;z-index:100;backdrop-filter:blur(8px)}
 .logo{display:flex;align-items:center;gap:10px;cursor:pointer}
-.logo-mark{width:36px;height:36px;background:var(--brand);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-mark{width:36px;height:36px;background:var(--brand);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(29,158,117,.3)}
 .logo-name{font-size:18px;font-weight:600}
 .nav-right{display:flex;align-items:center;gap:10px}
 
@@ -44,7 +46,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:16px 4
 .view.active{display:block}
 
 /* Landing */
-.hero{text-align:center;padding:88px 48px 72px}
+.hero{text-align:center;padding:88px 48px 72px;background:linear-gradient(180deg,#F0FDF9 0%,#fff 100%)}
 .hero-badge{display:inline-flex;align-items:center;gap:6px;background:var(--brand-light);color:var(--brand-dark);font-size:12px;font-weight:600;padding:5px 14px;border-radius:99px;margin-bottom:28px}
 .hero h1{font-family:'DM Serif Display',serif;font-size:54px;font-weight:400;line-height:1.12;max-width:660px;margin:0 auto 20px}
 .hero h1 em{color:var(--brand);font-style:normal}
@@ -57,7 +59,8 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:16px 4
 .section-title{font-family:'DM Serif Display',serif;font-size:38px;font-weight:400;text-align:center;margin-bottom:12px}
 .section-sub{font-size:16px;color:var(--text2);text-align:center;max-width:500px;margin:0 auto 52px;line-height:1.7}
 .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:920px;margin:0 auto}
-.feat-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:28px 24px}
+.feat-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:28px 24px;transition:all .2s;cursor:default}
+.feat-card:hover{box-shadow:0 10px 15px rgba(0,0,0,.1);transform:translateY(-2px);border-color:var(--brand-light)}
 .feat-icon{width:46px;height:46px;background:var(--brand-light);border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:16px}
 .feat-card h3{font-size:15px;font-weight:600;margin-bottom:8px}
 .feat-card p{font-size:13px;color:var(--text2);line-height:1.65}
@@ -66,7 +69,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:16px 4
 .step-num{width:40px;height:40px;border-radius:50%;background:var(--brand);color:#fff;font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
 .step h3{font-size:14px;font-weight:600;margin-bottom:6px}
 .step p{font-size:13px;color:var(--text2)}
-.pricing-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:740px;margin:0 auto}
+.pricing-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;max-width:960px;margin:0 auto}
 .price-card{border:1.5px solid var(--border);border-radius:var(--radius);padding:32px 28px}
 .price-card.featured{border-color:var(--brand)}
 .price-popular{display:inline-block;background:var(--brand);color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;margin-bottom:14px}
@@ -220,6 +223,11 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     </div>
     <span class="logo-name">Call Buddy</span>
   </div>
+  <div class="nav-links" style="display:flex;align-items:center;gap:24px">
+    <a style="font-size:14px;color:var(--text2);cursor:pointer" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">Features</a>
+    <a style="font-size:14px;color:var(--text2);cursor:pointer" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">Pricing</a>
+    <a style="font-size:14px;color:var(--text2);cursor:pointer" onclick="document.getElementById('faq').scrollIntoView({behavior:'smooth'})">FAQ</a>
+  </div>
   <div class="nav-right" id="nav-right">
     <button class="btn btn-ghost" onclick="showAuthModal('login')">Log in</button>
     <button class="btn btn-primary" onclick="showAuthModal('signup')">Start free</button>
@@ -234,12 +242,19 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       Built for mortgage &amp; loan officers
     </div>
     <h1>Your AI-powered <em>cold call</em> co-pilot</h1>
-    <p>Call Buddy listens to your cold calls, transcribes every word in real time, and automatically logs each prospect with AI. No typing. No forgetting. Your pipeline syncs across all your devices.</p>
+    <p>Call Buddy listens to your cold calls, transcribes every word in real time, and automatically logs each prospect with AI. No typing. No forgetting. Close more loans.</p>
     <div class="hero-ctas">
       <button class="btn btn-primary btn-lg" onclick="showAuthModal('signup')">Start free - no card needed</button>
       <button class="btn btn-outline btn-lg" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">See how it works</button>
     </div>
-    <p class="hero-note">Free plan: 25 calls/month &nbsp;|&nbsp; Pro: $29/month unlimited &nbsp;|&nbsp; Cancel anytime</p>
+
+    <div style="display:flex;align-items:center;justify-content:center;gap:40px;margin-top:56px;padding-top:40px;border-top:1px solid var(--border);flex-wrap:wrap">
+      <div style="text-align:center"><span style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);display:block">2 min</span><span style="font-size:13px;color:var(--text2)">Average setup time</span></div>
+      <div style="text-align:center"><span style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);display:block">0</span><span style="font-size:13px;color:var(--text2)">Manual notes required</span></div>
+      <div style="text-align:center"><span style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);display:block">100%</span><span style="font-size:13px;color:var(--text2)">Your data, always</span></div>
+      <div style="text-align:center"><span style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);display:block">$0</span><span style="font-size:13px;color:var(--text2)">To get started today</span></div>
+    </div>
+    <p class="hero-note" style="margin-top:20px">Free plan: 25 calls/month - Pro plan: $29/month unlimited - Cancel anytime</p>
   </div>
 
   <div class="section section-bg" id="features">
@@ -249,8 +264,8 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     <div class="steps">
       <div class="step"><div class="step-num">1</div><h3>Hit record</h3><p>Open Call Buddy, tap record before you dial.</p></div>
       <div class="step"><div class="step-num">2</div><h3>Make the call</h3><p>Put your phone on speaker near your computer. Call Buddy hears both sides through your mic.</p></div>
-      <div class="step"><div class="step-num">3</div><h3>AI analyzes</h3><p>Stop recording when the call ends. AI reads the transcript and extracts all key details in seconds.</p></div>
-      <div class="step"><div class="step-num">4</div><h3>Auto-logged</h3><p>Your prospect is saved to your dashboard automatically. Export to Excel any time with one click.</p></div>
+      <div class="step"><div class="step-num">3</div><h3>AI analyzes</h3><p>Stop recording when the call ends. AI reads the full transcript and extracts all key details in seconds.</p></div>
+      <div class="step"><div class="step-num">4</div><h3>Auto-logged</h3><p>Your prospect is saved to your dashboard automatically. Export to Excel any time.</p></div>
     </div>
   </div>
 
@@ -262,17 +277,17 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <div class="feat-card">
         <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg></div>
         <h3>Live mic recording</h3>
-        <p>Tap record, then make your call on speaker near your computer. Call Buddy captures every word through your microphone. No extra hardware or apps needed.</p>
+        <p>Tap record, then make your call on speaker near your computer. Call Buddy captures every word through your microphone. No extra hardware or apps required.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
         <h3>Real-time transcription</h3>
-        <p>Watch your entire conversation appear as text in real time while you talk. After the call, review and save the full word-for-word transcript.</p>
+        <p>Watch your entire conversation appear as text in real time. After the call, review and save the full word-for-word transcript.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg></div>
         <h3>AI auto-fill</h3>
-        <p>When the call ends, AI reads the full transcript and automatically fills in the prospect's name, company, pain points, next steps, outcome, and follow-up date. Zero manual data entry.</p>
+        <p>When the call ends, AI fills in the prospect name, company, pain points, next steps, outcome, and follow-up date automatically. Zero manual data entry.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></div>
@@ -287,7 +302,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <div class="feat-card">
         <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
         <h3>Secure &amp; private</h3>
-        <p>Built on Supabase with enterprise-grade encryption. Your call data belongs to you and is protected with row-level database security. Nothing is shared without your permission.</p>
+        <p>Built on Supabase with enterprise-grade encryption. Your data is yours alone, protected with row-level database security. Nothing is ever shared.</p>
       </div>
     </div>
   </div>
@@ -297,16 +312,16 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     <div class="section-title">Loan officers love it</div>
     <p class="section-sub">Trusted by loan officers and mortgage brokers across the United States.</p>
     <div class="testimonials">
-      <div class="testi"><div class="testi-stars">★★★★★</div><p>"I used to spend 30 minutes after every calling session just updating my spreadsheet. Call Buddy cut that to zero. The AI notes are actually better than what I wrote myself."</p><div class="testi-author">Marcus T. - Loan Officer, Phoenix AZ</div></div>
-      <div class="testi"><div class="testi-stars">★★★★★</div><p>"The follow-up tracking alone is worth it. I had prospects slipping through the cracks constantly. Now my dashboard tells me exactly who to call every morning."</p><div class="testi-author">Sarah K. - Mortgage Broker, Dallas TX</div></div>
-      <div class="testi"><div class="testi-stars">★★★★★</div><p>"Skeptical at first but the AI transcript accuracy blew me away. It even caught the property address the prospect mentioned halfway through the call."</p><div class="testi-author">James R. - Sr. Loan Officer, Atlanta GA</div></div>
+      <div class="testi"><div class="testi-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div><p>"I used to spend 30 minutes after every calling session just updating my spreadsheet. Call Buddy cut that to zero. The AI notes are actually better than what I wrote myself."</p><div class="testi-author">Marcus T.</div><div class="testi-role">Loan Officer, Phoenix AZ</div></div>
+      <div class="testi"><div class="testi-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div><p>"The follow-up tracking alone is worth it. I had prospects slipping through the cracks constantly. Now my dashboard tells me exactly who to call every morning."</p><div class="testi-author">Sarah K.</div><div class="testi-role">Mortgage Broker, Dallas TX</div></div>
+      <div class="testi"><div class="testi-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div><p>"Skeptical at first but the AI transcript accuracy blew me away. It even caught the property address the prospect mentioned halfway through the call."</p><div class="testi-author">James R.</div><div class="testi-role">Sr. Loan Officer, Atlanta GA</div></div>
     </div>
   </div>
 
   <div class="section" id="pricing">
     <div class="section-label">Pricing</div>
     <div class="section-title">Start free, scale when ready</div>
-    <p class="section-sub">No contracts. No hidden fees. Start for free today and upgrade only when you are ready.</p>
+    <p class="section-sub">No contracts. No hidden fees. Start for free today.</p>
     <div class="pricing-grid">
       <div class="price-card">
         <div class="price-name">Free</div>
@@ -333,9 +348,65 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Priority support</li>
           <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Early access to new features</li>
         </ul>
-        <button class="btn btn-primary btn-full" onclick="showAuthModal('signup')">Start 7-day free trial</button>
+        <button class="btn btn-primary btn-full" onclick="showUpgradeModal()">Start 7-day free trial</button>
+      </div>
+      <div class="price-card" style="border:1.5px solid var(--border)">
+        <div class="price-name">Team</div>
+        <div class="price-amount" style="font-size:36px">Custom</div>
+        <div class="price-desc">For mortgage teams and branch offices.</div>
+        <ul class="price-features">
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Everything in Pro</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Shared team dashboard</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Manager reporting</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Volume discounts</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Dedicated support</li>
+        </ul>
+        <a href="mailto:support@callbuddy.ai" class="btn btn-outline btn-full">Contact us</a>
       </div>
     </div>
+  </div>
+
+  <div class="section" id="faq">
+    <p class="section-label">FAQ</p>
+    <h2 class="section-title">Common questions answered</h2>
+    <p class="section-sub">Everything you need to know before getting started.</p>
+    <div style="max-width:720px;margin:0 auto">
+      <details style="border-bottom:1px solid var(--border)" open>
+        <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">Do I need any special equipment?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
+        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">No. All you need is a computer with a built-in microphone and your regular phone. Put your phone on speaker near your computer when making calls and Call Buddy picks up both sides of the conversation automatically.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--border)">
+        <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">Is the transcription accurate?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
+        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">Yes. Call Buddy uses your browser built-in speech recognition powered by the same technology as Google Voice Search. Accuracy is very high in normal conditions. Audio quality improves when your phone is placed close to your computer microphone.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--border)">
+        <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">Is my call data private and secure?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
+        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">Absolutely. Your call data is stored in your personal account with row-level security. No other user can ever access your records. We do not sell or share your data with anyone. You can delete all your data permanently at any time from your account settings.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--border)">
+        <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">Can I export my data to my CRM?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
+        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">Yes. Every call log can be exported as a formatted Excel file with one click. Most CRMs including Salesforce, HubSpot, and Encompass accept Excel imports, so you can bring your Call Buddy data into any system you use.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--border)">
+        <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">What happens when I reach 25 calls on the free plan?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
+        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">You will see a prompt to upgrade to Pro when you reach your monthly limit. Your existing call data is never deleted. You can still view, search, and export all your previous calls. The limit resets on the 1st of every month.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--border)">
+        <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">Can I cancel my Pro subscription anytime?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
+        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">Yes. You can cancel Pro at any time from your account settings. You will keep Pro access until the end of your billing period. No cancellation fees and no questions asked.</p>
+      </details>
+    </div>
+  </div>
+
+  <!-- CTA Banner -->
+  <div style="background:linear-gradient(135deg,#085041 0%,#0F6E56 100%);text-align:center;padding:80px 48px">
+    <h2 style="font-family:'DM Serif Display',serif;font-size:44px;font-weight:400;color:#fff;margin-bottom:16px;line-height:1.2">Ready to close more loans?</h2>
+    <p style="font-size:18px;color:rgba(255,255,255,.8);margin-bottom:36px;max-width:480px;margin-left:auto;margin-right:auto">Join loan officers who have stopped wasting time on manual notes and started focusing on building relationships and closing deals.</p>
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap">
+      <button class="btn btn-lg" style="background:#fff;color:#085041;border-color:#fff" onclick="showAuthModal('signup')">Start free today</button>
+      <button class="btn btn-lg" style="background:transparent;border-color:rgba(255,255,255,.4);color:#fff" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">View pricing</button>
+    </div>
+    <p style="font-size:13px;color:rgba(255,255,255,.5);margin-top:20px">Free plan available. No credit card required. Set up in under 2 minutes.</p>
   </div>
 
   <footer>
@@ -539,7 +610,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       1. Create a free account at <strong>stripe.com</strong><br>
       2. Create a recurring product → $29/month → copy the <strong>Price ID</strong><br>
       3. Copy your <strong>Publishable Key</strong> from Stripe Dashboard<br>
-      4. Replace <code>price_placeholder</code> and <code>YOUR_STRIPE_KEY</code> in index.html<br>
+      4. Replace <code>YOUR_STRIPE_PRICE_ID</code> and <code>YOUR_STRIPE_KEY</code> in index.html<br>
       5. Redeploy - Stripe handles billing, you keep 97%
     </div>
     <button class="btn btn-primary btn-full" onclick="handleStripe()">
@@ -565,7 +636,7 @@ let seconds = 0;
 let fullTranscript = '';
 
 const STRIPE_KEY = 'pk_test_51TdiCs2RgYWz496ckaoC48If1Jfq5sbU8PS8yciSzcEaLYjQB0HCtbYj7zcccIx9UFC12ExbzvC9gFIn6QJfnbBO00TpE7MDuG';
-const STRIPE_PRICE = 'price_placeholder';
+const STRIPE_PRICE = 'YOUR_STRIPE_PRICE_ID';
 
 /* ═══════════════════════════════════════════════════════
    INIT - check if already logged in
@@ -1014,7 +1085,7 @@ function exportOne() {
 ═══════════════════════════════════════════════════════ */
 async function handleStripe() {
   if (STRIPE_KEY === 'pk_test_51TdiCs2RgYWz496ckaoC48If1Jfq5sbU8PS8yciSzcEaLYjQB0HCtbYj7zcccIx9UFC12ExbzvC9gFIn6QJfnbBO00TpE7MDuG') {
-    alert('To enable Stripe payments:\n\n1. Go to stripe.com → create a free account\n2. Products → Add product → "Call Buddy Pro" → $29/month\n3. Copy the Price ID and Publishable Key\n4. Open index.html and replace pk_test_51TdiCs2RgYWz496ckaoC48If1Jfq5sbU8PS8yciSzcEaLYjQB0HCtbYj7zcccIx9UFC12ExbzvC9gFIn6QJfnbBO00TpE7MDuG and price_placeholder\n5. Redeploy on Vercel\n\nSee README.md for the full guide.');
+    alert('To enable Stripe payments:\n\n1. Go to stripe.com → create a free account\n2. Products → Add product → "Call Buddy Pro" → $29/month\n3. Copy the Price ID and Publishable Key\n4. Open index.html and replace pk_test_51TdiCs2RgYWz496ckaoC48If1Jfq5sbU8PS8yciSzcEaLYjQB0HCtbYj7zcccIx9UFC12ExbzvC9gFIn6QJfnbBO00TpE7MDuG and YOUR_STRIPE_PRICE_ID\n5. Redeploy on Vercel\n\nSee README.md for the full guide.');
     return;
   }
   try {
