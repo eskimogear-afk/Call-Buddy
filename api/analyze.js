@@ -1,6 +1,6 @@
-const https = require('https');
+import https from 'https';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -9,18 +9,18 @@ module.exports = async function handler(req, res) {
 
   let body = '';
   await new Promise((resolve, reject) => {
-    req.on('data', chunk => body += chunk);
+    req.on('data', chunk => { body += chunk; });
     req.on('end', resolve);
     req.on('error', reject);
   });
 
   let parsed;
-  try { parsed = JSON.parse(body); } 
+  try { parsed = JSON.parse(body); }
   catch(e) { return res.status(400).json({ error: 'Invalid JSON' }); }
 
   const { transcript, type, name, summary, painPoints, nextSteps } = parsed;
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-  if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+  if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
 
   let prompt = '';
   if (type === 'email') {
@@ -71,20 +71,25 @@ ${transcript}`;
 
     const apiReq = https.request(options, (apiRes) => {
       let data = '';
-      apiRes.on('data', chunk => data += chunk);
+      apiRes.on('data', chunk => { data += chunk; });
       apiRes.on('end', () => {
         try {
           const json = JSON.parse(data);
+          if (json.error) {
+            res.status(500).json({ error: json.error.message || 'Anthropic API error' });
+            resolve();
+            return;
+          }
           const text = (json.content || []).map(b => b.text || '').join('').trim();
           if (type === 'email') {
             res.status(200).json({ result: text });
           } else {
             const clean = text.replace(/```json|```/g, '').trim();
-            const parsed = JSON.parse(clean);
-            res.status(200).json(parsed);
+            const parsed2 = JSON.parse(clean);
+            res.status(200).json(parsed2);
           }
         } catch(e) {
-          res.status(500).json({ error: 'Parse error: ' + e.message, raw: data.slice(0, 200) });
+          res.status(500).json({ error: 'Parse error: ' + e.message });
         }
         resolve();
       });
@@ -98,4 +103,4 @@ ${transcript}`;
     apiReq.write(requestBody);
     apiReq.end();
   });
-};
+}
