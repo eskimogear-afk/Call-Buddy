@@ -795,6 +795,21 @@ async function handleAuth() {
       if (result.error) throw result.error;
     }
     closeModal('auth-modal');
+    // Explicitly route to dashboard after successful auth
+    if (result?.data?.user) {
+      currentUser = result.data.user;
+      await loadProfile();
+      enterApp();
+      if (authMode === 'signup') {
+        setTimeout(() => {
+          const tip = document.createElement('div');
+          tip.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--brand);color:#fff;padding:16px 20px;border-radius:var(--radius);font-size:14px;max-width:320px;box-shadow:0 8px 24px rgba(99,102,241,.4);z-index:9999;line-height:1.6';
+          tip.innerHTML = '<strong>Welcome to PitchLog!</strong><br>Click <strong>New call</strong> in the sidebar, hit record, and make your first call on speaker. The AI handles everything else.';
+          document.body.appendChild(tip);
+          setTimeout(() => tip.remove(), 8000);
+        }, 800);
+      }
+    }
   } catch(e) {
     showAlert('auth-alert', e.message || 'Something went wrong. Please try again.');
     btn.disabled = false;
