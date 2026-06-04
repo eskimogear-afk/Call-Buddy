@@ -1,17 +1,16 @@
 {
   "name": "call-buddy",
   "version": "1.0.0",
-  "description": "AI-powered cold call tracker for loan officers",
+  "description": "AI-powered cold call tracker for sales professionals",
   "private": true,
   "scripts": {
     "dev": "vercel dev",
     "deploy": "vercel --prod"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.0",
     "stripe": "^14.14.0"
   },
   "engines": {
-    "node": ">=18"
+    "node": "18.x"
   }
 }
