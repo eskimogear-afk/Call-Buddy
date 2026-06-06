@@ -3,7 +3,7 @@ let twilioDevice = null;
 
 async function initTwilioDevice() {
   try {
-    const { data: { session } } = await supabaseClient.auth.getSession();
+    const { data: { session } } = await db.auth.getSession();
     const res = await fetch('/api/twilio-token', {
       headers: { 'Authorization': `Bearer ${session?.access_token}` }
     });
@@ -21,18 +21,25 @@ async function initTwilioDevice() {
       if (el) el.textContent = '🔴 ' + err.message;
     });
     twilioDevice.on('connect', () => {
-      document.getElementById('btn-hangup').style.display = 'inline-block';
-      document.getElementById('btn-call').style.display = 'none';
-      document.getElementById('dialer-status').textContent = '📞 On call...';
+      const h = document.getElementById('btn-hangup');
+      const c = document.getElementById('btn-call');
+      const s = document.getElementById('dialer-status');
+      if (h) h.style.display = 'inline-block';
+      if (c) c.style.display = 'none';
+      if (s) s.textContent = '📞 On call...';
     });
     twilioDevice.on('disconnect', () => {
-      document.getElementById('btn-hangup').style.display = 'none';
-      document.getElementById('btn-call').style.display = 'inline-block';
-      document.getElementById('dialer-status').textContent = '✅ Call ended — AI logging...';
+      const h = document.getElementById('btn-hangup');
+      const c = document.getElementById('btn-call');
+      const s = document.getElementById('dialer-status');
+      if (h) h.style.display = 'none';
+      if (c) c.style.display = 'inline-block';
+      if (s) s.textContent = '✅ Call ended — AI logging...';
       setTimeout(() => {
         const el = document.getElementById('dialer-status');
         if (el) el.textContent = '🟢 Ready to call';
-        loadCallLog();
+        if (typeof renderLog === 'function') renderLog();
+        if (typeof refreshDashboard === 'function') refreshDashboard();
       }, 5000);
     });
   } catch (err) {
