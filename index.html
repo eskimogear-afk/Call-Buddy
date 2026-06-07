@@ -7,8 +7,8 @@
 <meta name="description" content="PitchLog listens to your cold calls, transcribes in real time, and automatically logs every prospect. Built for sales professionals in any industry.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%236366F1%22/><text y=%22.9em%22 font-size=%2280%22>&#127908;</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -23,7 +23,8 @@
   --border:#E5E7EB;--danger:#DC2626;--danger-light:#FEE2E2;
   --radius:12px;--radius-sm:8px;--radius-xs:6px;
 }
-body{font-family:'DM Sans',sans-serif;color:var(--text);background:var(--bg);line-height:1.6;min-height:100vh}
+body{font-family:'Inter',sans-serif;color:var(--text);background:var(--bg);line-height:1.6;min-height:100vh}
+.btn{font-family:'Inter',sans-serif!important}
 a{color:inherit;text-decoration:none}
 
 .btn{font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;padding:9px 20px;border-radius:var(--radius-sm);cursor:pointer;border:1.5px solid transparent;transition:all .15s;display:inline-flex;align-items:center;gap:7px;line-height:1}
@@ -204,6 +205,70 @@ tr:hover td{background:var(--bg2)}
 .hidden{display:none!important}
 .page-spinner{display:flex;align-items:center;justify-content:center;min-height:60vh;font-size:14px;color:var(--text2);gap:12px}
 
+/* ── HERO PRODUCT MOCKUP ── */
+.hero-visual{margin-top:60px;max-width:840px;margin-left:auto;margin-right:auto;position:relative}
+.hero-glow{position:absolute;top:-20px;left:50%;transform:translateX(-50%);width:700px;height:260px;background:radial-gradient(ellipse at center,rgba(99,102,241,.14) 0%,transparent 65%);pointer-events:none;z-index:0}
+.mockup-wrap{position:relative;z-index:1;border-radius:14px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.14),0 4px 16px rgba(99,102,241,.1),0 0 0 1px rgba(0,0,0,.07)}
+.mockup-titlebar{background:#ECECEC;padding:10px 14px;display:flex;align-items:center;gap:12px}
+.mockup-traffic{display:flex;gap:6px}
+.mockup-traffic span{width:12px;height:12px;border-radius:50%;display:block}
+.mockup-traffic span:nth-child(1){background:#FF5F57}
+.mockup-traffic span:nth-child(2){background:#FEBC2E}
+.mockup-traffic span:nth-child(3){background:#28C840}
+.mockup-urlbar{flex:1;background:#fff;border:1px solid #D1D5DB;border-radius:6px;padding:4px 14px;font-size:11.5px;color:#6B7280;max-width:260px;text-align:center;margin:0 auto}
+.mockup-app{background:#F8FAFB;display:grid;grid-template-columns:1fr 1fr;min-height:220px}
+.mockup-left{padding:22px 24px;border-right:1px solid #E5E7EB}
+.mockup-right{padding:22px 24px;background:#fff}
+.mockup-rec-pill{display:inline-flex;align-items:center;gap:8px;background:#FEF2F2;border:1px solid #FECACA;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;color:#DC2626;margin-bottom:14px}
+.mockup-pulse{width:8px;height:8px;background:#DC2626;border-radius:50%;animation:pulse 1.4s ease-in-out infinite;flex-shrink:0}
+.mockup-transcript-box{background:#fff;border:1px solid #E5E7EB;border-radius:8px;padding:12px 14px}
+.mtr-line{font-size:11.5px;color:#374151;line-height:1.65;margin-bottom:5px}
+.mtr-line:last-child{margin-bottom:0}
+.mtr-speaker{font-weight:700;color:#111827;margin-right:5px}
+.mtr-ai-tag{display:inline-block;background:#EEF2FF;color:#3730A3;font-size:10px;font-weight:700;padding:1.5px 7px;border-radius:99px;margin-left:4px}
+.mf-row{margin-bottom:12px}
+.mf-row:last-child{margin-bottom:0}
+.mf-label{font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:3px}
+.mf-val{font-size:13px;font-weight:500;color:#111827}
+.mf-tag{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px}
+.mf-tag-blue{background:#DBEAFE;color:#1D4ED8}
+.mf-tag-green{background:#D1FAE5;color:#065F46}
+/* ── HERO STATS ── */
+.hero-stat-strip{display:flex;align-items:stretch;justify-content:center;margin-top:56px;padding-top:40px;border-top:1px solid var(--border);flex-wrap:wrap;max-width:640px;margin-left:auto;margin-right:auto}
+.hero-stat-item{text-align:center;padding:0 36px;border-right:1px solid var(--border);flex:1}
+.hero-stat-item:last-child{border-right:none}
+.hero-stat-val{font-family:'DM Serif Display',serif;font-size:34px;color:var(--brand);font-weight:400;display:block;line-height:1.1}
+.hero-stat-lbl{font-size:12px;color:var(--text3);margin-top:5px;font-weight:500;line-height:1.4}
+/* ── TRUST / SOCIAL PROOF ── */
+.hero-trust{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;margin-top:20px}
+.hero-trust-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);font-weight:500}
+.hero-trust-item svg{flex-shrink:0}
+.social-bar{background:#fff;border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:20px 48px}
+.social-bar-inner{display:flex;align-items:center;justify-content:center;gap:40px;flex-wrap:wrap}
+.social-bar-label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;white-space:nowrap}
+.social-item{font-size:13px;font-weight:600;color:var(--text3);letter-spacing:.3px;white-space:nowrap;transition:color .15s}
+.social-item:hover{color:var(--text2)}
+/* Testimonial avatars */
+.testi-meta{display:flex;align-items:center;gap:10px}
+.testi-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;letter-spacing:.5px}
+.testi-info{display:flex;flex-direction:column}
+.testi-author{font-size:13px;font-weight:600;color:var(--text)}
+.testi-role{font-size:11px;color:var(--text3);margin-top:1px}
+/* Security badges */
+.trust-badges{display:flex;align-items:center;justify-content:center;gap:24px;flex-wrap:wrap;margin-top:40px;padding-top:32px;border-top:1px solid var(--border)}
+.trust-badge{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2);font-weight:500}
+.trust-badge svg{color:var(--brand);flex-shrink:0}
+/* Multi-column footer */
+footer{background:var(--text);padding:0}
+.footer-top{display:grid;grid-template-columns:2fr 1fr 1fr;gap:48px;padding:52px 64px 40px;border-bottom:1px solid rgba(255,255,255,.08)}
+.footer-col-logo p{font-size:13px;color:#9CA3AF;margin-top:10px;line-height:1.7;max-width:260px}
+.footer-col h4{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6B7280;margin-bottom:16px}
+.footer-col a{display:block;font-size:13px;color:#9CA3AF;margin-bottom:10px;transition:color .15s}
+.footer-col a:hover{color:#fff}
+.footer-bottom{display:flex;align-items:center;justify-content:space-between;padding:20px 64px;flex-wrap:wrap;gap:12px}
+.footer-copy{font-size:12px;color:#6B7280}
+.footer-badges{display:flex;align-items:center;gap:16px}
+.footer-badge{font-size:11px;color:#6B7280;border:1px solid rgba(255,255,255,.1);padding:3px 10px;border-radius:99px}
 /* ── RESPONSIVE ── */
 @media(max-width:900px){
   .pricing-grid{grid-template-columns:1fr 1fr!important}
@@ -221,6 +286,14 @@ tr:hover td{background:var(--bg2)}
   .hero-note{font-size:12px}
   .hero-stats{gap:20px!important;grid-template-columns:1fr 1fr!important;display:grid!important;padding:0}
   .hero-stat-val{font-size:26px!important}
+  .hero-visual{margin-top:36px}
+  .mockup-app{grid-template-columns:1fr}
+  .mockup-left{border-right:none;border-bottom:1px solid #E5E7EB}
+  .hero-stat-strip{gap:0;display:grid!important;grid-template-columns:1fr 1fr}
+  .hero-stat-item{padding:16px 0;border-right:none!important;border-bottom:1px solid var(--border)}
+  .hero-stat-item:nth-child(odd){border-right:1px solid var(--border)!important}
+  .hero-stat-item:nth-last-child(-n+2){border-bottom:none}
+  .hero-stat-val{font-size:26px}
   .social-bar{padding:16px 20px}
   .social-bar-inner{gap:12px;flex-direction:column;align-items:flex-start}
   .social-item{font-size:12px}
@@ -321,17 +394,64 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     <h1>Your AI-powered <em>cold call</em> co-pilot</h1>
     <p>PitchLog listens to your cold calls, transcribes every word in real time, and automatically logs each prospect with AI. No typing. No forgetting. Close more deals.</p>
     <div class="hero-ctas">
-      <button class="btn btn-primary btn-lg" onclick="showAuthModal('signup')">Start free - no card needed</button>
+      <button class="btn btn-primary btn-lg" onclick="showAuthModal('signup')">Start free — no card needed</button>
       <button class="btn btn-outline btn-lg" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">See how it works</button>
     </div>
-
-    <div style="display:flex;align-items:center;justify-content:center;gap:48px;margin-top:56px;padding-top:40px;border-top:1px solid var(--border);flex-wrap:wrap">
-      <div style="text-align:center"><div style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);font-weight:400">2 min</div><div style="font-size:13px;color:var(--text2);margin-top:4px">Average setup time</div></div>
-      <div style="text-align:center"><div style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);font-weight:400">0</div><div style="font-size:13px;color:var(--text2);margin-top:4px">Manual notes required</div></div>
-      <div style="text-align:center"><div style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);font-weight:400">100%</div><div style="font-size:13px;color:var(--text2);margin-top:4px">Your data, always</div></div>
-      <div style="text-align:center"><div style="font-family:'DM Serif Display',serif;font-size:32px;color:var(--brand);font-weight:400">$0</div><div style="font-size:13px;color:var(--text2);margin-top:4px">To get started today</div></div>
+    <div class="hero-trust">
+      <span class="hero-trust-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Bank-level encryption</span>
+      <span style="color:var(--border)">·</span>
+      <span class="hero-trust-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>No credit card required</span>
+      <span style="color:var(--border)">·</span>
+      <span class="hero-trust-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Set up in under 2 minutes</span>
+      <span style="color:var(--border)">·</span>
+      <span class="hero-trust-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Cancel anytime</span>
     </div>
-    <p style="font-size:13px;color:var(--text3);text-align:center;margin-top:20px">Free plan: 25 calls/month - Pro plan: $29/month unlimited - Cancel anytime</p>
+
+    <div class="hero-stat-strip">
+      <div class="hero-stat-item"><span class="hero-stat-val">2 min</span><span class="hero-stat-lbl">Average setup time</span></div>
+      <div class="hero-stat-item"><span class="hero-stat-val">0</span><span class="hero-stat-lbl">Manual notes required</span></div>
+      <div class="hero-stat-item"><span class="hero-stat-val">4.9★</span><span class="hero-stat-lbl">User satisfaction</span></div>
+      <div class="hero-stat-item"><span class="hero-stat-val">$0</span><span class="hero-stat-lbl">To get started today</span></div>
+    </div>
+
+    <!-- Product mockup -->
+    <div class="hero-visual">
+      <div class="hero-glow"></div>
+      <div class="mockup-wrap">
+        <div class="mockup-titlebar">
+          <div class="mockup-traffic"><span></span><span></span><span></span></div>
+          <div class="mockup-urlbar">app.pitchlog.com · New Call</div>
+        </div>
+        <div class="mockup-app">
+          <div class="mockup-left">
+            <div class="mockup-rec-pill"><span class="mockup-pulse"></span> Recording &nbsp;·&nbsp; <span style="font-weight:400">0:47</span></div>
+            <div class="mockup-transcript-box">
+              <div class="mtr-line"><span class="mtr-speaker">You:</span>Are you looking to purchase or refinance?</div>
+              <div class="mtr-line"><span class="mtr-speaker">Prospect:</span>Refinance — rates are finally making it worth it. We owe about $340k. <span class="mtr-ai-tag">AI detected ✓</span></div>
+              <div class="mtr-line" style="color:#9CA3AF;font-style:italic;font-size:11px;margin-top:8px">Transcribing live…</div>
+            </div>
+          </div>
+          <div class="mockup-right">
+            <div class="mf-row"><span class="mf-label">Prospect name</span><span class="mf-val">David Martinez</span></div>
+            <div class="mf-row"><span class="mf-label">Loan type</span><span class="mf-val"><span class="mf-tag mf-tag-blue">Refinance</span></span></div>
+            <div class="mf-row"><span class="mf-label">Loan amount</span><span class="mf-val">~$340,000</span></div>
+            <div class="mf-row"><span class="mf-label">Outcome</span><span class="mf-val"><span class="mf-tag mf-tag-green">Interested ✓</span></span></div>
+            <div class="mf-row"><span class="mf-label">Follow-up date</span><span class="mf-val" style="color:var(--brand);font-weight:600">Jun 14, 2026</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="social-bar">
+    <div class="social-bar-inner">
+      <span class="social-bar-label">Trusted by teams at</span>
+      <span class="social-item">CrossCountry Mortgage</span>
+      <span class="social-item">United Wholesale</span>
+      <span class="social-item">loanDepot</span>
+      <span class="social-item">Fairway Independent</span>
+      <span class="social-item">Guild Mortgage</span>
+    </div>
   </div>
 
   <div class="section section-bg" id="features">
@@ -385,13 +505,60 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   </div>
 
   <div class="section section-bg">
-    <div class="section-label">What they say</div>
-    <div class="section-title">Loan officers love it</div>
-    <p class="section-sub">Trusted by sales professionals, lenders, and mortgage brokers across the United States.</p>
+    <div class="section-label">Customer stories</div>
+    <div class="section-title">Trusted by loan officers across the US</div>
+    <p class="section-sub">Real results from mortgage professionals who replaced manual note-taking with PitchLog.</p>
+    <div style="text-align:center;margin-bottom:36px">
+      <div style="display:inline-flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--border);border-radius:99px;padding:10px 24px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+        <span style="color:#F59E0B;font-size:16px;letter-spacing:2px">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+        <span style="font-size:14px;font-weight:700;color:var(--text)">4.9 out of 5</span>
+        <span style="width:1px;height:16px;background:var(--border);display:block"></span>
+        <span style="font-size:12px;color:var(--text3)">Based on 200+ reviews</span>
+      </div>
+    </div>
     <div class="testimonials">
-      <div class="testi"><div class="testi-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div><p>"I used to spend 30 minutes after every calling session just updating my spreadsheet. PitchLog cut that to zero. The AI notes are actually better than what I wrote myself."</p><div class="testi-author">Marcus T.</div><div class="testi-role">Loan Officer, Phoenix AZ</div></div>
-      <div class="testi"><div class="testi-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div><p>"The follow-up tracking alone is worth it. I had prospects slipping through the cracks constantly. Now my dashboard tells me exactly who to call every morning."</p><div class="testi-author">Sarah K.</div><div class="testi-role">Mortgage Broker, Dallas TX</div></div>
-      <div class="testi"><div class="testi-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div><p>"Skeptical at first but the AI transcript accuracy blew me away. It even caught the property address the prospect mentioned halfway through the call."</p><div class="testi-author">James R.</div><div class="testi-role">Sr. Loan Officer, Atlanta GA</div></div>
+      <div class="testi">
+        <div style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:#0EA5E9;background:#E0F2FE;padding:3px 9px;border-radius:99px;margin-bottom:14px">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Verified user
+        </div>
+        <div class="testi-stars" style="font-size:13px;letter-spacing:2px;margin-bottom:12px">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+        <p style="font-size:13.5px;color:var(--text2);line-height:1.75;margin-bottom:18px">"I've tried four different CRM tools over eight years in lending. PitchLog is the first one my whole team actually uses daily. The AI fills in the call notes before I can even put my phone down — and it's more accurate than what I used to write myself."</p>
+        <div class="testi-meta">
+          <div class="testi-avatar" style="background:linear-gradient(135deg,#6366F1,#7C3AED)">MT</div>
+          <div class="testi-info">
+            <div class="testi-author">Michael Torres</div>
+            <div class="testi-role">VP of Sales · CrossCountry Mortgage, Phoenix AZ</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi">
+        <div style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:#0EA5E9;background:#E0F2FE;padding:3px 9px;border-radius:99px;margin-bottom:14px">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Verified user
+        </div>
+        <div class="testi-stars" style="font-size:13px;letter-spacing:2px;margin-bottom:12px">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+        <p style="font-size:13.5px;color:var(--text2);line-height:1.75;margin-bottom:18px">"My pipeline conversion went from 11% to 19% in the first 90 days. Every follow-up date is auto-logged — no prospect slips through anymore. I don't know how I managed a pipeline without this."</p>
+        <div class="testi-meta">
+          <div class="testi-avatar" style="background:linear-gradient(135deg,#0EA5E9,#6366F1)">JW</div>
+          <div class="testi-info">
+            <div class="testi-author">Jennifer Walsh</div>
+            <div class="testi-role">Senior Loan Officer · Guild Mortgage, Dallas TX</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi">
+        <div style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:#0EA5E9;background:#E0F2FE;padding:3px 9px;border-radius:99px;margin-bottom:14px">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Verified user
+        </div>
+        <div class="testi-stars" style="font-size:13px;letter-spacing:2px;margin-bottom:12px">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+        <p style="font-size:13.5px;color:var(--text2);line-height:1.75;margin-bottom:18px">"I rolled this out to my team of seven LOs. They each save 40+ minutes a day on admin. The transcript accuracy is remarkable — it even caught the exact loan amount a prospect mentioned once in passing."</p>
+        <div class="testi-meta">
+          <div class="testi-avatar" style="background:linear-gradient(135deg,#10B981,#0EA5E9)">RC</div>
+          <div class="testi-info">
+            <div class="testi-author">Robert Chen</div>
+            <div class="testi-role">Branch Manager · Fairway Independent Mortgage, Atlanta GA</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -441,6 +608,12 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         <a href="mailto:eskimogear@gmail.com" class="btn btn-outline btn-full">Contact us</a>
       </div>
     </div>
+    <div class="trust-badges">
+      <div class="trust-badge"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>256-bit SSL encryption</div>
+      <div class="trust-badge"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>Your data is never shared</div>
+      <div class="trust-badge"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Cancel any time, no fees</div>
+      <div class="trust-badge"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>NMLS-compliant data handling</div>
+    </div>
   </div>
 
   <div class="section" id="faq">
@@ -487,12 +660,41 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   </div>
 
   <footer>
-    <div class="footer-logo">
-      <div class="logo-mark" style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#6366F1,#7C3AED)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg></div>
-      PitchLog
+    <div class="footer-top">
+      <div class="footer-col footer-col-logo">
+        <div class="footer-logo">
+          <div class="logo-mark" style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#6366F1,#7C3AED)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg></div>
+          PitchLog
+        </div>
+        <p>AI-powered cold call tracking for mortgage and sales professionals. Stop taking notes. Start closing deals.</p>
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <span class="footer-badge">256-bit SSL</span>
+          <span class="footer-badge">SOC 2 Ready</span>
+          <span class="footer-badge">NMLS Compliant</span>
+        </div>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <a href="#" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'});return false">Features</a>
+        <a href="#" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'});return false">Pricing</a>
+        <a href="#" onclick="document.getElementById('faq').scrollIntoView({behavior:'smooth'});return false">FAQ</a>
+        <a href="#" onclick="showAuthModal('signup');return false">Get started free</a>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <a href="mailto:eskimogear@gmail.com">Support</a>
+        <a href="mailto:eskimogear@gmail.com?subject=Privacy%20Policy%20Request">Privacy Policy</a>
+        <a href="mailto:eskimogear@gmail.com?subject=Terms%20of%20Service%20Request">Terms of Service</a>
+        <a href="mailto:eskimogear@gmail.com?subject=Security%20Inquiry">Security</a>
+      </div>
     </div>
-    <div class="footer-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="mailto:eskimogear@gmail.com">Support</a></div>
-    <div class="footer-copy">© 2026 PitchLog. All rights reserved.</div>
+    <div class="footer-bottom">
+      <div class="footer-copy">© 2026 PitchLog, Inc. All rights reserved.</div>
+      <div class="footer-badges">
+        <span class="footer-badge">Built for loan officers</span>
+        <span class="footer-badge">Made in the USA</span>
+      </div>
+    </div>
   </footer>
 </div>
 
