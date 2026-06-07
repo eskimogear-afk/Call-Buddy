@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/reset-calls", "schedule": "0 0 1 * *" }
+    { "path": "/api/reset-calls", "schedule": "0 0 1 * *" },
+    { "path": "/api/process-follow-ups", "schedule": "0 * * * *" }
   ]
 }

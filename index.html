@@ -711,6 +711,13 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <button class="sidebar-item" id="nav-log" onclick="switchPanel('log')">
         <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Call log
       </button>
+      <button class="sidebar-item" id="nav-contacts" onclick="switchPanel('contacts')">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Contacts
+      </button>
+      <button class="sidebar-item" id="nav-followups" onclick="switchPanel('followups')">
+        <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.79 19.79 19.79 0 01.12 1.18 2 2 0 012.11 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>Follow-ups
+        <span id="followups-badge" style="display:none;background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:auto"></span>
+      </button>
       <div class="sidebar-divider"></div>
       <button class="sidebar-item" id="nav-settings" onclick="switchPanel('settings')">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>Settings
@@ -871,7 +878,95 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <div class="settings-row"><div><strong>Log out</strong><br><span>Sign out of your account.</span></div><button class="btn btn-ghost" onclick="logout()">Log out</button></div>
         </div>
       </div>
+
+      <!-- Contacts CRM -->
+      <div id="panel-contacts" class="hidden">
+        <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Contacts</h1>
+            <p style="font-size:14px;color:var(--text2);margin-top:4px">Your prospect pipeline.</p>
+          </div>
+          <button class="btn btn-primary" onclick="openAddContactModal()">+ Add contact</button>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+          <input id="contact-search" type="text" placeholder="Search name, company, phone..." oninput="renderContacts()"
+            style="flex:1;min-width:200px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+          <select id="contact-stage-filter" onchange="renderContacts()"
+            style="padding:9px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:#fff">
+            <option value="">All stages</option>
+            <option value="new">New lead</option>
+            <option value="contacted">Contacted</option>
+            <option value="qualified">Qualified</option>
+            <option value="appointment">Appointment set</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+        <div id="contacts-table"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div>
+      </div>
+
+      <!-- Follow-ups -->
+      <div id="panel-followups" class="hidden">
+        <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Follow-ups</h1>
+            <p style="font-size:14px;color:var(--text2);margin-top:4px">Scheduled SMS and tasks.</p>
+          </div>
+          <button class="btn btn-primary" onclick="openAddFollowUpModal()">+ Schedule follow-up</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="btn btn-outline" id="fu-filter-pending" onclick="setFuFilter('pending')" style="font-size:13px">Pending</button>
+          <button class="btn btn-ghost" id="fu-filter-sent" onclick="setFuFilter('sent')" style="font-size:13px">Sent</button>
+          <button class="btn btn-ghost" id="fu-filter-all" onclick="setFuFilter('all')" style="font-size:13px">All</button>
+        </div>
+        <div id="followups-list"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div>
+      </div>
+
     </div>
+  </div>
+</div>
+
+<!-- ══ ADD CONTACT MODAL ══════════════════════════════════════════════════ -->
+<div id="add-contact-modal" class="modal-overlay hidden" onclick="bgClose(event,'add-contact-modal')">
+  <div class="modal" style="max-width:480px">
+    <button class="modal-close" onclick="closeModal('add-contact-modal')">×</button>
+    <h2>Add contact</h2>
+    <div id="add-contact-alert" class="alert alert-error hidden"></div>
+    <div class="form-group"><label>Name</label><input type="text" id="ac-name" placeholder="Jane Smith"></div>
+    <div class="form-group"><label>Phone</label><input type="tel" id="ac-phone" placeholder="+1 (555) 000-0000"></div>
+    <div class="form-group"><label>Company</label><input type="text" id="ac-company" placeholder="ABC Realty"></div>
+    <div class="form-group"><label>Email</label><input type="email" id="ac-email" placeholder="jane@email.com"></div>
+    <div class="form-group"><label>Stage</label>
+      <select id="ac-stage">
+        <option value="new">New lead</option>
+        <option value="contacted">Contacted</option>
+        <option value="qualified">Qualified</option>
+        <option value="appointment">Appointment set</option>
+        <option value="closed">Closed</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Notes</label><textarea id="ac-notes" placeholder="Initial notes..." style="height:80px"></textarea></div>
+    <button class="btn btn-primary btn-full" onclick="saveNewContact()">Save contact</button>
+  </div>
+</div>
+
+<!-- ══ ADD FOLLOW-UP MODAL ══════════════════════════════════════════════ -->
+<div id="add-followup-modal" class="modal-overlay hidden" onclick="bgClose(event,'add-followup-modal')">
+  <div class="modal" style="max-width:480px">
+    <button class="modal-close" onclick="closeModal('add-followup-modal')">×</button>
+    <h2>Schedule follow-up</h2>
+    <div id="add-followup-alert" class="alert alert-error hidden"></div>
+    <div class="form-group"><label>Contact</label>
+      <select id="fu-contact-select"><option value="">Select contact...</option></select>
+    </div>
+    <div class="form-group"><label>Type</label>
+      <select id="fu-type">
+        <option value="sms">SMS</option>
+        <option value="task">Task reminder</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Message</label><textarea id="fu-message" placeholder="Hi [name], just following up..." style="height:80px"></textarea></div>
+    <div class="form-group"><label>Schedule for</label><input type="datetime-local" id="fu-scheduled-at"></div>
+    <button class="btn btn-primary btn-full" onclick="saveNewFollowUp()">Schedule</button>
   </div>
 </div>
 
@@ -1111,12 +1206,14 @@ function showView(v) {
 }
 
 function switchPanel(p) {
-  ['dashboard','recorder','log','settings'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
+  ['dashboard','recorder','log','settings','contacts','followups'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
   document.getElementById('panel-' + p).classList.remove('hidden');
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
   document.getElementById('nav-' + p)?.classList.add('active');
   if (p === 'dashboard') refreshDashboard();
   if (p === 'log') renderLog();
+  if (p === 'contacts') loadContacts();
+  if (p === 'followups') loadFollowUps();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1349,12 +1446,20 @@ function buildTable(recs) {
 }
 
 function refreshDashboard() {
-  const today = new Date().toISOString().slice(0, 10);
   document.getElementById('st-total').textContent = records.length;
   document.getElementById('st-int').textContent = records.filter(r => r.outcome === 'Interested').length;
   document.getElementById('st-cb').textContent = records.filter(r => r.outcome === 'Callback').length;
-  document.getElementById('st-fu').textContent = records.filter(r => r.follow_up_date && r.follow_up_date <= today).length;
   document.getElementById('dash-table').innerHTML = buildTable(records.slice(0, 8));
+  // Load overdue follow-ups count from API
+  db.auth.getSession().then(({ data: { session } }) => {
+    if (!session) return;
+    fetch('/api/follow-ups?status=pending&limit=100', { headers: { Authorization: 'Bearer ' + session.access_token } })
+      .then(r => r.json()).then(items => {
+        const now = new Date();
+        const overdue = (items || []).filter(f => new Date(f.scheduled_at) <= now).length;
+        document.getElementById('st-fu').textContent = overdue;
+      }).catch(() => document.getElementById('st-fu').textContent = '—');
+  });
 }
 
 function renderLog() {
@@ -1579,6 +1684,292 @@ db.auth.onAuthStateChange((event) => {
       .then(({ error }) => alert(error ? (error.message || 'Could not update password.') : '✓ Password updated. You are now signed in.'));
   }
 });
+
+/* ═══════════════════════════════════════════════════════
+   CONTACTS CRM
+═══════════════════════════════════════════════════════ */
+let contactsCache = [];
+const STAGE_LABELS = { new:'New lead', contacted:'Contacted', qualified:'Qualified', appointment:'Appointment set', closed:'Closed' };
+const STAGE_COLORS = { new:'#6b7280', contacted:'#3b82f6', qualified:'#f59e0b', appointment:'#8b5cf6', closed:'#10b981' };
+
+async function loadContacts() {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  const search = document.getElementById('contact-search')?.value || '';
+  const stage = document.getElementById('contact-stage-filter')?.value || '';
+  let url = '/api/contacts';
+  const params = [];
+  if (search) params.push('search=' + encodeURIComponent(search));
+  if (stage) params.push('stage=' + encodeURIComponent(stage));
+  if (params.length) url += '?' + params.join('&');
+  try {
+    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + session.access_token } });
+    contactsCache = await r.json();
+    renderContacts();
+  } catch (e) {
+    document.getElementById('contacts-table').innerHTML = '<p style="color:var(--danger);padding:20px">Failed to load contacts.</p>';
+  }
+}
+
+function renderContacts() {
+  const search = (document.getElementById('contact-search')?.value || '').toLowerCase();
+  const stage = document.getElementById('contact-stage-filter')?.value || '';
+  let rows = contactsCache;
+  if (search) rows = rows.filter(c => (c.name||'').toLowerCase().includes(search) || (c.company||'').toLowerCase().includes(search) || (c.phone||'').includes(search));
+  if (stage) rows = rows.filter(c => c.stage === stage);
+
+  if (!rows.length) {
+    document.getElementById('contacts-table').innerHTML = '<p style="color:var(--text3);padding:20px;text-align:center">No contacts found.</p>';
+    return;
+  }
+  const html = `<div class="table-card" style="overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:14px">
+      <thead><tr style="border-bottom:2px solid var(--border)">
+        <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Name</th>
+        <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Phone</th>
+        <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Company</th>
+        <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Stage</th>
+        <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Heat</th>
+        <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Calls</th>
+        <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Next follow-up</th>
+        <th style="padding:10px 14px"></th>
+      </tr></thead>
+      <tbody>${rows.map(c => {
+        const heat = c.heat_score || 'Cold';
+        const hc = heat === 'Hot' ? '#dc2626' : heat === 'Warm' ? '#f59e0b' : '#6b7280';
+        const nfu = c.next_follow_up_at ? new Date(c.next_follow_up_at).toLocaleDateString() : '—';
+        const stage = c.stage || 'new';
+        return `<tr style="border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+          <td style="padding:10px 14px;font-weight:500">${esc(c.name||'Unknown')}</td>
+          <td style="padding:10px 14px;color:var(--text2)">${esc(c.phone||'—')}</td>
+          <td style="padding:10px 14px;color:var(--text2)">${esc(c.company||'—')}</td>
+          <td style="padding:10px 14px"><span style="background:${STAGE_COLORS[stage]}22;color:${STAGE_COLORS[stage]};font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px">${STAGE_LABELS[stage]||stage}</span></td>
+          <td style="padding:10px 14px"><span style="color:${hc};font-weight:600;font-size:13px">${heat}</span></td>
+          <td style="padding:10px 14px;color:var(--text2)">${c.call_count||0}</td>
+          <td style="padding:10px 14px;color:var(--text2);font-size:13px">${nfu}</td>
+          <td style="padding:10px 14px">
+            <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="openContactFollowUp('${c.id}','${esc(c.name||'Unknown')}')">Follow-up</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="deleteContact('${c.id}')">Delete</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+  document.getElementById('contacts-table').innerHTML = html;
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function openAddContactModal() {
+  document.getElementById('ac-name').value = '';
+  document.getElementById('ac-phone').value = '';
+  document.getElementById('ac-company').value = '';
+  document.getElementById('ac-email').value = '';
+  document.getElementById('ac-stage').value = 'new';
+  document.getElementById('ac-notes').value = '';
+  document.getElementById('add-contact-alert').classList.add('hidden');
+  document.getElementById('add-contact-modal').classList.remove('hidden');
+}
+
+async function saveNewContact() {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  const body = {
+    name: document.getElementById('ac-name').value.trim() || 'Unknown',
+    phone: document.getElementById('ac-phone').value.trim(),
+    company: document.getElementById('ac-company').value.trim(),
+    email: document.getElementById('ac-email').value.trim(),
+    stage: document.getElementById('ac-stage').value,
+    notes: document.getElementById('ac-notes').value.trim()
+  };
+  if (!body.phone) {
+    const el = document.getElementById('add-contact-alert');
+    el.textContent = 'Phone number is required.'; el.classList.remove('hidden'); return;
+  }
+  try {
+    const r = await fetch('/api/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify(body) });
+    if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Save failed'); }
+    closeModal('add-contact-modal');
+    loadContacts();
+  } catch (e) {
+    const el = document.getElementById('add-contact-alert');
+    el.textContent = e.message; el.classList.remove('hidden');
+  }
+}
+
+async function deleteContact(id) {
+  if (!confirm('Delete this contact? This cannot be undone.')) return;
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  await fetch('/api/contacts?id=' + id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.access_token } });
+  loadContacts();
+}
+
+/* ═══════════════════════════════════════════════════════
+   FOLLOW-UPS
+═══════════════════════════════════════════════════════ */
+let followUpsCache = [];
+let fuFilter = 'pending';
+
+function setFuFilter(f) {
+  fuFilter = f;
+  ['pending','sent','all'].forEach(x => {
+    const btn = document.getElementById('fu-filter-' + x);
+    if (btn) { btn.className = x === f ? 'btn btn-outline' : 'btn btn-ghost'; btn.style.fontSize = '13px'; }
+  });
+  loadFollowUps();
+}
+
+async function loadFollowUps() {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  try {
+    const r = await fetch('/api/follow-ups?status=' + fuFilter + '&limit=100', { headers: { Authorization: 'Bearer ' + session.access_token } });
+    followUpsCache = await r.json();
+    renderFollowUps();
+    updateFollowUpsBadge();
+  } catch (e) {
+    document.getElementById('followups-list').innerHTML = '<p style="color:var(--danger);padding:20px">Failed to load follow-ups.</p>';
+  }
+}
+
+async function updateFollowUpsBadge() {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  try {
+    const r = await fetch('/api/follow-ups?status=pending&limit=100', { headers: { Authorization: 'Bearer ' + session.access_token } });
+    const items = await r.json();
+    const now = new Date();
+    const overdue = items.filter(f => new Date(f.scheduled_at) <= now).length;
+    const badge = document.getElementById('followups-badge');
+    if (badge) {
+      if (overdue > 0) { badge.textContent = overdue; badge.style.display = 'inline-block'; }
+      else badge.style.display = 'none';
+    }
+  } catch (e) {}
+}
+
+function renderFollowUps() {
+  const list = followUpsCache;
+  if (!list.length) {
+    document.getElementById('followups-list').innerHTML = '<p style="color:var(--text3);padding:20px;text-align:center">No follow-ups found.</p>';
+    return;
+  }
+  const now = new Date();
+  const html = list.map(f => {
+    const scheduled = new Date(f.scheduled_at);
+    const overdue = f.status === 'pending' && scheduled < now;
+    const sent = f.status === 'sent';
+    const contact = f.contacts;
+    return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px 20px;margin-bottom:10px;display:flex;gap:14px;align-items:flex-start">
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+          <strong>${esc(contact?.name||'Unknown')}</strong>
+          <span style="font-size:12px;color:var(--text3)">${esc(contact?.phone||'')}</span>
+          <span style="font-size:11px;background:${f.type==='sms'?'#dbeafe':'#f3f4f6'};color:${f.type==='sms'?'#1d4ed8':'#6b7280'};padding:2px 8px;border-radius:99px;font-weight:600">${f.type?.toUpperCase()||'SMS'}</span>
+          ${overdue ? '<span style="font-size:11px;background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:99px;font-weight:600">OVERDUE</span>' : ''}
+          ${sent ? '<span style="font-size:11px;background:#d1fae5;color:#059669;padding:2px 8px;border-radius:99px;font-weight:600">SENT</span>' : ''}
+        </div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:6px">${esc(f.message||'')}</div>
+        <div style="font-size:12px;color:var(--text3)">Scheduled: ${scheduled.toLocaleString()}${sent && f.sent_at ? ' · Sent: ' + new Date(f.sent_at).toLocaleString() : ''}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        ${!sent ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="sendFollowUpNow('${f.id}')">Send now</button>` : ''}
+        <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="deleteFollowUp('${f.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('followups-list').innerHTML = html;
+}
+
+async function sendFollowUpNow(id) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Sending...';
+  try {
+    const r = await fetch('/api/send-follow-up', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ follow_up_id: id })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Send failed');
+    loadFollowUps();
+  } catch (e) {
+    alert('Failed to send: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Send now';
+  }
+}
+
+async function deleteFollowUp(id) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  await fetch('/api/follow-ups?id=' + id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.access_token } });
+  loadFollowUps();
+}
+
+function openAddFollowUpModal() {
+  const sel = document.getElementById('fu-contact-select');
+  sel.innerHTML = '<option value="">Select contact...</option>' +
+    contactsCache.map(c => `<option value="${c.id}">${esc(c.name||'Unknown')} — ${esc(c.phone||'')}</option>`).join('');
+  if (!contactsCache.length) {
+    // reload contacts in background
+    db.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return;
+      fetch('/api/contacts', { headers: { Authorization: 'Bearer ' + session.access_token } })
+        .then(r => r.json()).then(data => {
+          contactsCache = data;
+          sel.innerHTML = '<option value="">Select contact...</option>' +
+            contactsCache.map(c => `<option value="${c.id}">${esc(c.name||'Unknown')} — ${esc(c.phone||'')}</option>`).join('');
+        });
+    });
+  }
+  const now = new Date();
+  now.setDate(now.getDate() + 1);
+  now.setMinutes(0, 0, 0);
+  document.getElementById('fu-scheduled-at').value = now.toISOString().slice(0, 16);
+  document.getElementById('fu-message').value = '';
+  document.getElementById('add-followup-alert').classList.add('hidden');
+  document.getElementById('add-followup-modal').classList.remove('hidden');
+}
+
+function openContactFollowUp(contactId, contactName) {
+  openAddFollowUpModal();
+  setTimeout(() => {
+    const sel = document.getElementById('fu-contact-select');
+    sel.value = contactId;
+    document.getElementById('fu-message').value = `Hi ${contactName}, just following up on our conversation. Let me know if you have any questions!`;
+  }, 50);
+}
+
+async function saveNewFollowUp() {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  const contact_id = document.getElementById('fu-contact-select').value;
+  const type = document.getElementById('fu-type').value;
+  const message = document.getElementById('fu-message').value.trim();
+  const scheduled_at = document.getElementById('fu-scheduled-at').value;
+  if (!contact_id || !scheduled_at) {
+    const el = document.getElementById('add-followup-alert');
+    el.textContent = 'Contact and schedule time are required.'; el.classList.remove('hidden'); return;
+  }
+  try {
+    const r = await fetch('/api/follow-ups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ contact_id, type, message, scheduled_at: new Date(scheduled_at).toISOString() })
+    });
+    if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Save failed'); }
+    closeModal('add-followup-modal');
+    loadFollowUps();
+  } catch (e) {
+    const el = document.getElementById('add-followup-alert');
+    el.textContent = e.message; el.classList.remove('hidden');
+  }
+}
+
+// Poll for overdue badge on app load
+setTimeout(updateFollowUpsBadge, 3000);
 
 </script>
 </body>

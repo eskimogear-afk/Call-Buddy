@@ -89,6 +89,20 @@ ${transcriptText}`
       })
       .eq('transcript', `PENDING:${transcript_id}`);
 
+    // Auto-schedule a follow-up SMS for Hot/Warm leads with a next step
+    if (contact?.id && userId && analysis.nextStep && analysis.heatScore !== 'Cold') {
+      const scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24h from now
+      const message = `Hi ${contact.name !== 'Unknown' ? contact.name : 'there'}, ${analysis.nextStep}`;
+      await supabase.from('follow_ups').insert({
+        user_id: userId,
+        contact_id: contact.id,
+        type: 'sms',
+        message: message.slice(0, 300),
+        scheduled_at: scheduledAt,
+        status: 'pending'
+      }).catch(err => console.error('Auto follow-up insert failed:', err));
+    }
+
     res.status(200).json({ ok: true });
   } catch (err) {
     console.error('AssemblyAI webhook error:', err);
