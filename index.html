@@ -740,7 +740,13 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 <div class="stat-card"><div class="stat-val" id="st-fu">-</div><div class="stat-lbl">Follow-ups due</div></div>
         </div>
         <div style="background:#1e1b4b;border-radius:12px;padding:20px;margin:16px 0;">
-          <h3 style="color:#a5b4fc;margin:0 0 12px;font-size:16px;">📞 Dialer</h3>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <h3 style="color:#a5b4fc;margin:0;font-size:16px;">📞 Dialer</h3>
+            <span id="dialer-caller-id" style="font-size:12px;color:#6b7280;background:#0f0a2e;padding:3px 10px;border-radius:20px;"></span>
+          </div>
+          <div id="dialer-setup-warning" style="display:none;padding:10px 14px;background:#7f1d1d;border-radius:8px;color:#fca5a5;font-size:13px;margin-bottom:10px;">
+            ⚠️ Phone number not provisioned. Contact your admin to complete setup.
+          </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <input id="dialer-number" type="tel" placeholder="+1 (555) 000-0000"
               style="flex:1;min-width:180px;padding:10px 14px;border-radius:8px;
@@ -1074,6 +1080,15 @@ async function enterApp() {
   document.getElementById('set-name').textContent = userProfile?.full_name || name;
   document.getElementById('set-email').textContent = currentUser.email;
   document.getElementById('set-plan').textContent = userProfile?.plan === 'pro' ? 'Pro - unlimited calls' : 'Free - 25 calls/month';
+  const callerIdEl = document.getElementById('dialer-caller-id');
+  const warningEl = document.getElementById('dialer-setup-warning');
+  if (userProfile?.twilio_phone_number) {
+    if (callerIdEl) callerIdEl.textContent = 'Calling from: ' + userProfile.twilio_phone_number;
+    if (warningEl) warningEl.style.display = 'none';
+  } else {
+    if (callerIdEl) callerIdEl.textContent = '';
+    if (warningEl) warningEl.style.display = 'block';
+  }
   await loadRecords();
   refreshDashboard();
   updatePlanBadge();

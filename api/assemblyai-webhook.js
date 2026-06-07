@@ -29,19 +29,19 @@ export default async function handler(req, res) {
     const data = await r.json();
     const transcriptText = data.text || '';
 
+    // Look up pending call record for phone number and user_id
+    const { data: callRecord } = await supabase
+      .from('calls')
+      .select('to_number, from_number, user_id')
+      .eq('transcript', `PENDING:${transcript_id}`)
+      .single();
+
     if (!transcriptText) {
       await supabase.from('calls')
         .update({ transcript: '', notes: 'No speech detected' })
         .eq('transcript', `PENDING:${transcript_id}`);
       return res.status(200).json({ status: 'no_speech' });
     }
-
-    // Look up pending call record for phone number
-    const { data: callRecord } = await supabase
-      .from('calls')
-      .select('to_number, from_number')
-      .eq('transcript', `PENDING:${transcript_id}`)
-      .single();
 
     // Run Claude analysis
     const message = await anthropic.messages.create({
@@ -66,21 +66,23 @@ ${transcriptText}`
     }
 
     const phone = callRecord?.to_number || callRecord?.from_number || 'unknown';
+    const userId = callRecord?.user_id || null;
 
-    // Upsert contact
+    // Upsert contact scoped to this user
     const { data: contact } = await supabase
       .from('contacts')
       .upsert({
         phone,
+        user_id: userId,
         name: analysis.name && analysis.name !== 'Unknown' ? analysis.name : 'Unknown',
         company: analysis.company || '',
         heat_score: analysis.heatScore || 'Cold',
         last_called: new Date().toISOString()
-      }, { onConflict: 'phone' })
+      }, { onConflict: 'phone,user_id' })
       .select()
       .single();
 
-    // Update the pending call record with analysis results
+    // Update the pending call record
     await supabase.from('calls')
       .update({
         transcript: transcriptText,

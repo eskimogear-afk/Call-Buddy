@@ -1,4 +1,7 @@
 import twilio from 'twilio';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'text/xml');
@@ -11,6 +14,7 @@ export default async function handler(req, res) {
     return res.status(405).send('<Response></Response>');
   }
 
+  // Twilio signature verification
   const twilioSignature = req.headers['x-twilio-signature'] || '';
   const url = `https://${req.headers.host}/api/twilio-voice`;
   const valid = twilio.validateRequest(
@@ -23,14 +27,32 @@ export default async function handler(req, res) {
     return res.status(403).send('<Response></Response>');
   }
 
-  const { To } = req.body;
+  const { To, From } = req.body;
+
+  // From = Twilio client identity = user.id (set in twilio-token.js)
+  // Look up user's provisioned phone number; fall back to shared number
+  let callerId = process.env.TWILIO_PHONE_NUMBER;
+  const userId = From;
+  if (userId && userId.length === 36) { // UUID format check
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('twilio_phone_number')
+      .eq('id', userId)
+      .single();
+    if (profile?.twilio_phone_number) {
+      callerId = profile.twilio_phone_number;
+    }
+  }
+
+  // Embed user_id in the recording callback URL so twilio-recording.js can associate the call
+  const recordingCallback = `https://${req.headers.host}/api/twilio-recording?user_id=${encodeURIComponent(userId || '')}`;
 
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial record="record-from-answer-dual"
-        recordingStatusCallback="https://${req.headers.host}/api/twilio-recording"
+        recordingStatusCallback="${recordingCallback}"
         recordingStatusCallbackMethod="POST"
-        callerId="${process.env.TWILIO_PHONE_NUMBER}">
+        callerId="${callerId}">
     <Number>${To}</Number>
   </Dial>
 </Response>`;

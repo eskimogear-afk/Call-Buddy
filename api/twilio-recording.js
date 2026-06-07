@@ -6,8 +6,10 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  // Signature verification — must include query string in URL since user_id is passed there
   const twilioSignature = req.headers['x-twilio-signature'] || '';
-  const url = `https://${req.headers.host}/api/twilio-recording`;
+  const qs = Object.keys(req.query).length > 0 ? '?' + new URLSearchParams(req.query).toString() : '';
+  const url = `https://${req.headers.host}/api/twilio-recording${qs}`;
   const valid = twilio.validateRequest(
     process.env.TWILIO_AUTH_TOKEN,
     twilioSignature,
@@ -21,6 +23,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ status: 'ignored' });
   }
   if (!RecordingUrl) return res.status(400).json({ error: 'No recording URL' });
+
+  // user_id is embedded in the callback URL by twilio-voice.js
+  const userId = req.query.user_id || null;
 
   try {
     const audioUrl = `${RecordingUrl}.mp3`;
@@ -45,7 +50,7 @@ export default async function handler(req, res) {
     });
     const { upload_url } = await uploadRes.json();
 
-    // Submit for transcription — webhook fires when done instead of polling
+    // Submit for transcription with webhook — no polling
     const webhookUrl = `https://${req.headers.host}/api/assemblyai-webhook`;
     const submitRes = await fetch('https://api.assemblyai.com/v2/transcript', {
       method: 'POST',
@@ -54,7 +59,7 @@ export default async function handler(req, res) {
     });
     const { id: transcriptId } = await submitRes.json();
 
-    // Insert pending call record immediately — analysis fills in later
+    // Insert pending call record with user_id
     await supabase.from('calls').insert({
       call_sid: CallSid,
       recording_sid: RecordingSid,
@@ -67,7 +72,8 @@ export default async function handler(req, res) {
       heat_score: null,
       sentiment: null,
       next_step: '',
-      contact_id: null
+      contact_id: null,
+      user_id: userId
     });
 
     res.status(200).json({ status: 'pending', transcriptId });
