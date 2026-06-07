@@ -1,25 +1,20 @@
+import twilio from 'twilio';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
-
-async function pollTranscript(id, apiKey) {
-  for (let i = 0; i < 25; i++) {
-    const r = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, {
-      headers: { Authorization: apiKey }
-    });
-    const data = await r.json();
-    if (data.status === 'completed') return data;
-    if (data.status === 'error') throw new Error(data.error);
-    await new Promise(res => setTimeout(res, 2000));
-  }
-  throw new Error('Transcription timed out');
-}
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const twilioSignature = req.headers['x-twilio-signature'] || '';
+  const url = `https://${req.headers.host}/api/twilio-recording`;
+  const valid = twilio.validateRequest(
+    process.env.TWILIO_AUTH_TOKEN,
+    twilioSignature,
+    url,
+    req.body || {}
+  );
+  if (!valid) return res.status(403).json({ error: 'Forbidden' });
 
   const { RecordingUrl, RecordingSid, CallSid, From, To, CallDuration, RecordingStatus } = req.body;
   if (RecordingStatus && RecordingStatus !== 'completed') {
@@ -31,6 +26,7 @@ export default async function handler(req, res) {
     const audioUrl = `${RecordingUrl}.mp3`;
     const apiKey = process.env.ASSEMBLYAI_API_KEY;
 
+    // Fetch audio from Twilio
     const twilioAudio = await fetch(audioUrl, {
       headers: {
         Authorization: `Basic ${Buffer.from(
@@ -41,6 +37,7 @@ export default async function handler(req, res) {
     if (!twilioAudio.ok) throw new Error(`Twilio fetch failed: ${twilioAudio.status}`);
     const audioBuffer = Buffer.from(await twilioAudio.arrayBuffer());
 
+    // Upload to AssemblyAI
     const uploadRes = await fetch('https://api.assemblyai.com/v2/upload', {
       method: 'POST',
       headers: { Authorization: apiKey, 'Content-Type': 'application/octet-stream' },
@@ -48,55 +45,16 @@ export default async function handler(req, res) {
     });
     const { upload_url } = await uploadRes.json();
 
+    // Submit for transcription — webhook fires when done instead of polling
+    const webhookUrl = `https://${req.headers.host}/api/assemblyai-webhook`;
     const submitRes = await fetch('https://api.assemblyai.com/v2/transcript', {
       method: 'POST',
       headers: { Authorization: apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ audio_url: upload_url, speaker_labels: true })
+      body: JSON.stringify({ audio_url: upload_url, speaker_labels: true, webhook_url: webhookUrl })
     });
-    const { id } = await submitRes.json();
+    const { id: transcriptId } = await submitRes.json();
 
-    const result = await pollTranscript(id, apiKey);
-    const transcript = result.text || '';
-    if (!transcript) return res.status(200).json({ status: 'no_speech' });
-
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
-        messages: [{
-          role: 'user',
-          content: `Analyze this cold call transcript. Return ONLY valid JSON with keys: name, company, notes (2-3 sentence summary), heatScore (0-100), sentiment (positive|neutral|negative), nextStep. Use "Unknown" if a field is unclear.\n\nTranscript:\n${transcript}`
-        }]
-      })
-    });
-
-    let analysis = {};
-    if (anthropicRes.ok) {
-      const aData = await anthropicRes.json();
-      const text = aData.content?.find(b => b.type === 'text')?.text || '{}';
-      try { analysis = JSON.parse(text.replace(/```json|```/g, '').trim()); }
-      catch { analysis = { notes: 'Analysis failed', heatScore: 50 }; }
-    }
-
-    const phone = To || From || 'unknown';
-    const { data: contact } = await supabase
-      .from('contacts')
-      .upsert({
-        phone,
-        name: analysis.name && analysis.name !== 'Unknown' ? analysis.name : 'Unknown',
-        company: analysis.company && analysis.company !== 'Unknown' ? analysis.company : '',
-        heat_score: analysis.heatScore || 50,
-        last_called: new Date().toISOString()
-      }, { onConflict: 'phone' })
-      .select()
-      .single();
-
+    // Insert pending call record immediately — analysis fills in later
     await supabase.from('calls').insert({
       call_sid: CallSid,
       recording_sid: RecordingSid,
@@ -104,15 +62,15 @@ export default async function handler(req, res) {
       from_number: From,
       to_number: To,
       duration: parseInt(CallDuration) || 0,
-      transcript,
-      notes: analysis.notes || '',
-      heat_score: analysis.heatScore || 50,
-      sentiment: analysis.sentiment || 'neutral',
-      next_step: analysis.nextStep || '',
-      contact_id: contact?.id || null
+      transcript: `PENDING:${transcriptId}`,
+      notes: '',
+      heat_score: null,
+      sentiment: null,
+      next_step: '',
+      contact_id: null
     });
 
-    res.status(200).json({ success: true, heatScore: analysis.heatScore, name: analysis.name });
+    res.status(200).json({ status: 'pending', transcriptId });
   } catch (err) {
     console.error('Recording error:', err);
     res.status(500).json({ error: String(err) });

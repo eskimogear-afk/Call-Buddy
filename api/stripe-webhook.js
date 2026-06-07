@@ -65,7 +65,12 @@ export default async function handler(req, res) {
       }
       case 'invoice.payment_failed': {
         const invoice = event.data.object;
-        console.log('Payment failed for customer:', invoice.customer);
+        if (invoice.subscription) {
+          await supabase.from('profiles').update({
+            payment_failed: true,
+            updated_at: new Date().toISOString()
+          }).eq('stripe_subscription_id', invoice.subscription);
+        }
         break;
       }
     }

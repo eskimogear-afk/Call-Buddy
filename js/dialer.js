@@ -96,11 +96,27 @@ function endCallUI() {
   if (c) c.style.display = 'inline-block';
   currentCall = null;
   setStatus('✅ Call ended — AI logging...');
-  setTimeout(() => {
+  pollForCallRecord(Date.now(), 0);
+}
+
+async function pollForCallRecord(startedAt, attempt) {
+  if (attempt >= 20) {
     setStatus('🟢 Ready to call');
     if (typeof renderLog === 'function') renderLog();
     if (typeof refreshDashboard === 'function') refreshDashboard();
-  }, 5000);
+    return;
+  }
+  try {
+    const since = new Date(startedAt - 10000).toISOString();
+    const { data } = await db.from('calls').select('id').gte('created_at', since).limit(1);
+    if (data && data.length > 0) {
+      setStatus('🟢 Ready to call');
+      if (typeof renderLog === 'function') renderLog();
+      if (typeof refreshDashboard === 'function') refreshDashboard();
+      return;
+    }
+  } catch (e) { console.error('Poll error:', e); }
+  setTimeout(() => pollForCallRecord(startedAt, attempt + 1), 3000);
 }
 
 function hangUp() {

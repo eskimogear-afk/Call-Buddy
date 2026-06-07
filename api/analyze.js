@@ -1,26 +1,27 @@
-import https from 'https';
+import Anthropic from '@anthropic-ai/sdk';
+import { createClient } from '@supabase/supabase-js';
+
+const ALLOWED_ORIGIN = 'https://call-buddy-omega.vercel.app';
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Vary', 'Origin');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  let body = '';
-  await new Promise((resolve, reject) => {
-    req.on('data', chunk => { body += chunk; });
-    req.on('end', resolve);
-    req.on('error', reject);
-  });
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '');
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
-  let parsed;
-  try { parsed = JSON.parse(body); }
-  catch(e) { return res.status(400).json({ error: 'Invalid JSON' }); }
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { transcript, type, name, summary, painPoints, nextSteps } = parsed;
-  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-  if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
+  const { transcript, type, name, summary, painPoints, nextSteps } = req.body || {};
 
   let prompt = '';
   if (type === 'email') {
@@ -50,57 +51,24 @@ Transcript:
 ${transcript}`;
   }
 
-  const requestBody = JSON.stringify({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1000,
-    messages: [{ role: 'user', content: prompt }]
-  });
-
-  return new Promise((resolve) => {
-    const options = {
-      hostname: 'api.anthropic.com',
-      path: '/v1/messages',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(requestBody),
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01'
-      }
-    };
-
-    const apiReq = https.request(options, (apiRes) => {
-      let data = '';
-      apiRes.on('data', chunk => { data += chunk; });
-      apiRes.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.error) {
-            res.status(500).json({ error: json.error.message || 'Anthropic API error' });
-            resolve();
-            return;
-          }
-          const text = (json.content || []).map(b => b.text || '').join('').trim();
-          if (type === 'email') {
-            res.status(200).json({ result: text });
-          } else {
-            const clean = text.replace(/```json|```/g, '').trim();
-            const parsed2 = JSON.parse(clean);
-            res.status(200).json(parsed2);
-          }
-        } catch(e) {
-          res.status(500).json({ error: 'Parse error: ' + e.message });
-        }
-        resolve();
-      });
+  try {
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      system: [{ type: 'text', text: 'You are an expert sales call analyst for mortgage professionals. Be precise and concise.', cache_control: { type: 'ephemeral' } }],
+      messages: [{ role: 'user', content: prompt }]
     });
 
-    apiReq.on('error', (e) => {
-      res.status(500).json({ error: 'API request failed: ' + e.message });
-      resolve();
-    });
+    const text = message.content.map(b => b.text || '').join('').trim();
 
-    apiReq.write(requestBody);
-    apiReq.end();
-  });
+    if (type === 'email') {
+      return res.status(200).json({ result: text });
+    } else {
+      const clean = text.replace(/```json|```/g, '').trim();
+      return res.status(200).json(JSON.parse(clean));
+    }
+  } catch (err) {
+    console.error('Analyze error:', err);
+    return res.status(500).json({ error: err.message || 'Analysis failed' });
+  }
 }

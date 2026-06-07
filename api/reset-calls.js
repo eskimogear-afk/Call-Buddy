@@ -1,18 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
-  // Only allow GET (for cron) or POST with secret
-  const secret = req.headers['x-cron-secret'] || req.query.secret;
-  if (secret !== process.env.CRON_SECRET) {
+  // Accept Authorization: Bearer <CRON_SECRET> (Vercel cron auto-injects this)
+  // or x-cron-secret header / ?secret= query param for manual invocation
+  const authHeader = req.headers['authorization'] || '';
+  const bearerToken = authHeader.replace(/^Bearer\s+/i, '');
+  const secret = bearerToken || req.headers['x-cron-secret'] || req.query.secret;
+  if (!secret || secret !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY
-  );
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-  // Reset calls_this_month for all free users
   const { error, count } = await supabase
     .from('profiles')
     .update({ calls_this_month: 0, billing_cycle_start: new Date().toISOString() })
