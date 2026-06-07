@@ -1476,35 +1476,37 @@ async function handleAudioUpload(event) {
     reader.onload = async (e) => {
       const base64 = e.target.result.split(',')[1];
       const mimeType = file.type || 'audio/mp3';
-      
+      const { data: { session } } = await db.auth.getSession();
+      const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` };
+
       // Send to Anthropic for transcription via server
       const resp = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        headers: authHeaders,
+        body: JSON.stringify({
           type: 'audio',
           audioData: base64,
           mimeType: mimeType,
           fileName: file.name
         })
       });
-      
+
       const result = await resp.json();
       if (!resp.ok) throw new Error(result.error || 'Transcription failed');
-      
+
       // Set transcript and switch to review tab
       fullTranscript = result.transcript || '';
       document.getElementById('final-tx').textContent = fullTranscript;
-      
+
       // Auto-run AI analysis
       status.textContent = 'Transcribed! Running AI analysis...';
       switchRecTab('review');
       document.getElementById('ai-thinking').classList.remove('hidden');
-      
+
       // Now analyze the transcript
       const analyzeResp = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ transcript: fullTranscript, type: 'analyze' })
       });
       const p = await analyzeResp.json();
