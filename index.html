@@ -686,6 +686,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <label>Password</label>
       <input type="password" id="a-pass" placeholder="Min. 6 characters" autocomplete="current-password">
     </div>
+    <div class="auth-switch" id="forgot-row"><span onclick="handleForgotPassword()">Forgot password?</span></div>
     <button class="btn btn-primary btn-full" id="auth-btn" onclick="handleAuth()" style="margin-top:6px">Create account</button>
     <div class="auth-switch" id="auth-switch">Already have an account? <span onclick="toggleAuth()">Log in</span></div>
   </div>
@@ -1330,6 +1331,35 @@ async function handleAudioUpload(event) {
     label.style.color = 'var(--text2)';
   }
 }
+
+// ── Forgot-password flow ───────────────────────────────────────────────────
+async function handleForgotPassword() {
+  if (SUPABASE_URL === 'YOUR_SUPABASE_PROJECT_URL') {
+    showAlert('auth-alert', '⚠️ Supabase is not configured yet. Open index.html and add your SUPABASE_URL and SUPABASE_ANON_KEY. See README for instructions.');
+    return;
+  }
+  const email = document.getElementById('a-email').value.trim();
+  document.getElementById('auth-alert').classList.add('hidden');
+  if (!email) { showAlert('auth-alert', 'Enter your email above, then click “Forgot password?”'); return; }
+  try {
+    const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+    if (error) throw error;
+    showAlert('auth-alert', '✓ If an account exists for that email, a password reset link is on its way.');
+  } catch(e) {
+    showAlert('auth-alert', e.message || 'Could not send reset email. Please try again.');
+  }
+}
+
+// Separate listener for password-recovery deep links (kept apart from the main onAuthStateChange).
+db.auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    const next = window.prompt('Enter a new password (min. 6 characters):');
+    if (!next) return;
+    if (next.length < 6) { alert('Password must be at least 6 characters.'); return; }
+    db.auth.updateUser({ password: next })
+      .then(({ error }) => alert(error ? (error.message || 'Could not update password.') : '✓ Password updated. You are now signed in.'));
+  }
+});
 
 </script>
 </body>
