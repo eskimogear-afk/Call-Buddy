@@ -1,9 +1,6 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-
 export const config = { api: { bodyParser: false } };
 
 async function getRawBody(req) {
@@ -21,6 +18,8 @@ export default async function handler(req, res) {
   const rawBody = await getRawBody(req);
   const sig = req.headers['stripe-signature'];
 
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+
   let event;
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET);
@@ -28,6 +27,8 @@ export default async function handler(req, res) {
     console.error('Webhook error:', err.message);
     return res.status(400).json({ error: 'Webhook Error: ' + err.message });
   }
+
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
   try {
     switch (event.type) {

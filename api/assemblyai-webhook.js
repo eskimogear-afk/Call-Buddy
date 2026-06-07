@@ -1,9 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-
 const SYSTEM_PROMPT = 'You are an expert sales call analyst for mortgage professionals. Be precise and return only valid JSON.';
 
 export default async function handler(req, res) {
@@ -11,6 +8,8 @@ export default async function handler(req, res) {
 
   const { transcript_id, status } = req.body || {};
   if (!transcript_id) return res.status(400).json({ error: 'No transcript_id' });
+
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
   if (status === 'error') {
     await supabase.from('calls')
@@ -22,14 +21,12 @@ export default async function handler(req, res) {
   if (status !== 'completed') return res.status(200).json({ status: 'ignored' });
 
   try {
-    // Fetch full transcript from AssemblyAI
     const r = await fetch(`https://api.assemblyai.com/v2/transcript/${transcript_id}`, {
       headers: { Authorization: process.env.ASSEMBLYAI_API_KEY }
     });
     const data = await r.json();
     const transcriptText = data.text || '';
 
-    // Look up pending call record for phone number and user_id
     const { data: callRecord } = await supabase
       .from('calls')
       .select('to_number, from_number, user_id')
@@ -43,7 +40,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ status: 'no_speech' });
     }
 
-    // Run Claude analysis
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
@@ -68,7 +65,6 @@ ${transcriptText}`
     const phone = callRecord?.to_number || callRecord?.from_number || 'unknown';
     const userId = callRecord?.user_id || null;
 
-    // Upsert contact scoped to this user
     const { data: contact } = await supabase
       .from('contacts')
       .upsert({
@@ -82,7 +78,6 @@ ${transcriptText}`
       .select()
       .single();
 
-    // Update the pending call record
     await supabase.from('calls')
       .update({
         transcript: transcriptText,

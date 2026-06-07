@@ -1,12 +1,9 @@
 import twilio from 'twilio';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Signature verification — must include query string in URL since user_id is passed there
   const twilioSignature = req.headers['x-twilio-signature'] || '';
   const qs = Object.keys(req.query).length > 0 ? '?' + new URLSearchParams(req.query).toString() : '';
   const url = `https://${req.headers.host}/api/twilio-recording${qs}`;
@@ -24,14 +21,12 @@ export default async function handler(req, res) {
   }
   if (!RecordingUrl) return res.status(400).json({ error: 'No recording URL' });
 
-  // user_id is embedded in the callback URL by twilio-voice.js
   const userId = req.query.user_id || null;
 
   try {
     const audioUrl = `${RecordingUrl}.mp3`;
     const apiKey = process.env.ASSEMBLYAI_API_KEY;
 
-    // Fetch audio from Twilio
     const twilioAudio = await fetch(audioUrl, {
       headers: {
         Authorization: `Basic ${Buffer.from(
@@ -42,7 +37,6 @@ export default async function handler(req, res) {
     if (!twilioAudio.ok) throw new Error(`Twilio fetch failed: ${twilioAudio.status}`);
     const audioBuffer = Buffer.from(await twilioAudio.arrayBuffer());
 
-    // Upload to AssemblyAI
     const uploadRes = await fetch('https://api.assemblyai.com/v2/upload', {
       method: 'POST',
       headers: { Authorization: apiKey, 'Content-Type': 'application/octet-stream' },
@@ -50,7 +44,6 @@ export default async function handler(req, res) {
     });
     const { upload_url } = await uploadRes.json();
 
-    // Submit for transcription with webhook — no polling
     const webhookUrl = `https://${req.headers.host}/api/assemblyai-webhook`;
     const submitRes = await fetch('https://api.assemblyai.com/v2/transcript', {
       method: 'POST',
@@ -59,7 +52,7 @@ export default async function handler(req, res) {
     });
     const { id: transcriptId } = await submitRes.json();
 
-    // Insert pending call record with user_id
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
     await supabase.from('calls').insert({
       call_sid: CallSid,
       recording_sid: RecordingSid,
