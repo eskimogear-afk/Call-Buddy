@@ -535,7 +535,22 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <div class="stat-card"><div class="stat-val" id="st-total">-</div><div class="stat-lbl">Total calls</div></div>
           <div class="stat-card"><div class="stat-val" id="st-int">-</div><div class="stat-lbl">Interested</div></div>
           <div class="stat-card"><div class="stat-val" id="st-cb">-</div><div class="stat-lbl">Callbacks</div></div>
-          <div class="stat-card"><div class="stat-val" id="st-fu">-</div><div class="stat-lbl">Follow-ups due</div></div>
+                <div class="stat-card"><div class="stat-val" id="st-fu">-</div><div class="stat-lbl">Follow-ups due</div></div>
+        </div>
+        <div style="background:#1e1b4b;border-radius:12px;padding:20px;margin:16px 0;">
+          <h3 style="color:#a5b4fc;margin:0 0 12px;font-size:16px;">📞 Dialer</h3>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input id="dialer-number" type="tel" placeholder="+1 (555) 000-0000"
+              style="flex:1;min-width:180px;padding:10px 14px;border-radius:8px;
+                     border:1px solid #4f46e5;background:#0f0a2e;color:#fff;font-size:14px;"/>
+            <button id="btn-call" onclick="makeCall()"
+              style="padding:10px 20px;background:#4f46e5;color:#fff;border:none;
+                     border-radius:8px;cursor:pointer;font-weight:600;">Call</button>
+            <button id="btn-hangup" onclick="hangUp()"
+              style="display:none;padding:10px 20px;background:#dc2626;color:#fff;
+                     border:none;border-radius:8px;cursor:pointer;font-weight:600;">Hang Up</button>
+          </div>
+          <div id="dialer-status" style="margin-top:8px;font-size:13px;color:#a5b4fc;">Initializing...</div>
         </div>
         <div class="table-card">
           <div class="table-header">
@@ -848,6 +863,7 @@ async function enterApp() {
   showView('app');
   setNavLoggedIn();
   initRecognition();
+  initTwilioDevice();
   const h = new Date().getHours();
   const name = userProfile?.full_name || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'there';
   document.getElementById('dash-greeting').textContent = (h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening') + ', ' + name.split(' ')[0];
