@@ -682,10 +682,11 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <label>Email</label>
       <input type="email" id="a-email" placeholder="you@email.com" autocomplete="email">
     </div>
-    <div class="form-group">
+  <div class="form-group">
       <label>Password</label>
       <input type="password" id="a-pass" placeholder="Min. 6 characters" autocomplete="current-password">
     </div>
+    <div style="text-align:right;margin:-6px 0 4px"><span onclick="handleForgotPassword()" style="font-size:12px;color:var(--brand);cursor:pointer">Forgot password?</span></div>
     <button class="btn btn-primary btn-full" id="auth-btn" onclick="handleAuth()" style="margin-top:6px">Create account</button>
     <div class="auth-switch" id="auth-switch">Already have an account? <span onclick="toggleAuth()">Log in</span></div>
   </div>
@@ -751,14 +752,21 @@ const STRIPE_PRICE = 'price_1TeRFh2RgYWz496cuMTZVogj';
         currentUser = session.user;
         await loadProfile();
         enterApp();
-      } else if (event === 'SIGNED_OUT') {
+     } else if (event === 'SIGNED_OUT') {
         currentUser = null; userProfile = null; records = [];
         showView('landing');
         setNavLoggedOut();
+      } else if (event === 'PASSWORD_RECOVERY') {
+        const newPass = prompt('Enter your new password (min. 6 characters):');
+        if (newPass && newPass.length >= 6) {
+          const { error } = await db.auth.updateUser({ password: newPass });
+          if (error) alert('Error: ' + error.message);
+          else { alert('✓ Password updated. You are now logged in.'); window.history.replaceState({}, '', window.location.pathname); }
+        } else if (newPass !== null) {
+          alert('Password must be at least 6 characters. Use the email link again.');
+        }
       }
     });
-  } catch(e) { console.warn('Supabase not configured yet:', e.message); }
-})();
 
 /* ═══════════════════════════════════════════════════════
    AUTH
@@ -782,7 +790,23 @@ function showAuthModal(mode) {
 function toggleAuth() {
   showAuthModal(authMode === 'login' ? 'signup' : 'login');
 }
-
+async function handleForgotPassword() {
+  const email = document.getElementById('a-email').value.trim();
+  if (!email) { showAlert('auth-alert', 'Enter your email above first, then click "Forgot password?"'); return; }
+  document.getElementById('auth-alert').classList.add('hidden');
+  try {
+    const { error } = await db.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '?recovery=true'
+    });
+    if (error) throw error;
+    const a = document.getElementById('auth-alert');
+    a.className = 'alert alert-success';
+    a.textContent = '✓ Check your email for a password reset link.';
+    a.classList.remove('hidden');
+  } catch (e) {
+    showAlert('auth-alert', e.message || 'Could not send reset email.');
+  }
+}
 async function handleAuth() {
   if (SUPABASE_URL === 'YOUR_SUPABASE_PROJECT_URL') {
     showAlert('auth-alert', '⚠️ Supabase is not configured yet. Open index.html and add your SUPABASE_URL and SUPABASE_ANON_KEY. See README for instructions.');
