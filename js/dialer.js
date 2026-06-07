@@ -1,61 +1,109 @@
-// PitchLog Browser Dialer
+// PitchLog Browser Dialer — Twilio Voice SDK 2.x
 let twilioDevice = null;
+let currentCall = null;
+
+function setStatus(msg) {
+  const el = document.getElementById('dialer-status');
+  if (el) el.textContent = msg;
+}
 
 async function initTwilioDevice() {
   try {
+    if (typeof Twilio === 'undefined' || !Twilio.Device) {
+      setStatus('⚠️ Voice SDK not loaded');
+      return;
+    }
+    setStatus('Connecting...');
+
     const { data: { session } } = await db.auth.getSession();
     const res = await fetch('/api/twilio-token', {
       headers: { 'Authorization': `Bearer ${session?.access_token}` }
     });
+    if (!res.ok) throw new Error('Token request failed (' + res.status + ')');
     const data = await res.json();
     if (!data.token) throw new Error('No token returned');
 
-    twilioDevice = new Twilio.Device(data.token, { codecPreferences: ['opus', 'pcmu'] });
+    twilioDevice = new Twilio.Device(data.token, {
+      codecPreferences: ['opus', 'pcmu'],
+      logLevel: 'error'
+    });
 
-    twilioDevice.on('ready', () => {
-      const el = document.getElementById('dialer-status');
-      if (el) el.textContent = '🟢 Ready to call';
-    });
+    twilioDevice.on('registered', () => setStatus('🟢 Ready to call'));
+    twilioDevice.on('registering', () => setStatus('Registering...'));
+    twilioDevice.on('unregistered', () => setStatus('⚪ Offline'));
     twilioDevice.on('error', (err) => {
-      const el = document.getElementById('dialer-status');
-      if (el) el.textContent = '🔴 ' + err.message;
+      console.error('Twilio device error:', err);
+      setStatus('🔴 ' + (err.message || err.code || 'Device error'));
     });
-    twilioDevice.on('connect', () => {
-      const h = document.getElementById('btn-hangup');
-      const c = document.getElementById('btn-call');
-      const s = document.getElementById('dialer-status');
-      if (h) h.style.display = 'inline-block';
-      if (c) c.style.display = 'none';
-      if (s) s.textContent = '📞 On call...';
+
+    // Refresh token before it expires so the device stays alive
+    twilioDevice.on('tokenWillExpire', async () => {
+      try {
+        const { data: { session } } = await db.auth.getSession();
+        const r = await fetch('/api/twilio-token', {
+          headers: { 'Authorization': `Bearer ${session?.access_token}` }
+        });
+        const d = await r.json();
+        if (d.token) twilioDevice.updateToken(d.token);
+      } catch (e) { console.error('Token refresh failed:', e); }
     });
-    twilioDevice.on('disconnect', () => {
-      const h = document.getElementById('btn-hangup');
-      const c = document.getElementById('btn-call');
-      const s = document.getElementById('dialer-status');
-      if (h) h.style.display = 'none';
-      if (c) c.style.display = 'inline-block';
-      if (s) s.textContent = '✅ Call ended — AI logging...';
-      setTimeout(() => {
-        const el = document.getElementById('dialer-status');
-        if (el) el.textContent = '🟢 Ready to call';
-        if (typeof renderLog === 'function') renderLog();
-        if (typeof refreshDashboard === 'function') refreshDashboard();
-      }, 5000);
-    });
+
+    await twilioDevice.register();
   } catch (err) {
     console.error('Dialer init error:', err);
-    const el = document.getElementById('dialer-status');
-    if (el) el.textContent = '⚠️ Dialer unavailable';
+    setStatus('⚠️ Dialer unavailable');
   }
 }
 
-function makeCall() {
-  const number = document.getElementById('dialer-number').value.trim();
+async function makeCall() {
+  const input = document.getElementById('dialer-number');
+  const number = input ? input.value.trim() : '';
   if (!number) { alert('Enter a phone number first'); return; }
   if (!twilioDevice) { alert('Dialer not ready — please wait'); return; }
-  twilioDevice.connect({ To: number });
+  if (twilioDevice.isBusy) { alert('Already on a call'); return; }
+
+  const h = document.getElementById('btn-hangup');
+  const c = document.getElementById('btn-call');
+
+  try {
+    setStatus('Calling...');
+    currentCall = await twilioDevice.connect({ params: { To: number } });
+
+    if (h) h.style.display = 'inline-block';
+    if (c) c.style.display = 'none';
+    setStatus('📞 On call...');
+
+    currentCall.on('accept', () => setStatus('📞 Connected'));
+    currentCall.on('disconnect', endCallUI);
+    currentCall.on('cancel', endCallUI);
+    currentCall.on('reject', endCallUI);
+    currentCall.on('error', (err) => {
+      console.error('Call error:', err);
+      setStatus('🔴 ' + (err.message || 'Call error'));
+      endCallUI();
+    });
+  } catch (err) {
+    console.error('makeCall error:', err);
+    setStatus('🔴 ' + (err.message || 'Call failed'));
+    endCallUI();
+  }
+}
+
+function endCallUI() {
+  const h = document.getElementById('btn-hangup');
+  const c = document.getElementById('btn-call');
+  if (h) h.style.display = 'none';
+  if (c) c.style.display = 'inline-block';
+  currentCall = null;
+  setStatus('✅ Call ended — AI logging...');
+  setTimeout(() => {
+    setStatus('🟢 Ready to call');
+    if (typeof renderLog === 'function') renderLog();
+    if (typeof refreshDashboard === 'function') refreshDashboard();
+  }, 5000);
 }
 
 function hangUp() {
-  if (twilioDevice) twilioDevice.disconnectAll();
+  if (currentCall) currentCall.disconnect();
+  else if (twilioDevice) twilioDevice.disconnectAll();
 }
