@@ -5,7 +5,7 @@ const AccessToken = twilio.jwt.AccessToken;
 const VoiceGrant = AccessToken.VoiceGrant;
 
 const ALLOWED_ORIGIN = 'https://call-buddy-omega.vercel.app';
-const FREE_PLAN_LIMIT = 10;
+const FREE_PLAN_LIMIT = 25;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
@@ -16,8 +16,10 @@ export default async function handler(req, res) {
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY)
     return res.status(500).json({ error: 'Supabase not configured' });
-  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_API_KEY || !process.env.TWILIO_API_SECRET)
-    return res.status(500).json({ error: 'Twilio not configured' });
+  if (!process.env.TWILIO_ACCOUNT_SID) return res.status(500).json({ error: 'Missing env: TWILIO_ACCOUNT_SID' });
+  if (!process.env.TWILIO_API_KEY) return res.status(500).json({ error: 'Missing env: TWILIO_API_KEY (create an API Key in Twilio console, starts with SK...)' });
+  if (!process.env.TWILIO_API_SECRET) return res.status(500).json({ error: 'Missing env: TWILIO_API_SECRET' });
+  if (!process.env.TWILIO_TWIML_APP_SID) return res.status(500).json({ error: 'Missing env: TWILIO_TWIML_APP_SID (create a TwiML App in Twilio console, starts with AP...)' });
 
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.replace(/^Bearer\s+/i, '');

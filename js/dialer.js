@@ -19,8 +19,8 @@ async function initTwilioDevice() {
     const res = await fetch('/api/twilio-token', {
       headers: { 'Authorization': `Bearer ${session?.access_token}` }
     });
-    if (!res.ok) throw new Error('Token request failed (' + res.status + ')');
     const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Token request failed (' + res.status + ')');
     if (!data.token) throw new Error('No token returned');
 
     twilioDevice = new Twilio.Device(data.token, {
@@ -51,7 +51,7 @@ async function initTwilioDevice() {
     await twilioDevice.register();
   } catch (err) {
     console.error('Dialer init error:', err);
-    setStatus('⚠️ Dialer unavailable');
+    setStatus('⚠️ ' + (err.message || 'Dialer unavailable'));
   }
 }
 
