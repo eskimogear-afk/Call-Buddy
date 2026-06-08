@@ -751,8 +751,8 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <h3 style="color:#a5b4fc;margin:0;font-size:16px;">📞 Dialer</h3>
             <span id="dialer-caller-id" style="font-size:12px;color:#6b7280;background:#0f0a2e;padding:3px 10px;border-radius:20px;"></span>
           </div>
-          <div id="dialer-setup-warning" style="display:none;padding:10px 14px;background:#7f1d1d;border-radius:8px;color:#fca5a5;font-size:13px;margin-bottom:10px;">
-            ⚠️ Phone number not provisioned. Contact your admin to complete setup.
+          <div id="dialer-setup-warning" style="display:none;padding:10px 14px;background:#1e3a5f;border-radius:8px;color:#93c5fd;font-size:13px;margin-bottom:10px;">
+            ℹ️ No dedicated caller ID set — calls will use the account default number.
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <input id="dialer-number" type="tel" placeholder="+1 (555) 000-0000"
@@ -765,7 +765,10 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
               style="display:none;padding:10px 20px;background:#dc2626;color:#fff;
                      border:none;border-radius:8px;cursor:pointer;font-weight:600;">Hang Up</button>
           </div>
-          <div id="dialer-status" style="margin-top:8px;font-size:13px;color:#a5b4fc;">Initializing...</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+            <div id="dialer-status" style="font-size:13px;color:#a5b4fc;flex:1">Initializing...</div>
+            <button id="btn-dialer-retry" onclick="retryDialer()" style="display:none;font-size:12px;padding:4px 10px;background:#4f46e5;color:#fff;border:none;border-radius:6px;cursor:pointer">Retry</button>
+          </div>
         </div>
         <div class="table-card">
           <div class="table-header">

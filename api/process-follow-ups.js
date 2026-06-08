@@ -20,10 +20,10 @@ export default async function handler(req, res) {
   const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
   try {
-    // Fetch all pending follow-ups due now
+    // Fetch pending SMS follow-ups that are due
     const { data: dueFollowUps, error } = await supabase
       .from('follow_ups')
-      .select('*, contacts(id, name, phone), profiles!follow_ups_user_id_fkey(twilio_phone_number)')
+      .select('*, contacts(id, name, phone)')
       .eq('status', 'pending')
       .eq('type', 'sms')
       .lte('scheduled_at', new Date().toISOString())
@@ -35,9 +35,20 @@ export default async function handler(req, res) {
 
     for (const fu of dueFollowUps || []) {
       const toPhone = fu.contacts?.phone;
-      const fromPhone = fu.profiles?.twilio_phone_number || process.env.TWILIO_PHONE_NUMBER;
+
+      // Look up the sender's phone number from their profile separately
+      let fromPhone = process.env.TWILIO_PHONE_NUMBER || null;
+      if (fu.user_id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('twilio_phone_number')
+          .eq('id', fu.user_id)
+          .single();
+        if (profile?.twilio_phone_number) fromPhone = profile.twilio_phone_number;
+      }
 
       if (!toPhone || !fromPhone) {
+        console.warn(`Follow-up ${fu.id} skipped — toPhone: ${toPhone}, fromPhone: ${fromPhone}`);
         results.skipped++;
         continue;
       }

@@ -33,7 +33,7 @@ export default async function handler(req, res) {
   try {
     const { data: followUp, error: fuError } = await supabase
       .from('follow_ups')
-      .select('*, contacts(id, name, phone)')
+      .select('*, contacts(id, name, phone, follow_up_count)')
       .eq('id', follow_up_id)
       .eq('user_id', user.id)
       .single();
@@ -51,25 +51,31 @@ export default async function handler(req, res) {
       .single();
 
     const fromPhone = profile?.twilio_phone_number || process.env.TWILIO_PHONE_NUMBER;
-    if (!fromPhone) return res.status(500).json({ error: 'No outbound phone number configured' });
+    if (!fromPhone) return res.status(500).json({ error: 'No outbound phone number configured for your account' });
 
-    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    const message = await client.messages.create({
-      body: followUp.message || `Hi ${followUp.contacts?.name || 'there'}, just following up. Let me know if you have any questions!`,
+    const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    const smsBody = followUp.message ||
+      `Hi ${followUp.contacts?.name || 'there'}, just following up. Let me know if you have any questions!`;
+
+    const sms = await twilioClient.messages.create({
+      body: smsBody,
       from: fromPhone,
       to: toPhone
     });
 
+    // Mark follow-up as sent
     await supabase.from('follow_ups')
       .update({ status: 'sent', sent_at: new Date().toISOString() })
       .eq('id', follow_up_id);
 
+    // Increment follow_up_count on the contact
+    const currentCount = followUp.contacts?.follow_up_count || 0;
     await supabase.from('contacts')
-      .update({ follow_up_count: supabase.rpc('increment', { x: 1 }) })
+      .update({ follow_up_count: currentCount + 1 })
       .eq('id', followUp.contact_id)
       .eq('user_id', user.id);
 
-    return res.status(200).json({ success: true, sid: message.sid });
+    return res.status(200).json({ success: true, sid: sms.sid });
   } catch (err) {
     console.error('Send follow-up error:', err);
     return res.status(500).json({ error: String(err) });

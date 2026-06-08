@@ -16,10 +16,12 @@ export default async function handler(req, res) {
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY)
     return res.status(500).json({ error: 'Supabase not configured' });
-  if (!process.env.TWILIO_ACCOUNT_SID) return res.status(500).json({ error: 'Missing env: TWILIO_ACCOUNT_SID' });
-  if (!process.env.TWILIO_API_KEY) return res.status(500).json({ error: 'Missing env: TWILIO_API_KEY (create an API Key in Twilio console, starts with SK...)' });
-  if (!process.env.TWILIO_API_SECRET) return res.status(500).json({ error: 'Missing env: TWILIO_API_SECRET' });
-  if (!process.env.TWILIO_TWIML_APP_SID) return res.status(500).json({ error: 'Missing env: TWILIO_TWIML_APP_SID (create a TwiML App in Twilio console, starts with AP...)' });
+  if (!process.env.TWILIO_ACCOUNT_SID)
+    return res.status(500).json({ error: 'Missing env: TWILIO_ACCOUNT_SID' });
+  if (!process.env.TWILIO_AUTH_TOKEN && !process.env.TWILIO_API_SECRET)
+    return res.status(500).json({ error: 'Missing env: TWILIO_AUTH_TOKEN or TWILIO_API_SECRET' });
+  if (!process.env.TWILIO_TWIML_APP_SID)
+    return res.status(500).json({ error: 'Missing env: TWILIO_TWIML_APP_SID (create a TwiML App in Twilio console → starts with AP...)' });
 
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.replace(/^Bearer\s+/i, '');
@@ -27,8 +29,14 @@ export default async function handler(req, res) {
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-  if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
+  let user;
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data.user) return res.status(401).json({ error: 'Unauthorized' });
+    user = data.user;
+  } catch (e) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -41,10 +49,15 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Prefer dedicated API Key (SK...) — falls back to Account SID + Auth Token which Twilio also accepts.
+    // Using TWILIO_ACCOUNT_SID as keySid with TWILIO_AUTH_TOKEN as secret is valid for AccessToken generation.
+    const keySid = process.env.TWILIO_API_KEY || process.env.TWILIO_ACCOUNT_SID;
+    const keySecret = process.env.TWILIO_API_SECRET || process.env.TWILIO_AUTH_TOKEN;
+
     const accessToken = new AccessToken(
       process.env.TWILIO_ACCOUNT_SID,
-      process.env.TWILIO_API_KEY,
-      process.env.TWILIO_API_SECRET,
+      keySid,
+      keySecret,
       { identity: user.id, ttl: 3600 }
     );
 

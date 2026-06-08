@@ -28,7 +28,11 @@ async function initTwilioDevice() {
       logLevel: 'error'
     });
 
-    twilioDevice.on('registered', () => setStatus('🟢 Ready to call'));
+    twilioDevice.on('registered', () => {
+      setStatus('🟢 Ready to call');
+      const retryBtn = document.getElementById('btn-dialer-retry');
+      if (retryBtn) retryBtn.style.display = 'none';
+    });
     twilioDevice.on('registering', () => setStatus('Registering...'));
     twilioDevice.on('unregistered', () => setStatus('⚪ Offline'));
     twilioDevice.on('error', (err) => {
@@ -52,7 +56,17 @@ async function initTwilioDevice() {
   } catch (err) {
     console.error('Dialer init error:', err);
     setStatus('⚠️ ' + (err.message || 'Dialer unavailable'));
+    const retryBtn = document.getElementById('btn-dialer-retry');
+    if (retryBtn) retryBtn.style.display = 'inline-block';
   }
+}
+
+async function retryDialer() {
+  const retryBtn = document.getElementById('btn-dialer-retry');
+  if (retryBtn) retryBtn.style.display = 'none';
+  twilioDevice = null;
+  currentCall = null;
+  await initTwilioDevice();
 }
 
 async function makeCall() {
