@@ -20,7 +20,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 
   <!-- ===================== ANALYTICS (placeholders) ===================== -->
@@ -33,11 +33,9 @@
     gtag('config', 'G-XXXXXXX');
   </script>
   -->
-
   <!-- TODO(Plausible): privacy-friendly alternative to GA4. Use ONE of the two.
   <script defer data-domain="YOUR-DOMAIN.com" src="https://plausible.io/js/script.js"></script>
   -->
-
   <!-- TODO(Meta Pixel): replace META_PIXEL_ID. Builds a retargeting audience from day 1.
   <script>
     !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -52,6 +50,10 @@
   <!-- =================================================================== -->
 </head>
 <body>
+  <!-- Global film-grain + vignette overlays for cinematic texture -->
+  <div class="grain" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
   <!-- ===== Header ===== -->
   <header class="site-header">
     <div class="wrap header-inner">
@@ -67,38 +69,93 @@
     </div>
   </header>
 
-  <!-- ===== Hero ===== -->
+  <!-- ===== Cinematic Hero ===== -->
   <section class="hero">
+    <!-- Layered SVG dusk scene (self-contained, no external images) -->
+    <div class="hero-scene" aria-hidden="true">
+      <svg class="hero-svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice">
+        <defs>
+          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#0a1430"/>
+            <stop offset="42%" stop-color="#132a55"/>
+            <stop offset="70%" stop-color="#5a3b6e"/>
+            <stop offset="86%" stop-color="#c96a4a"/>
+            <stop offset="100%" stop-color="#f2a65a"/>
+          </linearGradient>
+          <radialGradient id="sun" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#ffe7b8"/>
+            <stop offset="35%" stop-color="#ffc06a"/>
+            <stop offset="100%" stop-color="#ffc06a" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#e7935a"/>
+            <stop offset="100%" stop-color="#3a2a4d"/>
+          </linearGradient>
+        </defs>
+        <rect width="1440" height="900" fill="url(#sky)"/>
+        <circle cx="1040" cy="640" r="320" fill="url(#sun)"/>
+        <circle cx="1040" cy="640" r="78" fill="#ffeccb"/>
+        <!-- distant skyline -->
+        <g fill="#0c1733" opacity="0.92">
+          <rect x="120" y="560" width="42" height="160"/>
+          <rect x="172" y="600" width="30" height="120"/>
+          <rect x="212" y="540" width="54" height="180"/>
+          <rect x="276" y="588" width="34" height="132"/>
+          <rect x="320" y="612" width="44" height="108"/>
+          <rect x="378" y="556" width="38" height="164"/>
+          <rect x="430" y="600" width="50" height="120"/>
+          <rect x="610" y="590" width="40" height="130"/>
+          <rect x="660" y="560" width="60" height="160"/>
+          <rect x="730" y="610" width="34" height="110"/>
+        </g>
+        <!-- water -->
+        <rect x="0" y="716" width="1440" height="184" fill="url(#water)"/>
+        <!-- foreground land -->
+        <path d="M0 740 Q 360 712 760 738 T 1440 728 V 900 H 0 Z" fill="#0a1126"/>
+        <!-- palm silhouettes -->
+        <g fill="#070d1f">
+          <g transform="translate(190,742)">
+            <rect x="-5" y="-150" width="10" height="150" transform="rotate(-6)"/>
+            <path d="M0 -150 q -60 -18 -96 22 q 52 -8 96 6 q -50 -34 -96 -54 q 56 6 96 28 q -30 -52 -54 -86 q 44 28 60 78 q 16 -50 60 -78 q -24 34 -54 86 q 40 -22 96 -28 q -46 20 -96 54 q 44 -14 96 -6 q -36 -40 -96 -22 z"/>
+          </g>
+          <g transform="translate(1290,748) scale(1.25)">
+            <rect x="-5" y="-150" width="10" height="150" transform="rotate(7)"/>
+            <path d="M0 -150 q -60 -18 -96 22 q 52 -8 96 6 q -50 -34 -96 -54 q 56 6 96 28 q -30 -52 -54 -86 q 44 28 60 78 q 16 -50 60 -78 q -24 34 -54 86 q 40 -22 96 -28 q -46 20 -96 54 q 44 -14 96 -6 q -36 -40 -96 -22 z"/>
+          </g>
+        </g>
+      </svg>
+      <div class="hero-glow"></div>
+    </div>
+
     <div class="wrap hero-grid">
-      <div class="hero-copy">
+      <div class="hero-copy reveal">
         <span class="eyebrow">Florida investor financing · No tax returns</span>
-        <h1>DSCR Loans in Florida — qualify on your rental's income, <span class="hl">not your tax returns.</span></h1>
+        <h1>Qualify on your rental's <span class="hl">income</span>, not your tax returns.</h1>
         <p class="lede">
-          If your property's rent covers the payment, you can qualify — even if
-          you're self-employed or write off most of your income. Purchases,
-          refinances, cash-out, and BRRRR for single-family, condos, 2–4 units,
-          and short-term rentals.
+          DSCR loans for Florida investors. If the rent covers the payment, you
+          can qualify — even if you're self-employed or write off your income.
+          Purchases, refinances, cash-out, and BRRRR.
         </p>
         <div class="hero-cta">
           <a href="#calculator" class="btn btn-primary" data-cta="hero-calculate">See if I qualify →</a>
           <a href="tel:+15555555555" class="btn btn-ghost" data-cta="hero-call">Call now: (555) 555-5555</a>
         </div>
         <ul class="hero-trust">
-          <li>✓ Close in as few as 2–3 weeks</li>
-          <li>✓ Loan amounts from $75K</li>
-          <li>✓ Up to 80% LTV</li>
+          <li>Close in 2–3 weeks</li>
+          <li>Loans from $75K</li>
+          <li>Up to 80% LTV</li>
         </ul>
       </div>
 
-      <aside class="hero-card" aria-label="Why investors choose DSCR">
-        <h2>Why DSCR beats conventional for investors</h2>
+      <aside class="hero-card glass reveal" aria-label="Why investors choose DSCR">
+        <h2>DSCR vs. conventional</h2>
         <div class="compare">
           <div class="compare-col">
             <span class="compare-label">Conventional</span>
             <ul>
               <li>2 yrs tax returns</li>
               <li>Personal DTI caps</li>
-              <li>Limited # of properties</li>
+              <li>Limited properties</li>
             </ul>
           </div>
           <div class="compare-col best">
@@ -113,28 +170,33 @@
         <a href="#calculator" class="card-link" data-cta="card-calculate">Run the numbers ↓</a>
       </aside>
     </div>
+
+    <div class="scroll-cue" aria-hidden="true"><span></span></div>
   </section>
 
   <!-- ===== Trust strip ===== -->
   <section class="strip">
     <div class="wrap strip-inner">
-      <span>🏠 Equal Housing Lender</span>
-      <span>📍 Orlando · Tampa · Jacksonville · Kissimmee · Miami</span>
-      <span>⚡ Speed-to-lead: I call back within 5 minutes</span>
+      <span>Equal Housing Lender</span>
+      <span class="dot">·</span>
+      <span>Orlando · Tampa · Jacksonville · Kissimmee · Miami</span>
+      <span class="dot">·</span>
+      <span>I call back within 5 minutes</span>
     </div>
   </section>
 
   <!-- ===== Calculator (lead magnet) ===== -->
-  <section id="calculator" class="section">
+  <section id="calculator" class="section section-dark">
     <div class="wrap">
-      <div class="section-head">
-        <h2>Instant DSCR & rent calculator</h2>
+      <div class="section-head reveal">
+        <span class="kicker">The 30-second qualifier</span>
+        <h2>Instant DSCR &amp; rent calculator</h2>
         <p>Type the property address — we'll estimate the market rent, then show
           your DSCR in real time. A DSCR of <strong>1.0+</strong> means the rent
           covers the payment.</p>
       </div>
 
-      <div class="calc">
+      <div class="calc glass reveal">
         <div class="calc-grid">
           <label class="field span-2">
             <span>Property address</span>
@@ -149,17 +211,14 @@
             <span>Monthly rent</span>
             <input type="number" id="calc-rent" inputmode="numeric" placeholder="2400" min="0" />
           </label>
-
           <label class="field">
             <span>Loan amount</span>
             <input type="number" id="calc-loan" inputmode="numeric" placeholder="240000" min="0" />
           </label>
-
           <label class="field">
             <span>Interest rate (%)</span>
             <input type="number" id="calc-rate" inputmode="decimal" placeholder="7.25" step="0.01" min="0" value="7.25" />
           </label>
-
           <label class="field">
             <span>Taxes + insurance + HOA / mo</span>
             <input type="number" id="calc-expenses" inputmode="numeric" placeholder="450" min="0" />
@@ -173,39 +232,43 @@
             <span class="result-verdict" id="calc-verdict"></span>
           </div>
           <div class="result-detail">
-            <div><span>Est. monthly payment (PITIA)</span><strong id="calc-piti">—</strong></div>
+            <div><span>Est. payment (PITIA)</span><strong id="calc-piti">—</strong></div>
             <div><span>Monthly rent</span><strong id="calc-rent-out">—</strong></div>
           </div>
-          <a href="#apply" class="btn btn-primary btn-block" id="calc-cta" data-cta="calc-apply">Get my exact rate & terms →</a>
+          <a href="#apply" class="btn btn-primary btn-block" id="calc-cta" data-cta="calc-apply">Get my exact rate &amp; terms →</a>
         </div>
       </div>
     </div>
   </section>
 
   <!-- ===== Who it's for ===== -->
-  <section class="section section-alt">
+  <section class="section">
     <div class="wrap">
-      <div class="section-head"><h2>Built for real Florida investors</h2></div>
+      <div class="section-head reveal">
+        <span class="kicker">One lender, every play</span>
+        <h2>Built for real Florida investors</h2>
+      </div>
       <div class="cards">
-        <div class="info-card"><h3>Buy & hold</h3><p>Grow a rental portfolio without DTI caps or counting personal income.</p></div>
-        <div class="info-card"><h3>BRRRR</h3><p>Refi out of hard money into a 30-year DSCR loan once it's rented and stabilized.</p></div>
-        <div class="info-card"><h3>Airbnb / STR</h3><p>Short-term rental income can qualify — ideal for the Orlando & Kissimmee market.</p></div>
-        <div class="info-card"><h3>Self-employed</h3><p>Write off your income on taxes? The property's cash flow qualifies instead.</p></div>
+        <div class="info-card reveal"><span class="card-num">01</span><h3>Buy &amp; hold</h3><p>Grow a rental portfolio without DTI caps or counting personal income.</p></div>
+        <div class="info-card reveal"><span class="card-num">02</span><h3>BRRRR</h3><p>Refi out of hard money into a 30-year DSCR loan once it's rented and stabilized.</p></div>
+        <div class="info-card reveal"><span class="card-num">03</span><h3>Airbnb / STR</h3><p>Short-term rental income can qualify — ideal for the Orlando &amp; Kissimmee market.</p></div>
+        <div class="info-card reveal"><span class="card-num">04</span><h3>Self-employed</h3><p>Write off your income on taxes? The property's cash flow qualifies instead.</p></div>
       </div>
     </div>
   </section>
 
   <!-- ===== Lead form ===== -->
-  <section id="apply" class="section">
+  <section id="apply" class="section section-dark">
     <div class="wrap form-wrap">
-      <div class="form-pitch">
+      <div class="form-pitch reveal">
+        <span class="kicker">Speed to lead</span>
         <h2>Get your DSCR loan options</h2>
-        <p>Tell me about the deal and I'll text/call you back with real numbers —
-          usually within 5 minutes during business hours. No credit pull to get a quote.</p>
+        <p>Tell me about the deal and I'll text or call you back with real numbers —
+          usually within 5 minutes during business hours. No credit pull for a quote.</p>
         <ul class="form-bullets">
-          <li>✓ Exclusive — you work directly with me, not a call center</li>
-          <li>✓ Honest answer on whether DSCR is your best option</li>
-          <li>✓ Quotes for purchase, refi, cash-out & BRRRR</li>
+          <li>Exclusive — you work directly with me, not a call center</li>
+          <li>An honest answer on whether DSCR is your best option</li>
+          <li>Quotes for purchase, refi, cash-out &amp; BRRRR</li>
         </ul>
         <div class="officer">
           <div class="officer-name">Damon · Mortgage Loan Originator</div>
@@ -213,7 +276,7 @@
         </div>
       </div>
 
-      <form id="lead-form" class="lead-form" novalidate>
+      <form id="lead-form" class="lead-form glass reveal" novalidate>
         <div class="row">
           <label class="field"><span>Full name *</span><input type="text" name="name" required autocomplete="name" /></label>
           <label class="field"><span>Phone *</span><input type="tel" name="phone" required autocomplete="tel" placeholder="(555) 555-5555" /></label>
@@ -252,7 +315,6 @@
         </div>
         <label class="field"><span>Anything else?</span><textarea name="notes" rows="2" placeholder="Tell me about the deal…"></textarea></label>
 
-        <!-- Hidden DSCR + UTM attribution, filled by app.js -->
         <input type="hidden" name="dscr_ratio" />
         <input type="hidden" name="utm_source" />
         <input type="hidden" name="utm_medium" />
@@ -278,7 +340,7 @@
              any state-license language. DO NOT advertise live until signed off. -->
         <p>
           Damon, Mortgage Loan Originator, NMLS&nbsp;#2291737 · Visto Mortgage,
-          Company NMLS&nbsp;#[COMPANY_NMLS]. Equal Housing Lender 🏠.
+          Company NMLS&nbsp;#[COMPANY_NMLS]. Equal Housing Lender.
         </p>
         <p class="disclaimer">
           [DISCLAIMER PLACEHOLDER — insert Visto-approved wording.] This is not a
