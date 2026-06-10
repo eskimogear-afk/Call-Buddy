@@ -22,17 +22,53 @@ export default async function handler(req, res) {
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { transcript, type, name, summary, painPoints, nextSteps } = req.body || {};
+  const { transcript, type, name, summary, painPoints, nextSteps, call_id } = req.body || {};
 
   let prompt = '';
   if (type === 'email') {
-    prompt = `Write a short, friendly, personalized follow-up email from a sales professional to a prospect after a cold call.
-Name: ${name || 'the prospect'}
-Call summary: ${summary || ''}
-Pain points discussed: ${painPoints || ''}
-Next steps agreed: ${nextSteps || ''}
-Keep it under 150 words. Conversational, not salesy. End with one clear call to action.
-Return ONLY the email body - no subject line, no JSON, no extra formatting.`;
+    // Pull the call + contact server-side so the draft is grounded in the real transcript
+    let emailTranscript = transcript || '';
+    let emailNotes = summary || '';
+    let emailNext = nextSteps || '';
+    let recipientName = name || '';
+    let recipientEmail = '';
+    if (call_id) {
+      const { data: call } = await supabase
+        .from('calls')
+        .select('transcript, notes, next_step, contacts(name, email)')
+        .eq('id', call_id).eq('user_id', user.id).single();
+      if (call) {
+        if (!String(call.transcript || '').startsWith('PENDING:')) emailTranscript = call.transcript || emailTranscript;
+        emailNotes = call.notes || emailNotes;
+        emailNext = call.next_step || emailNext;
+        recipientName = call.contacts?.name && call.contacts.name !== 'Unknown' ? call.contacts.name : recipientName;
+        recipientEmail = call.contacts?.email || '';
+      }
+    }
+    // Sender hint from profile
+    const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
+    const senderName = prof?.full_name || '';
+
+    prompt = `You are drafting a follow-up email a mortgage loan officer will send to a real estate agent (or prospect) right after a phone call. Base it ENTIRELY on what was actually discussed in the transcript — names, programs, the agreed next step, timing — do not invent facts.
+
+Sender (loan officer): ${senderName || 'infer from the transcript'}
+Recipient: ${recipientName || 'the person called'}
+AI call summary: ${emailNotes}
+Agreed next step: ${emailNext}
+
+Guidelines:
+- Warm, professional, concise (120-180 words). Not pushy.
+- Open by referencing the actual conversation.
+- Recap only the specific value points that came up on the call.
+- Restate the agreed next step and timing clearly.
+- Sign with the sender's name and company if mentioned in the transcript.
+
+Return ONLY valid JSON: {"subject": "...", "body": "..."} — body uses \\n for line breaks, no markdown.
+
+Transcript:
+${emailTranscript || '(no transcript available — write a brief, generic but warm follow-up based on the summary and next step above)'}`;
+    // stash recipient email to return after the model call
+    req._recipientEmail = recipientEmail;
   } else {
     if (!transcript) return res.status(400).json({ error: 'No transcript provided' });
     prompt = `You are an AI assistant for a sales professional. Analyze this cold call transcript and return ONLY valid JSON with these exact keys:
@@ -64,7 +100,16 @@ ${transcript}`;
     const text = message.content.map(b => b.text || '').join('').trim();
 
     if (type === 'email') {
-      return res.status(200).json({ result: text });
+      let subject = '', body = text;
+      try {
+        const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+        subject = parsed.subject || '';
+        body = parsed.body || text;
+      } catch {
+        // Model returned plain text — use as body, derive a simple subject
+        subject = 'Following up on our call';
+      }
+      return res.status(200).json({ subject, body, to: req._recipientEmail || '' });
     } else {
       const clean = text.replace(/```json|```/g, '').trim();
       return res.status(200).json(JSON.parse(clean));

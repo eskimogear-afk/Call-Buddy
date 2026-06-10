@@ -1115,6 +1115,28 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   </div>
 </div>
 
+<!-- ══ AI EMAIL DRAFT MODAL ════════════════════════════════════════════════ -->
+<div id="email-modal" class="modal-overlay hidden" onclick="bgClose(event,'email-modal')">
+  <div class="modal" style="max-width:560px">
+    <button class="modal-close" onclick="closeModal('email-modal')">×</button>
+    <h2>✉️ AI follow-up email</h2>
+    <p class="modal-sub" id="email-sub">Drafted from your call transcript.</p>
+    <div id="email-loading" style="text-align:center;padding:30px 0;color:var(--text2)"><div class="spinner spinner-dark" style="margin:0 auto 12px"></div>Reading the transcript and drafting…</div>
+    <div id="email-fields" class="hidden">
+      <div class="form-group"><label>To</label><input type="email" id="email-to" placeholder="recipient@email.com"></div>
+      <div class="form-group"><label>Subject</label><input type="text" id="email-subject"></div>
+      <div class="form-group"><label>Body</label><textarea id="email-body" style="height:220px;font-family:inherit;line-height:1.6"></textarea></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-primary" onclick="openEmailClient()">Open in email app</button>
+        <button class="btn btn-outline" onclick="copyEmail(this)">Copy</button>
+        <button class="btn btn-ghost" onclick="draftEmail(emailCurrentCallId, emailCurrentName)">↻ Regenerate</button>
+        <span id="email-copied" class="hidden" style="font-size:13px;color:var(--brand)">✓ Copied</span>
+      </div>
+    </div>
+    <div id="email-error" class="alert alert-error hidden"></div>
+  </div>
+</div>
+
 <!-- ══ AUTH MODAL ══════════════════════════════════════════════════════════ -->
 <div id="auth-modal" class="modal-overlay hidden" onclick="bgClose(event,'auth-modal')">
   <div class="modal">
@@ -1644,6 +1666,7 @@ function buildTable(recs) {
         <div class="cc-actions">
           ${phone && !isDNC(phone) ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="callAgain('${esc(phone)}')">📞 Call again</button>` : ''}
           ${phone ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="followUpFromCall('${r.contact_id || ''}','${esc(display)}','${esc(phone)}')">⏰ Schedule follow-up</button>` : ''}
+          ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftEmail('${r.id}','${esc(display)}')">✉️ Draft email</button>` : ''}
           ${phone && !isDNC(phone) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="markDoNotCall('${esc(phone)}')">🚫 Do Not Call</button>` : ''}
           ${phone && isDNC(phone) ? `<span style="font-size:12px;font-weight:600;color:var(--danger);align-self:center">🚫 On Do Not Call list</span>` : ''}
           <button class="btn btn-danger" style="font-size:12px;padding:6px 14px;margin-left:auto" onclick="deleteRecord('${r.id}')">Delete</button>
@@ -1692,6 +1715,54 @@ function followUpFromCall(contactId, name, phone) {
     if (contactId && sel) sel.value = contactId;
     document.getElementById('fu-message').value = `Hi ${name && name !== phone ? name.split(' ')[0] : 'there'}, great speaking with you! Let me know if any questions came up — happy to help.`;
   }, 150);
+}
+
+/* ═══════════════════════════════════════════════════════
+   AI FOLLOW-UP EMAIL DRAFT
+═══════════════════════════════════════════════════════ */
+let emailCurrentCallId = null, emailCurrentName = '';
+async function draftEmail(callId, name) {
+  emailCurrentCallId = callId; emailCurrentName = name || '';
+  document.getElementById('email-sub').textContent = name ? `Drafted from your call with ${name}.` : 'Drafted from your call transcript.';
+  document.getElementById('email-loading').classList.remove('hidden');
+  document.getElementById('email-fields').classList.add('hidden');
+  document.getElementById('email-error').classList.add('hidden');
+  document.getElementById('email-modal').classList.remove('hidden');
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) throw new Error('Not signed in');
+    const r = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ type: 'email', call_id: callId })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Draft failed');
+    document.getElementById('email-to').value = d.to || '';
+    document.getElementById('email-subject').value = d.subject || 'Following up on our call';
+    document.getElementById('email-body').value = d.body || '';
+    document.getElementById('email-loading').classList.add('hidden');
+    document.getElementById('email-fields').classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('email-loading').classList.add('hidden');
+    const err = document.getElementById('email-error');
+    err.textContent = 'Could not draft the email: ' + e.message;
+    err.classList.remove('hidden');
+  }
+}
+function openEmailClient() {
+  const to = encodeURIComponent(document.getElementById('email-to').value || '');
+  const subject = encodeURIComponent(document.getElementById('email-subject').value || '');
+  const body = encodeURIComponent(document.getElementById('email-body').value || '');
+  window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+}
+function copyEmail(btn) {
+  const text = 'Subject: ' + document.getElementById('email-subject').value + '\n\n' + document.getElementById('email-body').value;
+  navigator.clipboard.writeText(text).then(() => {
+    const c = document.getElementById('email-copied');
+    c.classList.remove('hidden');
+    setTimeout(() => c.classList.add('hidden'), 2000);
+  });
 }
 
 function refreshDashboard() {
