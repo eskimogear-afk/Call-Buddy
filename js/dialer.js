@@ -102,6 +102,12 @@ async function makeCall() {
   const input = document.getElementById('dialer-number');
   const number = input ? input.value.trim() : '';
   if (!number) { alert('Enter a phone number first'); return; }
+  // Do Not Call guard — block suppressed numbers before connecting
+  if (typeof isDNC === 'function' && isDNC(number)) {
+    setStatus('🚫 On Do Not Call list — blocked');
+    alert('This number is on your Do Not Call list and was not dialed.\n\nRemove it under Settings → Do Not Call list if this is a mistake.');
+    return;
+  }
   if (!twilioDevice) { alert('Dialer not ready — please wait'); return; }
   if (twilioDevice.isBusy) { alert('Already on a call'); return; }
 

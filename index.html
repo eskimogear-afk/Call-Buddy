@@ -938,6 +938,13 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <div class="settings-row"><div><strong>Calls this month</strong><br><span id="set-calls">-</span></div></div>
         </div>
         <div class="settings-section">
+          <h3>Do Not Call list <span id="dnc-count" style="font-weight:400;color:var(--text3);font-size:13px">0</span></h3>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Numbers here are blocked from the dialer and automatically skipped by the Power Dialer. Paste numbers separated by commas, spaces, or new lines to bulk-import a suppression list.</p>
+          <textarea id="dnc-bulk-input" placeholder="(555) 123-4567, 5551234568&#10;5551234569" style="width:100%;min-height:72px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;resize:vertical"></textarea>
+          <button class="btn btn-primary" id="dnc-bulk-btn" style="font-size:13px;padding:8px 16px;margin-top:10px" onclick="bulkAddDNC()">Add to Do Not Call</button>
+          <div id="dnc-list-view" style="margin-top:16px"></div>
+        </div>
+        <div class="settings-section">
           <h3>Data</h3>
           <div class="settings-row"><div><strong>Export all records</strong><br><span>Download your full call log as Excel.</span></div><button class="btn btn-outline" style="font-size:13px;padding:7px 16px;flex-shrink:0" onclick="exportAll()">Export to Excel</button></div>
           <div class="settings-row"><div><strong>Delete all records</strong><br><span>Permanently remove all your call data. Cannot be undone.</span></div><button class="btn btn-danger" style="font-size:13px;padding:7px 16px;flex-shrink:0" onclick="clearAllRecords()">Delete all</button></div>
@@ -1323,6 +1330,7 @@ async function enterApp() {
     if (warningEl) warningEl.style.display = 'block';
   }
   await loadRecords();
+  loadDNC();
   refreshDashboard();
   updatePlanBadge();
 }
@@ -1354,6 +1362,7 @@ function switchPanel(p) {
   if (p === 'followups') loadFollowUps();
   if (p === 'power') pdRender();
   if (p === 'inbox') loadInbox();
+  if (p === 'settings') { loadDNC().then(renderDNC); }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1631,8 +1640,10 @@ function buildTable(recs) {
         </div>
         ${transcript ? `<div class="cc-field" style="margin-bottom:6px"><b>Transcript</b></div><div class="cc-transcript">${esc(transcript)}</div>` : ''}
         <div class="cc-actions">
-          ${phone ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="callAgain('${esc(phone)}')">📞 Call again</button>` : ''}
+          ${phone && !isDNC(phone) ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="callAgain('${esc(phone)}')">📞 Call again</button>` : ''}
           ${phone ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="followUpFromCall('${r.contact_id || ''}','${esc(display)}','${esc(phone)}')">⏰ Schedule follow-up</button>` : ''}
+          ${phone && !isDNC(phone) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="markDoNotCall('${esc(phone)}')">🚫 Do Not Call</button>` : ''}
+          ${phone && isDNC(phone) ? `<span style="font-size:12px;font-weight:600;color:var(--danger);align-self:center">🚫 On Do Not Call list</span>` : ''}
           <button class="btn btn-danger" style="font-size:12px;padding:6px 14px;margin-left:auto" onclick="deleteRecord('${r.id}')">Delete</button>
         </div>
       </div>
@@ -2040,6 +2051,104 @@ function displayName(name, phone) {
   return p || 'Unknown';
 }
 
+/* ═══════════════════════════════════════════════════════
+   DO NOT CALL LIST
+═══════════════════════════════════════════════════════ */
+let dncSet = new Set();      // canonical keys of suppressed numbers
+let dncRows = [];            // full rows for the manager UI
+
+// Must match the backend dncKey(): digits only, US 11-digit -> 10-digit
+function dncKey(p) {
+  let d = String(p || '').replace(/\D/g, '');
+  if (d.length === 11 && d[0] === '1') d = d.slice(1);
+  return d;
+}
+function isDNC(phone) {
+  const k = dncKey(phone);
+  return k.length >= 7 && dncSet.has(k);
+}
+
+async function loadDNC() {
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) return;
+    const r = await fetch('/api/contacts?resource=dnc', { headers: { Authorization: 'Bearer ' + session.access_token } });
+    dncRows = await r.json();
+    dncSet = new Set((dncRows || []).map(x => x.phone));
+  } catch (e) { console.warn('DNC load failed', e); }
+}
+
+async function addToDNC(phone, reason) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return false;
+  const r = await fetch('/api/contacts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+    body: JSON.stringify({ resource: 'dnc', phone, reason: reason || 'Manually added' })
+  });
+  if (r.ok) { dncSet.add(dncKey(phone)); await loadDNC(); return true; }
+  return false;
+}
+
+async function markDoNotCall(phone) {
+  const pretty = fmtPhone(phone);
+  if (!confirm(`Add ${pretty} to your Do Not Call list? You won't be able to dial it, and the power dialer will skip it.`)) return;
+  const ok = await addToDNC(phone, 'Requested do not call');
+  if (ok) { alert(`${pretty} added to Do Not Call.`); if (typeof renderDNC === 'function') renderDNC(); }
+  else alert('Could not add to Do Not Call list.');
+}
+
+async function removeFromDNC(phone) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  await fetch('/api/contacts?resource=dnc&phone=' + encodeURIComponent(phone), {
+    method: 'DELETE', headers: { Authorization: 'Bearer ' + session.access_token }
+  });
+  dncSet.delete(dncKey(phone));
+  await loadDNC();
+  renderDNC();
+}
+
+async function bulkAddDNC() {
+  const ta = document.getElementById('dnc-bulk-input');
+  const raw = (ta.value || '').split(/[\s,;\n]+/).map(s => s.trim()).filter(Boolean);
+  const phones = [...new Set(raw.map(dncKey).filter(p => p.length >= 7))];
+  if (!phones.length) { alert('No valid phone numbers found. Paste numbers separated by commas, spaces, or new lines.'); return; }
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  const btn = document.getElementById('dnc-bulk-btn');
+  btn.disabled = true; btn.textContent = 'Adding…';
+  try {
+    const r = await fetch('/api/contacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ resource: 'dnc', phones, reason: 'Bulk import' })
+    });
+    if (!r.ok) throw new Error((await r.json()).error || 'Failed');
+    ta.value = '';
+    await loadDNC();
+    renderDNC();
+    alert(`${phones.length} number${phones.length === 1 ? '' : 's'} added to Do Not Call.`);
+  } catch (e) { alert('Bulk add failed: ' + e.message); }
+  btn.disabled = false; btn.textContent = 'Add to Do Not Call';
+}
+
+function renderDNC() {
+  const el = document.getElementById('dnc-list-view');
+  if (!el) return;
+  document.getElementById('dnc-count').textContent = dncRows.length;
+  if (!dncRows.length) {
+    el.innerHTML = '<p style="color:var(--text3);font-size:13px;padding:12px 0">No numbers suppressed yet. Numbers you add here are blocked from the dialer and skipped by the power dialer.</p>';
+    return;
+  }
+  el.innerHTML = dncRows.map(r => `
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <span style="font-weight:600;min-width:130px">${esc(fmtPhone(r.phone))}</span>
+      <span style="color:var(--text3);flex:1">${esc(r.reason || '')}</span>
+      <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="removeFromDNC('${esc(r.phone)}')">Remove</button>
+    </div>`).join('');
+}
+
 function openAddContactModal() {
   document.getElementById('ac-name').value = '';
   document.getElementById('ac-phone').value = '';
@@ -2302,21 +2411,26 @@ function pdHandleFile(ev) {
       const parsed = rows.map(r => {
         const name = nameKey ? String(r[nameKey]).trim()
           : [firstKey ? r[firstKey] : '', lastKey ? r[lastKey] : ''].join(' ').trim();
+        const phone = pdNormPhone(r[phoneKey]);
         return {
           name: name || '',
-          phone: pdNormPhone(r[phoneKey]),
+          phone,
           company: companyKey ? String(r[companyKey]).trim() : '',
-          status: 'pending'
+          // Scrub against the Do Not Call list at import time
+          status: isDNC(phone) ? 'dnc' : 'pending'
         };
       }).filter(l => l.phone && l.phone.length >= 11);
 
       if (!parsed.length) { alert('No valid phone numbers found in the file.'); return; }
 
+      const scrubbed = parsed.filter(l => l.status === 'dnc').length;
       pdQueue = parsed;
       pdCurrentIdx = -1;
       pdActive = false;
       pdSave();
-      document.getElementById('pd-file-info').textContent = `${file.name} — ${parsed.length} leads loaded`;
+      document.getElementById('pd-file-info').textContent =
+        `${file.name} — ${parsed.length} leads loaded` +
+        (scrubbed ? ` · ${scrubbed} on Do Not Call (skipped)` : '');
       pdRender();
     } catch (err) {
       alert('Could not read that file: ' + err.message);
@@ -2342,13 +2456,13 @@ function pdRender() {
   if (controls) controls.style.display = 'flex';
   if (bar) bar.style.display = 'block';
 
-  const done = pdQueue.filter(l => l.status === 'done' || l.status === 'skipped').length;
+  const done = pdQueue.filter(l => l.status === 'done' || l.status === 'skipped' || l.status === 'dnc').length;
   document.getElementById('pd-progress').textContent = `${done} / ${pdQueue.length} complete`;
   document.getElementById('pd-bar-fill').style.width = (done / pdQueue.length * 100) + '%';
   document.getElementById('pd-start').style.display = pdActive ? 'none' : 'inline-flex';
   document.getElementById('pd-pause').style.display = pdActive ? 'inline-flex' : 'none';
 
-  const statusIcon = { pending: '⚪', calling: '📞', done: '✅', skipped: '⏭' };
+  const statusIcon = { pending: '⚪', calling: '📞', done: '✅', skipped: '⏭', dnc: '🚫' };
   queueEl.innerHTML = `<div class="table-card">${pdQueue.map((l, i) => `
     <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);font-size:13px;${l.status === 'calling' ? 'background:var(--brand-light)' : ''}">
       <span style="font-size:15px">${statusIcon[l.status] || '⚪'}</span>
@@ -2357,6 +2471,7 @@ function pdRender() {
       <span style="color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.company || '')}</span>
       ${l.status === 'pending' ? `<button class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="pdDialOne(${i})">Call now</button>` : ''}
       ${l.status === 'calling' ? '<span style="color:var(--brand);font-weight:600;font-size:12px">On call…</span>' : ''}
+      ${l.status === 'dnc' ? '<span style="color:var(--danger);font-weight:600;font-size:12px">Do Not Call</span>' : ''}
     </div>`).join('')}</div>`;
 }
 
@@ -2405,6 +2520,14 @@ function pdDialOne(i) {
 function pdDial(i) {
   const lead = pdQueue[i];
   if (!lead) return;
+  // Final Do Not Call safety check — never dial a suppressed number
+  if (isDNC(lead.phone)) {
+    lead.status = 'dnc';
+    pdSave();
+    pdRender();
+    if (pdActive) { pdAdvanceTimer = setTimeout(() => { if (pdActive) pdDialNext(); }, 400); }
+    return;
+  }
   pdCurrentIdx = i;
   lead.status = 'calling';
   pdSave();
