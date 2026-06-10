@@ -210,6 +210,18 @@ a { color: inherit; text-decoration: none; }
 .info-card h3 { font-size: 1.25rem; color: var(--navy-700); }
 .info-card p { margin: 0; color: var(--muted); font-size: .96rem; }
 
+/* ---- Florida markets (local SEO city chips) ---- */
+.markets { text-align: center; max-width: 52rem; margin: 60px auto 0; }
+.markets-title { font-size: clamp(1.4rem, 2.4vw, 1.9rem); color: var(--navy-700); }
+.markets-sub { color: var(--muted); margin-bottom: 1.4rem; }
+.chips { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.chips li {
+  background: var(--paper); border: 1px solid var(--line); border-radius: 999px;
+  padding: .55rem 1.1rem; font-weight: 600; font-size: .9rem; color: var(--navy-700);
+  box-shadow: 0 4px 14px rgba(7,13,31,.05); transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.chips li:hover { transform: translateY(-2px); border-color: var(--green); box-shadow: 0 8px 20px rgba(37,192,138,.18); }
+
 /* ---- Lead form ---- */
 .form-wrap { display: grid; grid-template-columns: .9fr 1.1fr; gap: 56px; align-items: start; }
 .form-pitch h2 { font-size: clamp(2rem, 3.6vw, 2.8rem); font-weight: 600; color: #fff; }
@@ -234,6 +246,7 @@ a { color: inherit; text-decoration: none; }
 .footer-inner { display: grid; grid-template-columns: 1fr 2fr; gap: 32px; }
 .footer-brand { display: flex; flex-direction: column; gap: 5px; }
 .footer-brand strong { font-family: 'Fraunces', serif; color: #fff; font-size: 1.15rem; }
+.footer-areas { color: #8190ab; font-size: .82rem; margin-top: .4rem; }
 .footer-legal p { font-size: .82rem; line-height: 1.6; margin: 0 0 .7rem; }
 .footer-legal .disclaimer { color: #8190ab; }
 .footer-legal .copyright { color: #6b7a97; }
