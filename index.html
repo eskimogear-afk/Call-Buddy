@@ -227,6 +227,12 @@ tr:hover td{background:var(--bg2)}
 @media(max-width:900px){.kanban{grid-template-columns:repeat(5,75vw)}}
 
 @media(max-width:980px){#pr-grid{grid-template-columns:1fr !important}}
+#quote-sheet{display:none}
+@media print{
+  body > *:not(#quote-sheet){display:none !important}
+  #quote-sheet{display:block !important}
+  @page{margin:14mm}
+}
 
 /* Calendar */
 .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:6px}
@@ -1175,10 +1181,19 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             </div>
 
             <details style="margin-top:16px">
-              <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--brand)">⚙️ My rate sheet &amp; defaults</summary>
-              <div id="pr-rates-editor" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-top:12px"></div>
-              <button class="btn btn-outline" style="font-size:12.5px;margin-top:12px" onclick="prSaveConfig(this)">Save my rates</button>
-              <span style="font-size:12px;color:var(--text3);margin-left:8px">Sample rates until you set yours — saved to your account.</span>
+              <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--brand)">⚙️ My rate sheet, info &amp; defaults</summary>
+              <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:var(--text3);text-transform:uppercase;margin:14px 0 8px">My info — shown on quotes</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px">
+                <div class="form-group" style="margin-bottom:0"><label>Name</label><input type="text" id="pr-lo-name" placeholder="Damon Cooper"></div>
+                <div class="form-group" style="margin-bottom:0"><label>NMLS #</label><input type="text" id="pr-lo-nmls" placeholder="e.g. 1234567"></div>
+                <div class="form-group" style="margin-bottom:0"><label>Company</label><input type="text" id="pr-lo-company" placeholder="Visto Mortgage"></div>
+                <div class="form-group" style="margin-bottom:0"><label>Phone</label><input type="text" id="pr-lo-phone" placeholder="(754) 256-5781"></div>
+                <div class="form-group" style="margin-bottom:0"><label>Email</label><input type="email" id="pr-lo-email" placeholder="damon@vistomortgage.com"></div>
+              </div>
+              <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:var(--text3);text-transform:uppercase;margin:16px 0 8px">Rates</div>
+              <div id="pr-rates-editor" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px"></div>
+              <button class="btn btn-outline" style="font-size:12.5px;margin-top:12px" onclick="prSaveConfig(this)">Save my info &amp; rates</button>
+              <span style="font-size:12px;color:var(--text3);margin-left:8px">Saved to your account — appears on every quote.</span>
             </details>
           </div>
 
@@ -1189,6 +1204,15 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <div id="pr-breakdown" style="font-size:13.5px"></div>
             <div id="pr-warnings" style="margin-top:12px"></div>
             <button class="btn btn-primary btn-full" style="margin-top:16px" onclick="prCopySummary(this)">📋 Copy quote summary</button>
+            <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:14px">
+              <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:var(--text3);text-transform:uppercase;margin-bottom:8px">Quote builder <span id="pr-scen-count" style="font-weight:500;text-transform:none;letter-spacing:0"></span></div>
+              <div id="pr-scen-chips" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+              <div class="form-group" style="margin-bottom:10px"><label>Prepared for</label><input type="text" id="pr-prepared-for" placeholder="Client or agent name (optional)"></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-outline" style="font-size:13px" onclick="prAddScenario(this)">➕ Add scenario</button>
+                <button class="btn btn-primary" style="font-size:13px" id="pr-pdf-btn" onclick="prGeneratePdf()" disabled>🧾 Download PDF quote</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2884,6 +2908,12 @@ async function prInit() {
     if (prConfig.insAnnual) document.getElementById('pr-ins').value = Number(prConfig.insAnnual).toLocaleString('en-US');
     if (prConfig.ccPct) document.getElementById('pr-cc').value = prConfig.ccPct;
     prBuildRatesEditor();
+    const lo = prConfig.lo || {};
+    document.getElementById('pr-lo-name').value = lo.name || userProfile?.full_name || '';
+    document.getElementById('pr-lo-nmls').value = lo.nmls || '';
+    document.getElementById('pr-lo-company').value = lo.company || 'Visto Mortgage';
+    document.getElementById('pr-lo-phone').value = lo.phone || (userProfile?.twilio_phone_number ? fmtPhone(userProfile.twilio_phone_number) : '');
+    document.getElementById('pr-lo-email').value = lo.email || currentUser?.email || '';
     prSetProgram(prState.program);
   }
   prCalc();
@@ -2906,6 +2936,13 @@ async function prSaveConfig(btn) {
   prConfig.tax = parseFloat(document.getElementById('pr-tax').value) || 1.1;
   prConfig.insAnnual = prNum(document.getElementById('pr-ins').value) || 1800;
   prConfig.ccPct = parseFloat(document.getElementById('pr-cc').value) || 2.5;
+  prConfig.lo = {
+    name: document.getElementById('pr-lo-name').value.trim(),
+    nmls: document.getElementById('pr-lo-nmls').value.trim(),
+    company: document.getElementById('pr-lo-company').value.trim(),
+    phone: document.getElementById('pr-lo-phone').value.trim(),
+    email: document.getElementById('pr-lo-email').value.trim()
+  };
   localStorage.setItem('pr_config', JSON.stringify(prConfig));
   try { await db.from('profiles').update({ pricing_config: prConfig }).eq('id', currentUser.id); } catch (e) {}
   btn.textContent = '✓ Saved'; setTimeout(() => btn.textContent = 'Save my rates', 1800);
@@ -3008,6 +3045,19 @@ function prCalc() {
   }
   g('pr-breakdown').innerHTML = html;
 
+  // snapshot model for the quote builder
+  const oldPiVal = purpose !== 'purchase' ? prNum(g('pr-oldpi').value) : 0;
+  window.prLast = {
+    programKey: prState.program, program: prog.label,
+    purpose, purposeLabel: purpose === 'purchase' ? 'Purchase' : purpose === 'cashout' ? 'Cash-Out Refinance' : 'Rate/Term Refinance',
+    value, loan, down, ltv, rate, termYears: Math.round(months / 12), io,
+    pi, pmi, taxMo, insMo, hoa, piti, points, pointsCost, ccCost,
+    cashToClose: purpose === 'purchase' ? down + ccCost + pointsCost : null,
+    cashOut: purpose === 'cashout' ? Math.max(0, cashout - ccCost - pointsCost) : null,
+    dscr: prState.program === 'dscr' && piti ? prNum(g('pr-rent').value) / piti : null,
+    monthlySavings: oldPiVal ? oldPiVal - pi : null
+  };
+
   const warn = [];
   if (ltv > prog.maxLtv) warn.push('LTV ' + ltv.toFixed(1) + '% exceeds typical ' + prog.label + ' max (~' + prog.maxLtv + '%)');
   if (prState.program === 'dscr' && prNum(g('pr-rent').value) && piti && prNum(g('pr-rent').value) / piti < 1.0) warn.push('DSCR below 1.00 — most lenders will price up or decline');
@@ -3025,6 +3075,98 @@ function prCopySummary(btn) {
   navigator.clipboard.writeText(lines.join('\n')).then(() => {
     btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = '📋 Copy quote summary', 1800);
   });
+}
+
+/* ── Quote builder: multi-scenario PDF ── */
+let prScenarios = [];
+
+function prAddScenario(btn) {
+  if (!window.prLast || !prLast.loan) { alert('Set up a scenario first.'); return; }
+  if (prScenarios.length >= 3) { alert('Max 3 scenarios per quote — remove one first.'); return; }
+  prScenarios.push(JSON.parse(JSON.stringify(prLast)));
+  prRenderScenarioChips();
+  btn.textContent = '✓ Added'; setTimeout(() => btn.textContent = '➕ Add scenario', 1200);
+}
+function prRemoveScenario(i) { prScenarios.splice(i, 1); prRenderScenarioChips(); }
+function prRenderScenarioChips() {
+  const el = document.getElementById('pr-scen-chips');
+  document.getElementById('pr-scen-count').textContent = prScenarios.length ? '· ' + prScenarios.length + ' of 3' : '';
+  document.getElementById('pr-pdf-btn').disabled = !prScenarios.length;
+  el.innerHTML = prScenarios.map((m, i) => `
+    <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:7px 10px">
+      <strong>${esc(m.program)}</strong><span style="color:var(--text2)">${esc(m.purposeLabel)} · ${m.rate}% · ${prMoney(m.piti)}/mo</span>
+      <button class="btn btn-ghost" style="font-size:11px;padding:2px 7px;margin-left:auto" onclick="prRemoveScenario(${i})">✕</button>
+    </div>`).join('');
+}
+
+function prGeneratePdf() {
+  if (!prScenarios.length) return;
+  const lo = prConfig.lo || {};
+  const preparedFor = document.getElementById('pr-prepared-for').value.trim();
+  const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const NAVY = '#0F172A', SKY = '#0369A1', LINE = '#E2E8F0', MUT = '#64748B';
+  const cell = (v, opts = {}) => `<td style="padding:9px 12px;border-bottom:1px solid ${LINE};font-size:12.5px;text-align:${opts.right ? 'right' : 'left'};${opts.bold ? 'font-weight:700;' : ''}${opts.color ? 'color:' + opts.color + ';' : ''}">${v}</td>`;
+  const rowLabel = (l) => `<td style="padding:9px 12px;border-bottom:1px solid ${LINE};font-size:12px;color:${MUT};white-space:nowrap">${l}</td>`;
+  const m$ = (n) => n == null ? '—' : prMoney(n);
+
+  const rows = [
+    ['Purpose', m => esc(m.purposeLabel)],
+    ['Home value', m => m$(m.value)],
+    ['Loan amount', m => m$(m.loan)],
+    ['LTV', m => m.ltv.toFixed(1) + '%'],
+    ['Rate', m => m.rate + '%' + (m.io ? ' (interest-only)' : '')],
+    ['Term', m => m.termYears + ' years'],
+    [null, null], // spacer
+    ['Principal & interest', m => m$(m.pi)],
+    ['Mortgage insurance', m => m.pmi ? m$(m.pmi) : '—'],
+    ['Property taxes (est)', m => m$(m.taxMo)],
+    ['Homeowners insurance (est)', m => m$(m.insMo)],
+    ['HOA', m => m.hoa ? m$(m.hoa) : '—'],
+    ['TOTAL MONTHLY (est)', m => m$(m.piti), true],
+    [null, null],
+    ['Points', m => m.points ? m.points + '% (' + m$(m.pointsCost) + ')' : '—'],
+    ['Closing costs (est)', m => m$(m.ccCost)],
+    ['Cash to close (est)', m => m.cashToClose != null ? m$(m.cashToClose) : '—'],
+    ['Cash in hand (est)', m => m.cashOut != null ? m$(m.cashOut) : '—'],
+    ['DSCR', m => m.dscr != null ? m.dscr.toFixed(2) : '—'],
+    ['Monthly savings vs current', m => m.monthlySavings != null ? m$(m.monthlySavings) : '—']
+  ];
+
+  const sheet = document.getElementById('quote-sheet');
+  sheet.innerHTML = `
+  <div style="font-family:'Inter',sans-serif;color:${NAVY};max-width:760px;margin:0 auto">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid ${SKY};padding-bottom:18px">
+      <div>
+        <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:26px;font-weight:800;letter-spacing:-.02em">${esc(lo.company || 'Visto Mortgage')}</div>
+        <div style="font-size:13px;color:${MUT};margin-top:2px">Loan Scenario Comparison</div>
+      </div>
+      <div style="text-align:right;font-size:12.5px;line-height:1.7">
+        <div style="font-weight:700;font-size:14px">${esc(lo.name || '')}</div>
+        ${lo.nmls ? `<div style="color:${MUT}">NMLS #${esc(lo.nmls)}</div>` : ''}
+        ${lo.phone ? `<div>${esc(lo.phone)}</div>` : ''}
+        ${lo.email ? `<div>${esc(lo.email)}</div>` : ''}
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:12.5px;color:${MUT};padding:12px 0 18px">
+      <span>${preparedFor ? 'Prepared for <strong style="color:' + NAVY + '">' + esc(preparedFor) + '</strong>' : ''}</span>
+      <span>${today}</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <td style="padding:10px 12px"></td>
+        ${prScenarios.map((m, i) => `<th style="padding:12px;background:${i === 0 ? SKY : NAVY};color:#fff;font-size:13px;text-align:right;border-radius:8px 8px 0 0;font-family:'Plus Jakarta Sans',sans-serif">Option ${i + 1}<br><span style="font-weight:500;font-size:11.5px;opacity:.85">${esc(m.program)}</span></th>`).join('')}
+      </tr></thead>
+      <tbody>
+        ${rows.map(([label, fn, bold]) => label === null
+          ? `<tr><td colspan="${prScenarios.length + 1}" style="padding:6px"></td></tr>`
+          : `<tr>${rowLabel(label)}${prScenarios.map(m => cell(fn(m), { right: true, bold: !!bold, color: bold ? SKY : null })).join('')}</tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="margin-top:26px;font-size:10px;color:${MUT};line-height:1.6;border-top:1px solid ${LINE};padding-top:12px">
+      Estimates for discussion purposes only — this is not a Loan Estimate, rate lock, pre-approval, or commitment to lend. Figures use rates and assumptions entered by the loan officer and are subject to change without notice; actual terms depend on a full application, credit, income and property review. Taxes and insurance are estimates. ${lo.nmls ? esc((lo.name || '') + ' · NMLS #' + lo.nmls + ' · ') : ''}${esc(lo.company || '')} — Verify license at nmlsconsumeraccess.org. Generated with Aevaa on ${today}.
+    </div>
+  </div>`;
+  window.print();
 }
 
 /* ── Prospect research (AI web search) ── */
@@ -3504,5 +3646,6 @@ setInterval(() => {
 }, 60000);
 
 </script>
+<div id="quote-sheet"></div>
 </body>
 </html>
