@@ -226,6 +226,8 @@ tr:hover td{background:var(--bg2)}
 .kanban-card select{width:100%;font-size:12px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text2);font-family:inherit}
 @media(max-width:900px){.kanban{grid-template-columns:repeat(5,75vw)}}
 
+@media(max-width:980px){#pr-grid{grid-template-columns:1fr !important}}
+
 /* Calendar */
 .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:6px}
 .cal-dow-row span{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;text-align:center;padding:6px 0}
@@ -789,6 +791,9 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <button class="sidebar-item" id="nav-calendar" onclick="switchPanel('calendar')">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Calendar
       </button>
+      <button class="sidebar-item" id="nav-pricing" onclick="switchPanel('pricing')">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Pricing
+      </button>
       <button class="sidebar-item" id="nav-recorder" onclick="switchPanel('recorder')">
         <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>Recorder
       </button>
@@ -1113,6 +1118,78 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         <div class="table-card" style="padding:14px">
           <div class="cal-dow-row" id="cal-dow"></div>
           <div class="cal-grid" id="cal-grid"></div>
+        </div>
+      </div>
+
+      <!-- Mortgage Pricing -->
+      <div id="panel-pricing" class="hidden">
+        <div style="margin-bottom:20px">
+          <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Mortgage Pricing</h1>
+          <p style="font-size:14px;color:var(--text2);margin-top:4px">Scenario pricing across every program — purchase and refinance. <strong>Estimates only with your configured rates; not a rate quote or Loan Estimate.</strong></p>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px" id="pr-purpose-row">
+          <button class="btn btn-primary" data-purpose="purchase" onclick="prSetPurpose('purchase',this)">Purchase</button>
+          <button class="btn btn-outline" data-purpose="refi" onclick="prSetPurpose('refi',this)">Rate/Term Refi</button>
+          <button class="btn btn-outline" data-purpose="cashout" onclick="prSetPurpose('cashout',this)">Cash-Out Refi</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px" id="pr-program-row"></div>
+
+        <div style="display:grid;grid-template-columns:1fr 380px;gap:20px;align-items:start" id="pr-grid">
+          <div class="table-card" style="padding:20px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div class="form-group"><label id="pr-price-label">Purchase price</label><input type="text" id="pr-price" value="400,000" inputmode="numeric"></div>
+              <div class="form-group" id="pr-down-group"><label>Down payment %</label><input type="number" id="pr-down" value="20" min="0" max="100" step="0.5"></div>
+              <div class="form-group hidden" id="pr-balance-group"><label>Current loan balance</label><input type="text" id="pr-balance" value="300,000" inputmode="numeric"></div>
+              <div class="form-group hidden" id="pr-cashout-group"><label>Cash out amount</label><input type="text" id="pr-cashout" value="50,000" inputmode="numeric"></div>
+              <div class="form-group"><label>Rate % <span id="pr-rate-tag" style="color:var(--text3);font-weight:400"></span></label><input type="number" id="pr-rate" step="0.125" value="6.625"></div>
+              <div class="form-group"><label>Term</label><select id="pr-term"><option value="360">30 year</option><option value="240">20 year</option><option value="180">15 year</option></select></div>
+              <div class="form-group"><label>Points %</label><input type="number" id="pr-points" step="0.25" value="0"></div>
+              <div class="form-group"><label style="display:flex;align-items:center;gap:8px;margin-top:26px"><input type="checkbox" id="pr-io" style="width:auto"> Interest-only</label></div>
+              <div class="form-group"><label>Property taxes %/yr</label><input type="number" id="pr-tax" step="0.05" value="1.1"></div>
+              <div class="form-group"><label>Insurance $/yr</label><input type="text" id="pr-ins" value="1,800" inputmode="numeric"></div>
+              <div class="form-group"><label>HOA $/mo</label><input type="text" id="pr-hoa" value="0" inputmode="numeric"></div>
+              <div class="form-group"><label>Closing costs %</label><input type="number" id="pr-cc" step="0.25" value="2.5"></div>
+            </div>
+
+            <div id="pr-dscr-extra" class="hidden" style="border-top:1px solid var(--border);margin-top:6px;padding-top:14px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                <div class="form-group"><label>Monthly rent (market)</label><input type="text" id="pr-rent" value="3,000" inputmode="numeric"></div>
+                <div style="align-self:center"><span style="font-size:12.5px;color:var(--text2)">DSCR = rent ÷ PITIA. Most lenders want ≥ 1.00–1.25.</span></div>
+              </div>
+            </div>
+
+            <div id="pr-bs-extra" class="hidden" style="border-top:1px solid var(--border);margin-top:6px;padding-top:14px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                <div class="form-group"><label>Avg monthly deposits (12-24 mo)</label><input type="text" id="pr-deposits" value="25,000" inputmode="numeric"></div>
+                <div class="form-group"><label>Expense factor %</label><input type="number" id="pr-expense" value="50" step="5"></div>
+              </div>
+              <div style="font-size:12.5px;color:var(--text2)">Qualifying income ≈ <strong id="pr-bs-income" class="num">$12,500/mo</strong> (deposits × (1 − expense factor))</div>
+            </div>
+
+            <div id="pr-refi-extra" class="hidden" style="border-top:1px solid var(--border);margin-top:6px;padding-top:14px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                <div class="form-group"><label>Current monthly P&I</label><input type="text" id="pr-oldpi" value="2,100" inputmode="numeric"></div>
+                <div style="align-self:center"><span style="font-size:12.5px;color:var(--text2)">Used for savings &amp; break-even.</span></div>
+              </div>
+            </div>
+
+            <details style="margin-top:16px">
+              <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--brand)">⚙️ My rate sheet &amp; defaults</summary>
+              <div id="pr-rates-editor" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-top:12px"></div>
+              <button class="btn btn-outline" style="font-size:12.5px;margin-top:12px" onclick="prSaveConfig(this)">Save my rates</button>
+              <span style="font-size:12px;color:var(--text3);margin-left:8px">Sample rates until you set yours — saved to your account.</span>
+            </details>
+          </div>
+
+          <div class="table-card" style="padding:22px;position:sticky;top:20px">
+            <div style="font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--text3);text-transform:uppercase" id="pr-result-title">Monthly payment</div>
+            <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:40px;font-weight:800;letter-spacing:-.03em;margin:4px 0 2px" class="num" id="pr-piti">$0</div>
+            <div style="font-size:12.5px;color:var(--text3);margin-bottom:14px" id="pr-piti-sub">PITI estimate</div>
+            <div id="pr-breakdown" style="font-size:13.5px"></div>
+            <div id="pr-warnings" style="margin-top:12px"></div>
+            <button class="btn btn-primary btn-full" style="margin-top:16px" onclick="prCopySummary(this)">📋 Copy quote summary</button>
+          </div>
         </div>
       </div>
 
@@ -1470,7 +1547,7 @@ function showView(v) {
 }
 
 function switchPanel(p) {
-  ['dashboard','recorder','log','settings','contacts','followups','power','inbox','calendar'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
+  ['dashboard','recorder','log','settings','contacts','followups','power','inbox','calendar','pricing'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
   document.getElementById('panel-' + p).classList.remove('hidden');
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
   document.getElementById('nav-' + p)?.classList.add('active');
@@ -1482,6 +1559,7 @@ function switchPanel(p) {
   if (p === 'inbox') loadInbox();
   if (p === 'settings') { loadDNC().then(renderDNC); }
   if (p === 'calendar') renderCalendar();
+  if (p === 'pricing') prInit();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -2758,6 +2836,195 @@ async function draftNextAction(callId, name) {
     el.textContent = 'Could not get a recommendation: ' + e.message;
     el.classList.remove('hidden');
   }
+}
+
+/* ═══════════════════════════════════════════════════════
+   MORTGAGE PRICING TOOL
+═══════════════════════════════════════════════════════ */
+const PR_PROGRAMS = {
+  conventional: { label: 'Conventional', rate: 6.625, maxLtv: 97, io: false },
+  fha:          { label: 'FHA',          rate: 6.25,  maxLtv: 96.5, io: false },
+  va:           { label: 'VA',           rate: 6.125, maxLtv: 100, io: false },
+  jumbo:        { label: 'Jumbo',        rate: 6.875, maxLtv: 89.99, io: false },
+  bank_stmt:    { label: 'Bank Statement', rate: 7.625, maxLtv: 90, io: false },
+  dscr:         { label: 'DSCR',         rate: 7.375, maxLtv: 80, io: true },
+  hard_money:   { label: 'Hard Money',   rate: 10.5,  maxLtv: 90, io: true }
+};
+let prState = { purpose: 'purchase', program: 'conventional', configLoaded: false };
+let prConfig = { rates: {}, tax: 1.1, insAnnual: 1800, pmiFactor: 0.5, ccPct: 2.5 };
+
+const prNum = (v) => parseFloat(String(v || '').replace(/[^0-9.]/g, '')) || 0;
+const prMoney = (n) => '$' + Math.round(n).toLocaleString('en-US');
+const prPI = (principal, ratePct, months, io) => {
+  const r = ratePct / 100 / 12;
+  if (!principal || !ratePct) return 0;
+  if (io) return principal * r;
+  return principal * r * Math.pow(1 + r, months) / (Math.pow(1 + r, months) - 1);
+};
+
+async function prInit() {
+  // program chips
+  const row = document.getElementById('pr-program-row');
+  if (row && !row.children.length) {
+    row.innerHTML = Object.entries(PR_PROGRAMS).map(([k, p]) =>
+      `<button class="btn ${k === prState.program ? 'btn-primary' : 'btn-outline'}" data-prog="${k}" style="font-size:13px" onclick="prSetProgram('${k}')">${p.label}</button>`).join('');
+    // bind inputs once
+    document.getElementById('panel-pricing').addEventListener('input', prCalc);
+  }
+  if (!prState.configLoaded) {
+    prState.configLoaded = true;
+    try {
+      const local = localStorage.getItem('pr_config');
+      if (local) prConfig = { ...prConfig, ...JSON.parse(local) };
+      const { data } = await db.from('profiles').select('pricing_config').eq('id', currentUser.id).single();
+      if (data?.pricing_config) prConfig = { ...prConfig, ...data.pricing_config };
+    } catch (e) {}
+    Object.keys(PR_PROGRAMS).forEach(k => { if (prConfig.rates[k]) PR_PROGRAMS[k].rate = prConfig.rates[k]; });
+    if (prConfig.tax) document.getElementById('pr-tax').value = prConfig.tax;
+    if (prConfig.insAnnual) document.getElementById('pr-ins').value = Number(prConfig.insAnnual).toLocaleString('en-US');
+    if (prConfig.ccPct) document.getElementById('pr-cc').value = prConfig.ccPct;
+    prBuildRatesEditor();
+    prSetProgram(prState.program);
+  }
+  prCalc();
+}
+
+function prBuildRatesEditor() {
+  const ed = document.getElementById('pr-rates-editor');
+  ed.innerHTML = Object.entries(PR_PROGRAMS).map(([k, p]) => `
+    <div class="form-group" style="margin-bottom:0"><label>${p.label} rate %</label>
+      <input type="number" step="0.125" id="pr-cfg-${k}" value="${p.rate}"></div>`).join('') + `
+    <div class="form-group" style="margin-bottom:0"><label>PMI factor %/yr</label><input type="number" step="0.05" id="pr-cfg-pmi" value="${prConfig.pmiFactor}"></div>`;
+}
+
+async function prSaveConfig(btn) {
+  Object.keys(PR_PROGRAMS).forEach(k => {
+    const v = parseFloat(document.getElementById('pr-cfg-' + k)?.value);
+    if (v) { PR_PROGRAMS[k].rate = v; prConfig.rates[k] = v; }
+  });
+  prConfig.pmiFactor = parseFloat(document.getElementById('pr-cfg-pmi')?.value) || 0.5;
+  prConfig.tax = parseFloat(document.getElementById('pr-tax').value) || 1.1;
+  prConfig.insAnnual = prNum(document.getElementById('pr-ins').value) || 1800;
+  prConfig.ccPct = parseFloat(document.getElementById('pr-cc').value) || 2.5;
+  localStorage.setItem('pr_config', JSON.stringify(prConfig));
+  try { await db.from('profiles').update({ pricing_config: prConfig }).eq('id', currentUser.id); } catch (e) {}
+  btn.textContent = '✓ Saved'; setTimeout(() => btn.textContent = 'Save my rates', 1800);
+  prSetProgram(prState.program);
+}
+
+function prSetPurpose(p, btn) {
+  prState.purpose = p;
+  document.querySelectorAll('#pr-purpose-row .btn').forEach(b => b.className = 'btn ' + (b === btn ? 'btn-primary' : 'btn-outline'));
+  const isRefi = p !== 'purchase';
+  document.getElementById('pr-down-group').classList.toggle('hidden', isRefi);
+  document.getElementById('pr-balance-group').classList.toggle('hidden', !isRefi);
+  document.getElementById('pr-cashout-group').classList.toggle('hidden', p !== 'cashout');
+  document.getElementById('pr-refi-extra').classList.toggle('hidden', !isRefi);
+  document.getElementById('pr-price-label').textContent = isRefi ? 'Home value' : 'Purchase price';
+  prCalc();
+}
+
+function prSetProgram(k) {
+  prState.program = k;
+  const prog = PR_PROGRAMS[k];
+  document.querySelectorAll('#pr-program-row .btn').forEach(b => b.className = 'btn ' + (b.dataset.prog === k ? 'btn-primary' : 'btn-outline') );
+  document.querySelectorAll('#pr-program-row .btn').forEach(b => b.style.fontSize = '13px');
+  document.getElementById('pr-rate').value = prog.rate;
+  document.getElementById('pr-rate-tag').textContent = '(your ' + prog.label + ' rate)';
+  document.getElementById('pr-io').checked = prog.io;
+  document.getElementById('pr-dscr-extra').classList.toggle('hidden', k !== 'dscr');
+  document.getElementById('pr-bs-extra').classList.toggle('hidden', k !== 'bank_stmt');
+  prCalc();
+}
+
+function prCalc() {
+  const g = id => document.getElementById(id);
+  if (!g('pr-piti')) return;
+  const purpose = prState.purpose, prog = PR_PROGRAMS[prState.program];
+  const value = prNum(g('pr-price').value);
+  const rate = parseFloat(g('pr-rate').value) || 0;
+  const months = parseInt(g('pr-term').value);
+  const io = g('pr-io').checked;
+  const points = parseFloat(g('pr-points').value) || 0;
+  const taxPct = parseFloat(g('pr-tax').value) || 0;
+  const insAnnual = prNum(g('pr-ins').value);
+  const hoa = prNum(g('pr-hoa').value);
+  const ccPct = parseFloat(g('pr-cc').value) || 0;
+
+  let loan = 0, down = 0, cashout = 0;
+  if (purpose === 'purchase') {
+    const downPct = parseFloat(g('pr-down').value) || 0;
+    down = value * downPct / 100;
+    loan = value - down;
+  } else {
+    loan = prNum(g('pr-balance').value);
+    if (purpose === 'cashout') { cashout = prNum(g('pr-cashout').value); loan += cashout; }
+  }
+  const ltv = value ? (loan / value) * 100 : 0;
+
+  const pi = prPI(loan, rate, months, io);
+  const pmi = (prState.program === 'conventional' && ltv > 80) ? loan * (prConfig.pmiFactor / 100) / 12 : 0;
+  const taxMo = value * (taxPct / 100) / 12;
+  const insMo = insAnnual / 12;
+  const piti = pi + pmi + taxMo + insMo + hoa;
+  const ccCost = loan * ccPct / 100;
+  const pointsCost = loan * points / 100;
+
+  g('pr-piti').textContent = prMoney(piti);
+  g('pr-piti-sub').textContent = (io ? 'Interest-only payment + TI' : 'PITI estimate') + ' · ' + prog.label;
+
+  const row = (l, v, accent) => `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">${l}</span><strong class="num"${accent ? ' style="color:' + accent + '"' : ''}>${v}</strong></div>`;
+  let html = '';
+  html += row('Loan amount', prMoney(loan));
+  html += row('LTV', ltv.toFixed(1) + '%');
+  html += row(io ? 'Interest-only pmt' : 'Principal & interest', prMoney(pi));
+  if (pmi) html += row('PMI (est)', prMoney(pmi));
+  html += row('Taxes', prMoney(taxMo));
+  html += row('Insurance', prMoney(insMo));
+  if (hoa) html += row('HOA', prMoney(hoa));
+  if (points) html += row('Points cost (' + points + '%)', prMoney(pointsCost));
+  html += row('Closing costs (est ' + ccPct + '%)', prMoney(ccCost));
+  if (purpose === 'purchase') html += row('Cash to close (est)', prMoney(down + ccCost + pointsCost), 'var(--brand)');
+  if (purpose === 'cashout') html += row('Cash in hand (est)', prMoney(Math.max(0, cashout - ccCost - pointsCost)), 'var(--green)');
+
+  if (prState.program === 'dscr') {
+    const rent = prNum(g('pr-rent').value);
+    const dscr = piti ? rent / piti : 0;
+    const col = dscr >= 1.25 ? 'var(--green)' : dscr >= 1.0 ? 'var(--warm)' : 'var(--danger)';
+    html += row('DSCR (rent ÷ PITIA)', dscr.toFixed(2), col);
+  }
+  if (prState.program === 'bank_stmt') {
+    const dep = prNum(g('pr-deposits').value), exp = parseFloat(g('pr-expense').value) || 0;
+    const inc = dep * (1 - exp / 100);
+    g('pr-bs-income').textContent = prMoney(inc) + '/mo';
+  }
+  if (purpose !== 'purchase') {
+    const oldPi = prNum(g('pr-oldpi').value);
+    if (oldPi) {
+      const save = oldPi - pi;
+      html += row('Monthly savings', (save >= 0 ? '' : '−') + prMoney(Math.abs(save)), save >= 0 ? 'var(--green)' : 'var(--danger)');
+      if (save > 0) html += row('Break-even', Math.ceil((ccCost + pointsCost) / save) + ' months');
+    }
+  }
+  g('pr-breakdown').innerHTML = html;
+
+  const warn = [];
+  if (ltv > prog.maxLtv) warn.push('LTV ' + ltv.toFixed(1) + '% exceeds typical ' + prog.label + ' max (~' + prog.maxLtv + '%)');
+  if (prState.program === 'dscr' && prNum(g('pr-rent').value) && piti && prNum(g('pr-rent').value) / piti < 1.0) warn.push('DSCR below 1.00 — most lenders will price up or decline');
+  g('pr-warnings').innerHTML = warn.map(w => '<div style="font-size:12.5px;background:var(--warm-bg);color:#92400E;border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;margin-top:6px">⚠️ ' + esc(w) + '</div>').join('');
+}
+
+function prCopySummary(btn) {
+  const prog = PR_PROGRAMS[prState.program];
+  const lines = ['Aevaa scenario — ' + prog.label + ' ' + (prState.purpose === 'purchase' ? 'Purchase' : prState.purpose === 'cashout' ? 'Cash-Out Refi' : 'Rate/Term Refi'),
+    document.getElementById('pr-piti').textContent + '/mo (' + document.getElementById('pr-piti-sub').textContent + ')'];
+  document.querySelectorAll('#pr-breakdown > div').forEach(r => {
+    lines.push(r.children[0].textContent + ': ' + r.children[1].textContent);
+  });
+  lines.push('Rate used: ' + document.getElementById('pr-rate').value + '% — estimate only, not a rate quote or commitment.');
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = '📋 Copy quote summary', 1800);
+  });
 }
 
 /* ── Prospect research (AI web search) ── */
