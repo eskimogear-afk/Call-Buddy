@@ -1870,6 +1870,7 @@ function buildTable(recs) {
           ${phone ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="followUpFromCall('${r.contact_id || ''}','${esc(display)}','${esc(phone)}')">⏰ Schedule follow-up</button>` : ''}
           ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftEmail('${r.id}','${esc(display)}')">✉️ Draft email</button>` : ''}
           ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftNextAction('${r.id}','${esc(display)}')">📅 Schedule next</button>` : ''}
+          <button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="priceFromCall('${hasRealName ? esc(display) : ''}')">💲 Quote</button>
           ${phone && !isDNC(phone) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="markDoNotCall('${esc(phone)}')">🚫 Do Not Call</button>` : ''}
           ${phone && isDNC(phone) ? `<span style="font-size:12px;font-weight:600;color:var(--danger);align-self:center">🚫 On Do Not Call list</span>` : ''}
           <button class="btn btn-danger" style="font-size:12px;padding:6px 14px;margin-left:auto" onclick="deleteRecord('${r.id}')">Delete</button>
@@ -1909,6 +1910,15 @@ function callAgain(phone) {
   switchPanel('dashboard');
   const input = document.getElementById('dialer-number');
   if (input) { input.value = phone; input.focus(); }
+}
+
+// Jump to the Pricing tool from a call card, pre-filling who the quote is for
+function priceFromCall(name) {
+  switchPanel('pricing');
+  setTimeout(() => {
+    const pf = document.getElementById('pr-prepared-for');
+    if (pf && name) pf.value = name;
+  }, 300);
 }
 
 function followUpFromCall(contactId, name, phone) {
