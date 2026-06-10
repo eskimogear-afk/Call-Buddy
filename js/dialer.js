@@ -121,6 +121,8 @@ async function makeCall() {
     if (h) h.style.display = 'inline-block';
     if (c) c.style.display = 'none';
     setStatus('📞 On call...');
+    // Kick off pre-call intelligence while it rings (no-op if app lacks the handler)
+    window.dispatchEvent(new CustomEvent('cb:call-started', { detail: { number } }));
 
     currentCall.on('accept', () => setStatus('📞 Connected'));
     currentCall.on('disconnect', endCallUI);

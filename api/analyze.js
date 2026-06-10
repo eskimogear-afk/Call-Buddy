@@ -22,7 +22,99 @@ export default async function handler(req, res) {
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { transcript, type, name, summary, painPoints, nextSteps, call_id } = req.body || {};
+  const { transcript, type, name, summary, painPoints, nextSteps, call_id, phone, force } = req.body || {};
+
+  /* ── Prospect research: AI web-search brief on the realtor behind a number ── */
+  if (type === 'research') {
+    if (!phone) return res.status(400).json({ error: 'phone required' });
+    const digits = String(phone).replace(/\D/g, '');
+    const ten = digits.length === 11 && digits[0] === '1' ? digits.slice(1) : digits;
+    const variants = [String(phone).trim(), '+1' + ten, ten, '1' + ten];
+
+    // Find the contact (any stored phone format)
+    const { data: matches } = await supabase
+      .from('contacts')
+      .select('id, name, first_name, last_name, company, research, researched_at')
+      .eq('user_id', user.id)
+      .in('phone', variants)
+      .limit(1);
+    const contact = matches?.[0] || null;
+
+    // Fresh cache → return instantly (research is paid; don't re-buy it)
+    if (contact?.research && contact.researched_at && !force) {
+      const ageDays = (Date.now() - new Date(contact.researched_at).getTime()) / 86400000;
+      if (ageDays < 30) return res.status(200).json({ cached: true, contact_id: contact.id, ...contact.research });
+    }
+
+    // Resolve a usable identity: contact name → CNAM lookup
+    let personName = contact && contact.name && contact.name.toLowerCase() !== 'unknown' ? contact.name : '';
+    let personCompany = contact?.company || '';
+    if (!personName && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+      try {
+        const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+        const lr = await fetch(`https://lookups.twilio.com/v2/PhoneNumbers/${encodeURIComponent('+1' + ten)}?Fields=caller_name`, { headers: { Authorization: `Basic ${auth}` } });
+        if (lr.ok) {
+          const ld = await lr.json();
+          const cn = ld.caller_name || {};
+          if (cn.caller_name && cn.caller_type !== 'BUSINESS') {
+            personName = String(cn.caller_name).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+          } else if (cn.caller_name && cn.caller_type === 'BUSINESS' && !personCompany) {
+            personCompany = String(cn.caller_name).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+          }
+        }
+      } catch (e) { console.error('research CNAM failed:', e.message); }
+    }
+    if (!personName) {
+      return res.status(422).json({ error: "Couldn't identify who this number belongs to yet. Add a name to the contact (or let a call identify them) and try again." });
+    }
+
+    try {
+      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const msg = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2200,
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
+        system: [{ type: 'text', text: 'You are a meticulous sales-intelligence researcher for a mortgage loan officer. You only state facts your sources support and clearly mark unknowns. You always end with a single valid JSON object.', cache_control: { type: 'ephemeral' } }],
+        messages: [{
+          role: 'user',
+          content: `Research this real estate agent using web search and produce a fact-based pre-call brief.
+
+Agent: ${personName}${personCompany ? ' — ' + personCompany : ''} (real estate agent, likely Florida; phone area code ${ten.slice(0, 3)})
+
+Search public sources (Zillow and realtor.com agent profiles, brokerage bios, LinkedIn, news, public social posts) and determine:
+- how long they've been in business / licensed since
+- approximately how many homes they've sold and current active listings
+- brokerages they've worked for (current and past)
+- whether they work with investors, first-time homebuyers, luxury, etc.
+- what they post or talk about online: themes, recent activity — summarized
+- anything useful for a mortgage loan officer proposing a referral partnership
+
+Rules: never invent numbers — if a fact isn't supported by a source, use null or "unknown". If multiple agents share this name and you can't disambiguate with the company/area, set identity_confidence to "low" and say what you'd need.
+
+After your research, output ONLY this JSON object (no prose before or after):
+{"identity_confidence":"high"|"medium"|"low","summary":"3-4 sentence overview","years_in_business":number|null,"licensed_since":"YYYY or null","homes_sold":"e.g. '47 sales on Zillow' or null","active_listings":"e.g. '5 active' or null","brokerages":{"current":string|null,"past":[strings]},"client_focus":"investors / first-time buyers / mixed / unknown","online_presence":"2-3 sentences on what they post and themes","talking_points":[3-4 short strings for the call],"sources":[{"title":string,"url":string}]}`
+        }]
+      });
+
+      const fullText = msg.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+      const jsonMatch = fullText.match(/\{[\s\S]*\}\s*$/);
+      if (!jsonMatch) return res.status(500).json({ error: 'Research completed but could not be summarized — try again' });
+      let brief;
+      try { brief = JSON.parse(jsonMatch[0]); } catch { return res.status(500).json({ error: 'Research summary parse failed — try again' }); }
+      brief.researched_name = personName;
+      brief.researched_at = new Date().toISOString();
+
+      if (contact?.id) {
+        await supabase.from('contacts')
+          .update({ research: brief, researched_at: brief.researched_at })
+          .eq('id', contact.id).eq('user_id', user.id);
+      }
+      return res.status(200).json({ cached: false, contact_id: contact?.id || null, ...brief });
+    } catch (err) {
+      console.error('Research error:', err);
+      return res.status(500).json({ error: err.message || 'Research failed' });
+    }
+  }
 
   let prompt = '';
   if (type === 'next_action') {

@@ -853,11 +853,14 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
               onmouseover="this.style.background='var(--brand-mid)'" onmouseout="this.style.background='var(--brand)'">Call</button>
             <button id="btn-hangup" onclick="hangUp()"
               style="display:none;height:40px;padding:0 22px;background:var(--danger);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13.5px;font-family:inherit">Hang Up</button>
+            <button id="btn-research" onclick="researchProspect()" title="AI web research on this prospect"
+              style="height:40px;padding:0 16px;background:var(--bg2);color:var(--text2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-weight:600;font-size:13.5px;font-family:inherit">🔍 Research</button>
           </div>
           <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
             <div id="dialer-status" style="font-size:12.5px;color:var(--text2);flex:1">Initializing...</div>
             <button id="btn-dialer-retry" onclick="retryDialer()" style="display:none;font-size:12px;padding:5px 12px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit">Retry</button>
           </div>
+          <div id="research-panel" class="hidden" style="margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg2);padding:16px 18px"></div>
         </div>
         <div class="table-card">
           <div class="table-header">
@@ -2756,6 +2759,70 @@ async function draftNextAction(callId, name) {
     el.classList.remove('hidden');
   }
 }
+
+/* ── Prospect research (AI web search) ── */
+let researchBusy = false;
+async function researchProspect(autoNumber) {
+  const number = (typeof autoNumber === 'string' && autoNumber) || document.getElementById('dialer-number')?.value?.trim();
+  const panel = document.getElementById('research-panel');
+  if (!number) { alert('Type a number in the dialer first.'); return; }
+  if (researchBusy) return;
+  researchBusy = true;
+  panel.classList.remove('hidden');
+  panel.innerHTML = '<div style="display:flex;align-items:center;gap:10px;color:var(--text2);font-size:13px"><div class="spinner spinner-dark"></div> Researching this prospect — checking sales history, brokerage, and online presence… (~15s)</div>';
+  try {
+    const data = await fuFetch('/api/analyze', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'research', phone: number })
+    });
+    renderResearchPanel(data);
+  } catch (e) {
+    panel.innerHTML = '<div style="font-size:13px;color:var(--text2)">🔍 ' + esc(e.message) + '</div>';
+  }
+  researchBusy = false;
+}
+
+function renderResearchPanel(d) {
+  const panel = document.getElementById('research-panel');
+  if (!panel) return;
+  const confColor = d.identity_confidence === 'high' ? 'var(--green)' : d.identity_confidence === 'medium' ? 'var(--warm)' : 'var(--danger)';
+  const chip = (label, val) => val ? `<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:4px 12px"><strong>${esc(label)}:</strong> ${esc(String(val))}</span>` : '';
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <strong style="font-size:14px">🔍 ${esc(d.researched_name || 'Prospect')}</strong>
+      <span style="font-size:11px;font-weight:700;color:${confColor};border:1px solid currentColor;border-radius:99px;padding:1px 8px">${esc((d.identity_confidence || '').toUpperCase())} MATCH</span>
+      ${d.cached ? '<span style="font-size:11px;color:var(--text3)">cached · </span>' : ''}
+      <button class="btn btn-ghost" style="font-size:11.5px;padding:3px 8px;margin-left:auto" onclick="refreshResearch()">↻ Refresh</button>
+      <button class="btn btn-ghost" style="font-size:11.5px;padding:3px 8px" onclick="document.getElementById('research-panel').classList.add('hidden')">✕</button>
+    </div>
+    <div style="font-size:13px;color:var(--text);line-height:1.6;margin-bottom:10px">${esc(d.summary || '')}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      ${chip('Years', d.years_in_business ?? (d.licensed_since ? 'since ' + d.licensed_since : null))}
+      ${chip('Sold', d.homes_sold)}
+      ${chip('Active', d.active_listings)}
+      ${chip('Brokerage', d.brokerages?.current)}
+      ${chip('Focus', d.client_focus)}
+    </div>
+    ${d.online_presence ? `<div style="font-size:12.5px;color:var(--text2);margin-bottom:10px"><strong>Online:</strong> ${esc(d.online_presence)}</div>` : ''}
+    ${Array.isArray(d.talking_points) && d.talking_points.length ? `<div style="font-size:12.5px;margin-bottom:10px"><strong>Talking points</strong><ul style="margin:5px 0 0 18px;color:var(--text2)">${d.talking_points.map(t => '<li>' + esc(t) + '</li>').join('')}</ul></div>` : ''}
+    ${Array.isArray(d.sources) && d.sources.length ? `<div style="font-size:11.5px;color:var(--text3)">Sources: ${d.sources.slice(0, 4).map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener" style="color:var(--brand)">${esc(s.title || 'link')}</a>`).join(' · ')}</div>` : ''}`;
+}
+
+function refreshResearch() {
+  const number = document.getElementById('dialer-number')?.value?.trim();
+  if (!number) return;
+  const panel = document.getElementById('research-panel');
+  panel.innerHTML = '<div style="display:flex;align-items:center;gap:10px;color:var(--text2);font-size:13px"><div class="spinner spinner-dark"></div> Re-researching…</div>';
+  fuFetch('/api/analyze', { method: 'POST', body: JSON.stringify({ type: 'research', phone: number, force: true }) })
+    .then(renderResearchPanel)
+    .catch(e => { panel.innerHTML = '<div style="font-size:13px;color:var(--text2)">🔍 ' + esc(e.message) + '</div>'; });
+}
+
+// Auto-research while the phone is ringing so the brief is ready during the call
+window.addEventListener('cb:call-started', e => {
+  const n = e.detail?.number;
+  if (n) researchProspect(n);
+});
 
 /* ── Calendar ── */
 let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
