@@ -1,4 +1,4 @@
-// PitchLog Browser Dialer — Twilio Voice SDK 2.x
+// Aevaa Browser Dialer — Twilio Voice SDK 2.x
 let twilioDevice = null;
 let currentCall = null;
 

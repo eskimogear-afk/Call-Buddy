@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   res.setHeader('Content-Type', 'text/xml');
 
   if (req.method === 'GET') {
-    return res.status(200).send('<Response><Say>Call Buddy is connected.</Say></Response>');
+    return res.status(200).send('<Response><Say>Aevaa is connected.</Say></Response>');
   }
 
   if (req.method !== 'POST') {
