@@ -1102,6 +1102,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--brand);vertical-align:-1px"></span> Call</span>
           <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--green);vertical-align:-1px"></span> SMS</span>
           <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#7C3AED;vertical-align:-1px"></span> Meeting</span>
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#DB2777;vertical-align:-1px"></span> In person</span>
           <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--warm);vertical-align:-1px"></span> Task</span>
           <span style="opacity:.55">Faded = completed</span>
         </div>
@@ -1188,18 +1189,29 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     <button class="modal-close" onclick="closeModal('fc-modal')">×</button>
     <h2 id="fc-title">🤖 Aevaa suggests a follow-up</h2>
     <p class="modal-sub" id="fc-sub">Based on your call — is this correct?</p>
+    <div id="fc-loading" class="hidden" style="text-align:center;padding:28px 0;color:var(--text2)"><div class="spinner spinner-dark" style="margin:0 auto 12px"></div>Analyzing the call and picking the best next move…</div>
+    <div id="fc-form">
     <div style="background:var(--brand-light);border:1px solid #BAE6FD;border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px;font-size:13.5px" id="fc-context"></div>
+    <div id="fc-reason" class="hidden" style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:var(--radius-sm);padding:11px 14px;margin-bottom:14px;font-size:13px;color:#92400E"></div>
     <div class="form-group"><label>Activity</label>
       <select id="fc-type">
         <option value="call">📞 Call</option>
         <option value="sms">💬 Text (SMS)</option>
-        <option value="meeting">🗓 Meeting</option>
+        <option value="meeting">🗓 Video meeting</option>
+        <option value="in_person">🤝 Meet in person</option>
         <option value="task">✅ Task</option>
       </select>
     </div>
     <div class="form-group"><label>Title</label><input type="text" id="fc-title-input" placeholder="Call Liliana to confirm Wednesday demo"></div>
     <div class="form-group"><label>When</label><input type="datetime-local" id="fc-when"></div>
+    <div style="display:flex;gap:12px" id="fc-meta-row">
+      <div class="form-group" id="fc-dur-group" style="flex:1"><label>Duration</label>
+        <select id="fc-dur"><option value="">—</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 hour</option></select>
+      </div>
+      <div class="form-group" id="fc-loc-group" style="flex:2"><label>Location</label><input type="text" id="fc-loc" placeholder="Their office / our branch / coffee spot"></div>
+    </div>
     <div class="form-group" id="fc-msg-group"><label id="fc-msg-label">Details</label><textarea id="fc-msg" style="height:70px"></textarea></div>
+    <div id="fc-prep" class="hidden" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px;margin-bottom:14px;font-size:13px"></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap" id="fc-actions-suggest">
       <button class="btn btn-primary" onclick="fcConfirm()">✓ Add to calendar</button>
       <button class="btn btn-ghost" onclick="fcDismiss()">Dismiss</button>
@@ -1208,6 +1220,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <button class="btn btn-primary" onclick="fcConfirm()">Save changes</button>
       <button class="btn btn-outline" onclick="fcMarkDone()">Mark done</button>
       <button class="btn btn-danger" onclick="fcDismiss()">Delete</button>
+    </div>
     </div>
     <div id="fc-error" class="alert alert-error hidden" style="margin-top:12px"></div>
   </div>
@@ -1750,6 +1763,7 @@ function buildTable(recs) {
           ${phone && !isDNC(phone) ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="callAgain('${esc(phone)}')">📞 Call again</button>` : ''}
           ${phone ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="followUpFromCall('${r.contact_id || ''}','${esc(display)}','${esc(phone)}')">⏰ Schedule follow-up</button>` : ''}
           ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftEmail('${r.id}','${esc(display)}')">✉️ Draft email</button>` : ''}
+          ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftNextAction('${r.id}','${esc(display)}')">📅 Schedule next</button>` : ''}
           ${phone && !isDNC(phone) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="markDoNotCall('${esc(phone)}')">🚫 Do Not Call</button>` : ''}
           ${phone && isDNC(phone) ? `<span style="font-size:12px;font-weight:600;color:var(--danger);align-self:center">🚫 On Do Not Call list</span>` : ''}
           <button class="btn btn-danger" style="font-size:12px;padding:6px 14px;margin-left:auto" onclick="deleteRecord('${r.id}')">Delete</button>
@@ -2591,15 +2605,27 @@ async function fuFetch(path, opts = {}) {
 function openFollowUpModal(row, mode) {
   fcCurrent = { row, mode };
   const who = displayName(row.contacts?.name, row.contacts?.phone);
-  document.getElementById('fc-title').textContent = mode === 'suggest' ? '🤖 Aevaa suggests a follow-up' : 'Edit follow-up';
-  document.getElementById('fc-sub').textContent = mode === 'suggest' ? 'Based on your call — is this correct?' : '';
+  document.getElementById('fc-loading').classList.add('hidden');
+  document.getElementById('fc-form').classList.remove('hidden');
+  document.getElementById('fc-title').textContent = mode === 'suggest' ? '🤖 Aevaa suggests a follow-up' : (mode === 'create' ? '📅 Schedule next appointment' : 'Edit follow-up');
+  document.getElementById('fc-sub').textContent = mode === 'suggest' ? 'Based on your call — is this correct?' : (mode === 'create' ? 'Aevaa picked the best next move — adjust anything, then add it.' : '');
   document.getElementById('fc-context').innerHTML = `<strong>${esc(who)}</strong>${row.contacts?.phone ? ' · ' + esc(fmtPhone(row.contacts.phone)) : ''}`;
-  document.getElementById('fc-type').value = ['call','sms','meeting','task'].includes(row.type) ? row.type : 'task';
+  document.getElementById('fc-type').value = ['call','sms','meeting','in_person','task'].includes(row.type) ? row.type : 'task';
   document.getElementById('fc-title-input').value = row.title || '';
   document.getElementById('fc-when').value = toLocalInput(row.scheduled_at);
   document.getElementById('fc-msg').value = row.message || '';
+  document.getElementById('fc-loc').value = row.location || '';
+  document.getElementById('fc-dur').value = row.duration_minutes ? String(row.duration_minutes) : '';
+  const reasonEl = document.getElementById('fc-reason');
+  if (row.reason) { reasonEl.innerHTML = '💡 ' + esc(row.reason); reasonEl.classList.remove('hidden'); }
+  else reasonEl.classList.add('hidden');
+  const prepEl = document.getElementById('fc-prep');
+  if (Array.isArray(row.prep) && row.prep.length) {
+    prepEl.innerHTML = '<strong style="font-size:12px">Prep notes</strong><ul style="margin:6px 0 0 18px">' + row.prep.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>';
+    prepEl.classList.remove('hidden');
+  } else prepEl.classList.add('hidden');
   fcSyncMsgLabel();
-  document.getElementById('fc-actions-suggest').style.display = mode === 'suggest' ? 'flex' : 'none';
+  document.getElementById('fc-actions-suggest').style.display = (mode === 'suggest' || mode === 'create') ? 'flex' : 'none';
   document.getElementById('fc-actions-edit').style.display = mode === 'edit' ? 'flex' : 'none';
   document.getElementById('fc-error').classList.add('hidden');
   document.getElementById('fc-modal').classList.remove('hidden');
@@ -2607,6 +2633,8 @@ function openFollowUpModal(row, mode) {
 function fcSyncMsgLabel() {
   const t = document.getElementById('fc-type').value;
   document.getElementById('fc-msg-label').textContent = t === 'sms' ? 'Text message to send' : 'Details';
+  document.getElementById('fc-loc-group').style.display = (t === 'in_person' || t === 'meeting') ? '' : 'none';
+  document.getElementById('fc-dur-group').style.display = (t === 'sms' || t === 'task') ? 'none' : '';
 }
 document.addEventListener('change', e => { if (e.target && e.target.id === 'fc-type') fcSyncMsgLabel(); });
 
@@ -2615,17 +2643,26 @@ async function fcConfirm() {
   try {
     const when = document.getElementById('fc-when').value;
     if (!when) throw new Error('Pick a date and time');
-    await fuFetch('/api/follow-ups', {
-      method: 'PUT',
-      body: JSON.stringify({
-        id: fcCurrent.row.id,
-        status: 'pending',
-        type: document.getElementById('fc-type').value,
-        title: document.getElementById('fc-title-input').value.trim(),
-        message: document.getElementById('fc-msg').value.trim(),
-        scheduled_at: new Date(when).toISOString()
-      })
-    });
+    const fields = {
+      type: document.getElementById('fc-type').value,
+      title: document.getElementById('fc-title-input').value.trim(),
+      message: document.getElementById('fc-msg').value.trim(),
+      location: document.getElementById('fc-loc').value.trim(),
+      duration_minutes: parseInt(document.getElementById('fc-dur').value) || null,
+      scheduled_at: new Date(when).toISOString()
+    };
+    if (fcCurrent.mode === 'create') {
+      if (!fcCurrent.row.contact_id) throw new Error('No contact linked to this call yet — try again in a minute');
+      await fuFetch('/api/follow-ups', {
+        method: 'POST',
+        body: JSON.stringify({ ...fields, contact_id: fcCurrent.row.contact_id, call_id: fcCurrent.row.call_id || null })
+      });
+    } else {
+      await fuFetch('/api/follow-ups', {
+        method: 'PUT',
+        body: JSON.stringify({ id: fcCurrent.row.id, status: 'pending', ...fields })
+      });
+    }
     closeModal('fc-modal');
     fcCurrent = null;
     loadFollowUps();
@@ -2639,6 +2676,7 @@ async function fcConfirm() {
 }
 async function fcDismiss() {
   if (!fcCurrent) return;
+  if (fcCurrent.mode === 'create') { closeModal('fc-modal'); fcCurrent = null; return; }
   if (fcCurrent.mode === 'edit' && !confirm('Delete this follow-up?')) return;
   try {
     await fuFetch('/api/follow-ups?id=' + fcCurrent.row.id, { method: 'DELETE' });
@@ -2678,9 +2716,49 @@ async function checkSuggestedFollowUps(callId) {
 }
 window.addEventListener('cb:analysis-ready', e => checkSuggestedFollowUps(e.detail?.callId || null));
 
+// "Schedule next appointment" — AI recommends the best next action for a call
+async function draftNextAction(callId, name) {
+  // open the modal in loading state
+  fcCurrent = null;
+  document.getElementById('fc-title').textContent = '📅 Schedule next appointment';
+  document.getElementById('fc-sub').textContent = name ? 'For ' + name : '';
+  document.getElementById('fc-form').classList.add('hidden');
+  document.getElementById('fc-loading').classList.remove('hidden');
+  document.getElementById('fc-error').classList.add('hidden');
+  document.getElementById('fc-actions-suggest').style.display = 'none';
+  document.getElementById('fc-actions-edit').style.display = 'none';
+  document.getElementById('fc-modal').classList.remove('hidden');
+  try {
+    const rec = await fuFetch('/api/analyze', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'next_action', call_id: callId })
+    });
+    openFollowUpModal({
+      id: null,
+      contact_id: rec.contact?.id || null,
+      call_id: rec.call_id || callId,
+      type: rec.type,
+      title: rec.title || '',
+      message: rec.message || '',
+      location: rec.location || '',
+      duration_minutes: rec.duration_minutes || null,
+      scheduled_at: rec.datetime,
+      reason: rec.reason || '',
+      prep: rec.prep || [],
+      contacts: rec.contact || { name, phone: '' }
+    }, 'create');
+  } catch (e) {
+    document.getElementById('fc-loading').classList.add('hidden');
+    document.getElementById('fc-form').classList.remove('hidden');
+    const el = document.getElementById('fc-error');
+    el.textContent = 'Could not get a recommendation: ' + e.message;
+    el.classList.remove('hidden');
+  }
+}
+
 /* ── Calendar ── */
 let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-const FU_COLORS = { call: 'var(--brand)', sms: 'var(--green)', meeting: '#7C3AED', task: 'var(--warm)' };
+const FU_COLORS = { call: 'var(--brand)', sms: 'var(--green)', meeting: '#7C3AED', in_person: '#DB2777', task: 'var(--warm)' };
 
 function calNav(dir) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + dir, 1); renderCalendar(); }
 function calToday() { calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1); renderCalendar(); }

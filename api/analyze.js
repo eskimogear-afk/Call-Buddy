@@ -25,7 +25,41 @@ export default async function handler(req, res) {
   const { transcript, type, name, summary, painPoints, nextSteps, call_id } = req.body || {};
 
   let prompt = '';
-  if (type === 'email') {
+  if (type === 'next_action') {
+    // AI picks the best next move (in-person / meeting / call / text) from the call
+    if (!call_id) return res.status(400).json({ error: 'call_id required' });
+    const { data: call } = await supabase
+      .from('calls')
+      .select('id, transcript, notes, next_step, heat_score, contacts(id, name, phone, company)')
+      .eq('id', call_id).eq('user_id', user.id).single();
+    if (!call) return res.status(404).json({ error: 'Call not found' });
+    const naTranscript = String(call.transcript || '').startsWith('PENDING:') ? '' : (call.transcript || '');
+    req._naContact = call.contacts || null;
+    req._naCallId = call.id;
+
+    prompt = `You are a sales strategist for a mortgage loan officer. Based on this call, decide the SINGLE best next action to move the relationship forward, choosing between: "in_person" (meet face to face), "meeting" (video meeting / Google Meet), "call" (phone call), "sms" (text message).
+
+Decision guidance: honor anything explicitly agreed on the call first (that wins). Otherwise weigh warmth and stakes — hot leads with concrete deals justify in-person or a video meeting; lukewarm or early relationships fit a call; light touches or confirmations fit a text. Use business hours, America/New_York timezone. Current datetime: ${new Date().toISOString()}.
+
+Prospect: ${call.contacts?.name || 'unknown'}${call.contacts?.company ? ' (' + call.contacts.company + ')' : ''} · heat: ${call.heat_score || 'unknown'}
+AI call notes: ${call.notes || ''}
+Stated next step: ${call.next_step || ''}
+
+Return ONLY valid JSON:
+{
+ "type": "in_person" | "meeting" | "call" | "sms",
+ "reason": 1-2 sentences on why this action beats the alternatives for this prospect,
+ "datetime": ISO 8601 with -04:00 offset (use any agreed timing from the call, else next sensible business slot),
+ "duration_minutes": 15 | 30 | 60 (omit for sms),
+ "title": short imperative, e.g. "Video demo of investor programs with Liliana",
+ "message": if sms, the exact friendly text to send; otherwise a 1-2 sentence agenda/description,
+ "location": for in_person only — a sensible suggestion grounded in the call (their office, our Altamonte Springs branch, a coffee spot near them) or "" if unknown,
+ "prep": array of 2-3 short talking points to prepare, grounded in what was discussed
+}
+
+Transcript:
+${naTranscript || '(no transcript — base it on the notes and next step above)'}`;
+  } else if (type === 'email') {
     // Pull the call + contact server-side so the draft is grounded in the real transcript
     let emailTranscript = transcript || '';
     let emailNotes = summary || '';
@@ -99,7 +133,26 @@ ${transcript}`;
 
     const text = message.content.map(b => b.text || '').join('').trim();
 
-    if (type === 'email') {
+    if (type === 'next_action') {
+      let rec;
+      try {
+        rec = JSON.parse(text.replace(/```json|```/g, '').trim());
+      } catch {
+        return res.status(500).json({ error: 'Could not parse recommendation' });
+      }
+      const validTypes = ['in_person', 'meeting', 'call', 'sms'];
+      if (!validTypes.includes(rec.type)) rec.type = 'call';
+      const d = new Date(rec.datetime);
+      rec.datetime = (!isNaN(d.getTime()) && d.getTime() > Date.now() - 60000)
+        ? d.toISOString()
+        : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      rec.prep = Array.isArray(rec.prep) ? rec.prep.slice(0, 4) : [];
+      return res.status(200).json({
+        ...rec,
+        contact: req._naContact ? { id: req._naContact.id, name: req._naContact.name, phone: req._naContact.phone, company: req._naContact.company } : null,
+        call_id: req._naCallId
+      });
+    } else if (type === 'email') {
       let subject = '', body = text;
       try {
         const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
