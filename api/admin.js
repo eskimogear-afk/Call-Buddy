@@ -31,20 +31,29 @@ export default async function handler(req, res) {
   }
 
   // Admin gate
-  const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+  const { data: me } = await supabase.from('profiles').select('role, team_owner_id').eq('id', user.id).single();
   if (me?.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
+  // Scope everything to the admin's team — only reps explicitly added to it appear
+  const teamId = me.team_owner_id || user.id;
 
   try {
     if (req.method === 'GET' && (req.query.view === 'overview' || !req.query.view)) {
       const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-      const [profilesQ, usersQ, callsQ, contactsQ, fusQ] = await Promise.all([
-        supabase.from('profiles').select('id, full_name, plan, role, twilio_phone_number, calls_this_month, created_at'),
+      // Only profiles on this admin's team
+      const { data: teamProfiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, plan, role, twilio_phone_number, calls_this_month, created_at')
+        .eq('team_owner_id', teamId);
+      const teamIds = (teamProfiles || []).map(p => p.id);
+      if (!teamIds.length) return res.status(200).json({ team: { reps: 0, calls_today: 0, calls_week: 0, hot: 0, warm: 0, pending_followups: 0 }, reps: [] });
+
+      const [usersQ, callsQ, contactsQ, fusQ] = await Promise.all([
         supabase.auth.admin.listUsers({ perPage: 200 }),
-        supabase.from('calls').select('user_id, created_at, heat_score, duration').order('created_at', { ascending: false }).limit(3000),
-        supabase.from('contacts').select('user_id, stage').limit(5000),
-        supabase.from('follow_ups').select('user_id, status').eq('status', 'pending').limit(2000)
+        supabase.from('calls').select('user_id, created_at, heat_score, duration').in('user_id', teamIds).order('created_at', { ascending: false }).limit(3000),
+        supabase.from('contacts').select('user_id, stage').in('user_id', teamIds).limit(5000),
+        supabase.from('follow_ups').select('user_id, status').in('user_id', teamIds).eq('status', 'pending').limit(2000)
       ]);
 
       const emails = {};
@@ -54,7 +63,7 @@ export default async function handler(req, res) {
       const contacts = contactsQ.data || [];
       const fus = fusQ.data || [];
 
-      const reps = (profilesQ.data || []).map(p => {
+      const reps = (teamProfiles || []).map(p => {
         const mine = calls.filter(c => c.user_id === p.id);
         const week = mine.filter(c => c.created_at >= weekAgo);
         const today = mine.filter(c => c.created_at >= dayAgo);
@@ -95,6 +104,9 @@ export default async function handler(req, res) {
     if (req.method === 'GET' && req.query.view === 'user_calls') {
       const { user_id } = req.query;
       if (!user_id) return res.status(400).json({ error: 'user_id required' });
+      // Only allow drilling into a rep on the admin's own team
+      const { data: target } = await supabase.from('profiles').select('id').eq('id', user_id).eq('team_owner_id', teamId).single();
+      if (!target) return res.status(403).json({ error: 'User is not on your team' });
       const { data, error } = await supabase
         .from('calls')
         .select('id, created_at, to_number, from_number, duration, heat_score, sentiment, notes, next_step, transcript')
@@ -113,7 +125,8 @@ export default async function handler(req, res) {
       const { user_id, role } = req.body;
       if (!user_id || !['admin', 'member'].includes(role)) return res.status(400).json({ error: 'user_id and role (admin|member) required' });
       if (user_id === user.id && role !== 'admin') return res.status(400).json({ error: 'You cannot demote yourself' });
-      const { error } = await supabase.from('profiles').update({ role }).eq('id', user_id);
+      // Only change roles for reps on the admin's own team
+      const { error } = await supabase.from('profiles').update({ role }).eq('id', user_id).eq('team_owner_id', teamId);
       if (error) throw error;
       return res.status(200).json({ success: true });
     }
