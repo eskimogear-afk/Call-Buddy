@@ -109,16 +109,40 @@ export default async function handler(req, res) {
       if (!target) return res.status(403).json({ error: 'User is not on your team' });
       const { data, error } = await supabase
         .from('calls')
-        .select('id, created_at, to_number, from_number, duration, heat_score, sentiment, notes, next_step, transcript')
+        .select('id, created_at, to_number, from_number, duration, heat_score, sentiment, notes, next_step, transcript, recording_url')
         .eq('user_id', user_id)
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw error;
-      // Trim transcripts so the payload stays light; full text stays in the rep's own app
+      // Trim transcripts so the payload stays light; expose only a has_recording flag, not the raw URL
       return res.status(200).json((data || []).map(c => ({
-        ...c,
-        transcript: String(c.transcript || '').startsWith('PENDING:') ? '' : String(c.transcript || '').slice(0, 600)
+        id: c.id, created_at: c.created_at, to_number: c.to_number, from_number: c.from_number,
+        duration: c.duration, heat_score: c.heat_score, sentiment: c.sentiment, next_step: c.next_step,
+        notes: c.notes,
+        transcript: String(c.transcript || '').startsWith('PENDING:') ? '' : String(c.transcript || '').slice(0, 600),
+        has_recording: !!c.recording_url
       })));
+    }
+
+    // Stream a team member's call recording (admin only, team-scoped)
+    if (req.method === 'GET' && req.query.view === 'recording') {
+      const { call_id } = req.query;
+      if (!call_id) return res.status(400).json({ error: 'call_id required' });
+      const { data: call } = await supabase
+        .from('calls').select('recording_url, user_id').eq('id', call_id).single();
+      if (!call?.recording_url) return res.status(404).json({ error: 'No recording' });
+      // Confirm the call's owner is on this admin's team
+      const { data: owner } = await supabase.from('profiles').select('id').eq('id', call.user_id).eq('team_owner_id', teamId).single();
+      if (!owner) return res.status(403).json({ error: 'Recording is not on your team' });
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN)
+        return res.status(500).json({ error: 'Twilio not configured' });
+      const a = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+      const tw = await fetch(call.recording_url, { headers: { Authorization: `Basic ${a}` } });
+      if (!tw.ok) return res.status(502).json({ error: 'Recording fetch failed (' + tw.status + ')' });
+      const buf = Buffer.from(await tw.arrayBuffer());
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+      return res.status(200).send(buf);
     }
 
     if (req.method === 'POST' && req.body?.action === 'set_role') {

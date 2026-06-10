@@ -1638,6 +1638,8 @@ function buildTable(recs) {
           ${sentiment ? `<div class="cc-field"><b>Sentiment</b>${sentiment}</div>` : ''}
           ${r.pain_points ? `<div class="cc-field"><b>Pain points</b>${esc(r.pain_points)}</div>` : ''}
         </div>
+        ${r.recording_url ? `<div class="cc-field" style="margin-bottom:6px"><b>Recording</b></div>
+        <div id="rec-${r.id}" style="margin-bottom:14px"><button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="playRecording('${r.id}', this)">▶ Play recording</button></div>` : ''}
         ${transcript ? `<div class="cc-field" style="margin-bottom:6px"><b>Transcript</b></div><div class="cc-transcript">${esc(transcript)}</div>` : ''}
         <div class="cc-actions">
           ${phone && !isDNC(phone) ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="callAgain('${esc(phone)}')">📞 Call again</button>` : ''}
@@ -1653,6 +1655,28 @@ function buildTable(recs) {
 
 function toggleCallDetail(id) {
   document.getElementById('cc-' + id)?.classList.toggle('open');
+}
+
+async function playRecording(callId, btn) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  btn.disabled = true; btn.textContent = '⏳ Loading…';
+  try {
+    const r = await fetch('/api/contacts?resource=recording&id=' + encodeURIComponent(callId), {
+      headers: { Authorization: 'Bearer ' + session.access_token }
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.error || 'Recording unavailable (' + r.status + ')');
+    }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const wrap = document.getElementById('rec-' + callId);
+    if (wrap) wrap.innerHTML = '<audio controls autoplay src="' + url + '" style="width:100%;max-width:420px;height:38px"></audio>';
+  } catch (e) {
+    btn.disabled = false; btn.textContent = '▶ Play recording';
+    alert('Could not load recording: ' + e.message + '\n\n(Recordings can take a few seconds to be ready right after a call.)');
+  }
 }
 
 function callAgain(phone) {

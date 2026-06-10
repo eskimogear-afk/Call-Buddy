@@ -222,9 +222,23 @@ async function openRep(id, name){
         ${c.sentiment?`<span>· ${c.sentiment}</span>`:''}</div>
       ${c.notes?`<div><strong>AI:</strong> ${esc(c.notes)}</div>`:''}
       ${c.next_step?`<div style="color:var(--text2);margin-top:3px"><strong>Next:</strong> ${esc(c.next_step)}</div>`:''}
+      ${c.has_recording?`<div id="arec-${c.id}" style="margin-top:8px"><button class="btn" style="font-size:12px;padding:5px 12px" onclick="playAdminRec('${c.id}', this)">▶ Play recording</button></div>`:''}
     </div>`;
   }).join('') : '<div style="text-align:center;color:var(--text3);padding:24px">No calls yet.</div>';
   card.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function playAdminRec(callId, btn){
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  btn.disabled = true; btn.textContent = '⏳ Loading…';
+  try {
+    const r = await fetch('/api/admin?view=recording&call_id=' + encodeURIComponent(callId), { headers: { Authorization: 'Bearer ' + session.access_token } });
+    if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.error || 'Unavailable'); }
+    const url = URL.createObjectURL(await r.blob());
+    const w = document.getElementById('arec-' + callId);
+    if (w) w.innerHTML = '<audio controls autoplay src="' + url + '" style="width:100%;max-width:420px;height:38px"></audio>';
+  } catch(e){ btn.disabled = false; btn.textContent = '▶ Play recording'; alert('Could not load recording: ' + e.message); }
 }
 
 async function logout(){ await db.auth.signOut(); location.reload(); }

@@ -31,6 +31,27 @@ export default async function handler(req, res) {
   };
 
   try {
+    // ── Call recording playback proxy (resource=recording&id=<callId>).
+    //    Streams the user's own recording from Twilio with server-side auth so
+    //    the credentials are never exposed to the browser. Folded in here to
+    //    stay within Vercel's 12-function limit. ──
+    if (req.query.resource === 'recording' && req.method === 'GET') {
+      const { id } = req.query;
+      if (!id) return res.status(400).json({ error: 'id required' });
+      const { data: call } = await supabase
+        .from('calls').select('recording_url').eq('id', id).eq('user_id', user.id).single();
+      if (!call?.recording_url) return res.status(404).json({ error: 'No recording for this call' });
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN)
+        return res.status(500).json({ error: 'Twilio not configured' });
+      const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+      const tw = await fetch(call.recording_url, { headers: { Authorization: `Basic ${auth}` } });
+      if (!tw.ok) return res.status(502).json({ error: 'Recording fetch failed (' + tw.status + ')' });
+      const buf = Buffer.from(await tw.arrayBuffer());
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+      return res.status(200).send(buf);
+    }
+
     // ── Do Not Call list (folded into this endpoint to stay within Vercel's
     //    12-function limit). Triggered by resource=dnc on query or body. ──
     if (req.query.resource === 'dnc' || req.body?.resource === 'dnc') {
