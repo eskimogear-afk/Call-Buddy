@@ -276,6 +276,9 @@ tr:hover td{background:var(--bg2)}
 .spinner-dark{border-color:rgba(0,0,0,.15);border-top-color:var(--text)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .hidden{display:none!important}
+.founder-chip{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:700;letter-spacing:.3px;color:var(--warm);background:var(--warm-bg);border:1px solid var(--warm);padding:1px 7px;border-radius:99px;vertical-align:1px;white-space:nowrap}
+.plw-pulse{animation:plwPulse 1.3s ease-in-out 4}
+@keyframes plwPulse{0%,100%{box-shadow:0 0 0 0 rgba(91,163,247,0)}50%{box-shadow:0 0 0 10px rgba(91,163,247,.3)}}
 .page-spinner{display:flex;align-items:center;justify-content:center;min-height:60vh;font-size:14px;color:var(--text2);gap:12px}
 
 /* ── HERO PRODUCT MOCKUP ── */
@@ -781,7 +784,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <div class="sidebar-plan" id="sidebar-plan">
         <strong id="plan-name">Free plan</strong>
         <span id="plan-usage">0 / 25 calls used</span>
-        <button class="btn btn-primary" style="margin-top:10px;font-size:12px;padding:7px 14px;width:100%;justify-content:center" onclick="showUpgradeModal()">Upgrade to Pro →</button>
+        <button id="sidebar-upgrade-btn" class="btn btn-primary" style="margin-top:10px;font-size:12px;padding:7px 14px;width:100%;justify-content:center" onclick="showUpgradeModal()">Upgrade to Pro →</button>
       </div>
     </div>
 
@@ -792,6 +795,13 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         <div style="margin-bottom:24px">
           <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px" id="dash-greeting">Dashboard</h1>
           <p style="font-size:14px;color:var(--text2);margin-top:4px" id="dash-date"></p>
+        </div>
+        <div id="upgrade-nudge" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:13px 18px;margin-bottom:20px;border:1px solid var(--warm);background:var(--warm-bg);border-radius:var(--radius)">
+          <div style="font-size:13.5px;line-height:1.5"><strong id="nudge-text" style="color:var(--text)"></strong> <span style="color:var(--text2)">Founding-member Pro is $29/mo — unlimited calls, price locked for life.</span></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-primary" onclick="showUpgradeModal()">Upgrade to Pro</button>
+            <button class="btn btn-ghost" onclick="dismissUpgradeNudge()" title="Hide for the rest of this month">Not now</button>
+          </div>
         </div>
         <div class="stats-grid">
           <div class="stat-card">
@@ -1499,7 +1509,7 @@ async function enterApp() {
   document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   document.getElementById('set-name').textContent = userProfile?.full_name || name;
   document.getElementById('set-email').textContent = currentUser.email;
-  document.getElementById('set-plan').textContent = userProfile?.plan === 'pro' ? 'Pro - unlimited calls' : 'Free - 25 calls/month';
+  document.getElementById('set-plan').textContent = userProfile?.plan === 'pro' ? 'Pro — unlimited calls · Founding member' : 'Free - 25 calls/month';
   const callerIdEl = document.getElementById('dialer-caller-id');
   const warningEl = document.getElementById('dialer-setup-warning');
   if (userProfile?.twilio_phone_number) {
@@ -1513,6 +1523,7 @@ async function enterApp() {
   loadDNC();
   refreshDashboard();
   updatePlanBadge();
+  maybeShowWelcome();
   // Surface any AI-suggested follow-ups awaiting review (e.g. from calls
   // that finished analyzing while the app was closed)
   setTimeout(() => checkSuggestedFollowUps(null), 2500);
@@ -1967,8 +1978,51 @@ function renderLog() {
 function updatePlanBadge() {
   const isPro = userProfile?.plan === 'pro';
   const used = userProfile?.calls_this_month || records.length;
-  document.getElementById('plan-name').textContent = isPro ? 'Pro plan' : 'Free plan';
+  document.getElementById('plan-name').innerHTML = isPro ? 'Pro plan <span class="founder-chip">★ FOUNDING MEMBER</span>' : 'Free plan';
   document.getElementById('plan-usage').textContent = isPro ? 'Unlimited calls' : `${used} / ${FREE_LIMIT} calls used`;
+  const upBtn = document.getElementById('sidebar-upgrade-btn');
+  if (upBtn) upBtn.classList.toggle('hidden', isPro);
+  maybeShowUpgradeNudge(isPro, used);
+}
+
+/* — Activation & upgrade moments — */
+function plwKey(sfx) { return 'plw_' + sfx + '_' + (currentUser?.id || 'anon'); }
+function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
+
+function maybeShowUpgradeNudge(isPro, used) {
+  const el = document.getElementById('upgrade-nudge');
+  if (!el) return;
+  const ym = new Date().toISOString().slice(0, 7);
+  if (isPro || used < 20 || lsGet(plwKey('nudge')) === ym) { el.classList.add('hidden'); return; }
+  const left = FREE_LIMIT - used;
+  document.getElementById('nudge-text').textContent = left <= 0
+    ? `You've used all ${FREE_LIMIT} free calls this month.`
+    : `${left} free call${left === 1 ? '' : 's'} left this month.`;
+  el.classList.remove('hidden');
+}
+function dismissUpgradeNudge() {
+  lsSet(plwKey('nudge'), new Date().toISOString().slice(0, 7));
+  document.getElementById('upgrade-nudge').classList.add('hidden');
+}
+
+function maybeShowWelcome() {
+  if ((records?.length || 0) > 0 || lsGet(plwKey('welcome'))) return;
+  document.getElementById('welcome-modal').classList.remove('hidden');
+}
+function plwSkipWelcome() {
+  lsSet(plwKey('welcome'), '1');
+  document.getElementById('welcome-modal').classList.add('hidden');
+}
+function plwStartFirstCall() {
+  plwSkipWelcome();
+  switchPanel('recorder');
+  const btn = document.getElementById('rec-btn');
+  if (btn) {
+    btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    btn.classList.add('plw-pulse');
+    setTimeout(() => btn.classList.remove('plw-pulse'), 5500);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -3751,6 +3805,20 @@ setInterval(() => {
 }, 60000);
 
 </script>
+<div id="welcome-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:470px;text-align:left">
+    <h2 style="margin-bottom:6px">Welcome to PitchLog 👋</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:20px">Your first logged call takes about two minutes. Here's the whole job:</p>
+    <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:24px">
+      <div style="display:flex;gap:12px;align-items:flex-start"><span style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:var(--brand-light);color:var(--brand);font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">1</span><div style="font-size:13.5px;line-height:1.6"><strong>Tap record and make a call</strong><br><span style="color:var(--text2)">Phone on speaker near your computer — or use the built-in dialer.</span></div></div>
+      <div style="display:flex;gap:12px;align-items:flex-start"><span style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:var(--brand-light);color:var(--brand);font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">2</span><div style="font-size:13.5px;line-height:1.6"><strong>Just talk</strong><br><span style="color:var(--text2)">The AI transcribes live while you focus on the conversation.</span></div></div>
+      <div style="display:flex;gap:12px;align-items:flex-start"><span style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:var(--brand-light);color:var(--brand);font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">3</span><div style="font-size:13.5px;line-height:1.6"><strong>Hang up — it's logged</strong><br><span style="color:var(--text2)">Name, details, outcome and follow-up fill themselves in.</span></div></div>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="plwStartFirstCall()">Make my first call</button>
+    <button class="btn btn-ghost btn-full" style="margin-top:8px" onclick="plwSkipWelcome()">I'll explore on my own</button>
+  </div>
+</div>
+
 <div id="quote-sheet"></div>
 </body>
 </html>
