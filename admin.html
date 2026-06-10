@@ -88,7 +88,7 @@ tbody tr:hover{background:var(--bg2)}
       <span id="who"></span>
       <button class="btn btn-ghost" onclick="loadOverview()">↻ Refresh</button>
       <a class="btn btn-ghost" href="/" style="text-decoration:none">Open app</a>
-      <button class="btn btn-ghost" onclick="logout()">Log out</button>
+      <button class="btn btn-ghost" id="logout-btn" onclick="logout()">Log out</button>
     </div>
   </div>
   <div class="wrap">
@@ -132,8 +132,34 @@ function timeAgo(d){if(!d)return'—';const s=Math.floor((Date.now()-new Date(d)
 function fmtTalk(sec){if(!sec)return'0m';const h=Math.floor(sec/3600),m=Math.round((sec%3600)/60);return h?`${h}h ${m}m`:`${m}m`}
 function initials(n){return (n||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase()}
 
+const SHARE = new URLSearchParams(location.search).get('share') || '';
+
+// One fetch path for both access modes: share-link token or signed-in admin
+async function adminFetch(params){
+  if (SHARE) return fetch('/api/admin?' + params + '&share=' + encodeURIComponent(SHARE));
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return null;
+  return fetch('/api/admin?' + params, { headers: { Authorization: 'Bearer ' + session.access_token } });
+}
+
 async function init(){
   db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  if (SHARE) {
+    // Share-link mode: no login — straight into the (read-only) portal
+    const r = await adminFetch('view=overview');
+    if (r && r.ok) {
+      document.getElementById('who').textContent = 'Shared view';
+      const lb = document.getElementById('logout-btn'); if (lb) lb.style.display = 'none';
+      document.getElementById('gate').classList.add('hidden');
+      document.getElementById('portal').classList.remove('hidden');
+      render(await r.json());
+    } else {
+      const err = document.getElementById('g-err');
+      err.textContent = 'This share link is invalid or has been revoked.';
+      err.style.display = 'block';
+    }
+    return;
+  }
   const { data: { session } } = await db.auth.getSession();
   if (session) enter();
 }
@@ -174,11 +200,9 @@ async function enter(){
 }
 
 async function loadOverview(){
-  const { data: { session } } = await db.auth.getSession();
-  if (!session) return;
   document.getElementById('reps').innerHTML = '<tr><td colspan="10"><div class="spin"></div></td></tr>';
-  const r = await fetch('/api/admin?view=overview', { headers: { Authorization: 'Bearer ' + session.access_token } });
-  if (r.ok) render(await r.json());
+  const r = await adminFetch('view=overview');
+  if (r && r.ok) render(await r.json());
 }
 
 function render(data){
@@ -206,14 +230,12 @@ function render(data){
 }
 
 async function openRep(id, name){
-  const { data: { session } } = await db.auth.getSession();
-  if (!session) return;
   const card = document.getElementById('detail-card');
   card.classList.remove('hidden');
   document.getElementById('detail-title').textContent = name + ' — recent calls';
   document.getElementById('detail-body').innerHTML = '<div class="spin"></div>';
-  const r = await fetch('/api/admin?view=user_calls&user_id=' + id, { headers: { Authorization: 'Bearer ' + session.access_token } });
-  const calls = r.ok ? await r.json() : [];
+  const r = await adminFetch('view=user_calls&user_id=' + id);
+  const calls = (r && r.ok) ? await r.json() : [];
   document.getElementById('detail-body').innerHTML = calls.length ? calls.map(c => {
     const heat = c.heat_score ? `<span class="pill ${c.heat_score==='Hot'?'hot':c.heat_score==='Warm'?'warm':'gray'}">${c.heat_score.toUpperCase()}</span>` : '';
     return `<div class="callrow">
@@ -229,12 +251,10 @@ async function openRep(id, name){
 }
 
 async function playAdminRec(callId, btn){
-  const { data: { session } } = await db.auth.getSession();
-  if (!session) return;
   btn.disabled = true; btn.textContent = '⏳ Loading…';
   try {
-    const r = await fetch('/api/admin?view=recording&call_id=' + encodeURIComponent(callId), { headers: { Authorization: 'Bearer ' + session.access_token } });
-    if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.error || 'Unavailable'); }
+    const r = await adminFetch('view=recording&call_id=' + encodeURIComponent(callId));
+    if (!r || !r.ok) { const d = r ? await r.json().catch(()=>({})) : {}; throw new Error(d.error || 'Unavailable'); }
     const url = URL.createObjectURL(await r.blob());
     const w = document.getElementById('arec-' + callId);
     if (w) w.innerHTML = '<audio controls autoplay src="' + url + '" style="width:100%;max-width:420px;height:38px"></audio>';

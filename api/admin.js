@@ -1,9 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Team admin API — requires an authenticated user whose profiles.role = 'admin'
+// Team admin API — two access modes:
+//  1. Authenticated user whose profiles.role = 'admin' (full access)
+//  2. Share-link token (?share=ADMIN_SHARE_TOKEN) — read-only, scoped to
+//     ADMIN_SHARE_TEAM_ID's team; revoke by rotating/removing the env var
 //  GET ?view=overview            → per-rep stats for the whole team
 //  GET ?view=user_calls&user_id= → recent calls (with AI analysis) for one rep
-//  POST { action:'set_role', user_id, role }  → promote/demote a rep (admin only)
+//  GET ?view=recording&call_id=  → stream a rep's call recording
+//  POST { action:'set_role', user_id, role }  → promote/demote (NOT in share mode)
 
 const ALLOWED_ORIGIN = 'https://call-buddy-omega.vercel.app';
 
@@ -16,25 +20,38 @@ export default async function handler(req, res) {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY)
     return res.status(500).json({ error: 'Supabase not configured' });
 
-  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
-
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-  let user;
-  try {
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user) return res.status(401).json({ error: 'Unauthorized' });
-    user = data.user;
-  } catch (e) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  let teamId = null;
+  let readOnly = false;
+
+  const shareToken = req.query.share || '';
+  if (shareToken && process.env.ADMIN_SHARE_TOKEN && shareToken === process.env.ADMIN_SHARE_TOKEN && process.env.ADMIN_SHARE_TEAM_ID) {
+    // Share-link mode: read-only access to the configured team
+    teamId = process.env.ADMIN_SHARE_TEAM_ID;
+    readOnly = true;
+  } else {
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+    let user;
+    try {
+      const { data, error } = await supabase.auth.getUser(token);
+      if (error || !data.user) return res.status(401).json({ error: 'Unauthorized' });
+      user = data.user;
+    } catch (e) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Admin gate
+    const { data: me } = await supabase.from('profiles').select('role, team_owner_id').eq('id', user.id).single();
+    if (me?.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
+    // Scope everything to the admin's team — only reps explicitly added to it appear
+    teamId = me.team_owner_id || user.id;
+    var authedUserId = user.id;
   }
 
-  // Admin gate
-  const { data: me } = await supabase.from('profiles').select('role, team_owner_id').eq('id', user.id).single();
-  if (me?.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
-  // Scope everything to the admin's team — only reps explicitly added to it appear
-  const teamId = me.team_owner_id || user.id;
+  if (req.method !== 'GET' && readOnly) return res.status(403).json({ error: 'Share link is read-only' });
 
   try {
     if (req.method === 'GET' && (req.query.view === 'overview' || !req.query.view)) {
@@ -148,7 +165,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && req.body?.action === 'set_role') {
       const { user_id, role } = req.body;
       if (!user_id || !['admin', 'member'].includes(role)) return res.status(400).json({ error: 'user_id and role (admin|member) required' });
-      if (user_id === user.id && role !== 'admin') return res.status(400).json({ error: 'You cannot demote yourself' });
+      if (user_id === authedUserId && role !== 'admin') return res.status(400).json({ error: 'You cannot demote yourself' });
       // Only change roles for reps on the admin's own team
       const { error } = await supabase.from('profiles').update({ role }).eq('id', user_id).eq('team_owner_id', teamId);
       if (error) throw error;
