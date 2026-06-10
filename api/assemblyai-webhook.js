@@ -60,7 +60,14 @@ export default async function handler(req, res) {
           system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
           messages: [{
             role: 'user',
-            content: `Analyze this cold call transcript. Return ONLY valid JSON with keys: "name" (prospect full name or "Unknown"), "company" (or ""), "notes" (2-3 sentence summary), "heatScore" (one of exactly: Hot, Warm, Cold), "sentiment" (one of: positive, neutral, negative), "nextStep" (brief next action or "").
+            content: `Analyze this cold call transcript. Return ONLY valid JSON with keys:
+"name" (prospect full name or "Unknown"), "company" (or ""), "notes" (2-3 sentence summary), "heatScore" (one of exactly: Hot, Warm, Cold), "sentiment" (one of: positive, neutral, negative), "nextStep" (brief next action or ""),
+"followUp": an object describing the concrete follow-up activity implied by the call, or {"needed": false} if none is warranted. When needed, include:
+  "needed": true,
+  "type": one of exactly "call", "sms", "meeting", "task",
+  "datetime": ISO 8601 datetime WITH timezone offset for when it should happen. Current datetime is ${new Date().toISOString()} and the user's timezone is America/New_York (offset -04:00). If a specific day/time was agreed on the call, use it (interpret relative dates like "Monday" or "next week" from the current date, business hours, default 10:00 AM if no time given). If nothing specific was agreed but a follow-up makes sense, pick the next business day at 10:00 AM.
+  "title": short imperative summary, e.g. "Call Liliana to confirm Wednesday demo",
+  "message": if type is "sms", the exact friendly text message to send; otherwise a 1-sentence description of what to do.
 
 Transcript:
 ${transcriptText}`
@@ -130,18 +137,33 @@ ${transcriptText}`
       .select('id');
     console.log('calls update:', JSON.stringify({ matched: updatedRows?.length ?? null, error: updateErr?.message || null }));
 
-    // Auto-schedule a follow-up SMS for Hot/Warm leads with a next step
-    if (contact?.id && userId && analysis.nextStep && analysis.heatScore !== 'Cold') {
-      const scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      const followUpMessage = `Hi ${contact.name && contact.name !== 'Unknown' ? contact.name : 'there'}, ${analysis.nextStep}`;
+    // AI-drafted follow-up SUGGESTION — saved as status 'suggested' so nothing
+    // happens until the user confirms it in the post-call popup (the cron and
+    // Send-now only act on 'pending' rows)
+    const fu = analysis.followUp;
+    if (contact?.id && userId && fu && fu.needed) {
+      const validTypes = ['call', 'sms', 'meeting', 'task'];
+      const type = validTypes.includes(fu.type) ? fu.type : 'task';
+      let scheduledAt;
+      try {
+        const d = new Date(fu.datetime);
+        scheduledAt = isNaN(d.getTime()) || d.getTime() < Date.now() - 60000
+          ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          : d.toISOString();
+      } catch {
+        scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      }
+      const { data: callRow } = await supabase.from('calls').select('id').eq('transcript', transcriptText).eq('user_id', userId).order('created_at', { ascending: false }).limit(1).single();
       await supabase.from('follow_ups').insert({
         user_id: userId,
         contact_id: contact.id,
-        type: 'sms',
-        message: followUpMessage.slice(0, 300),
+        call_id: callRow?.id || null,
+        type,
+        title: String(fu.title || analysis.nextStep || 'Follow up').slice(0, 140),
+        message: String(fu.message || analysis.nextStep || '').slice(0, 300),
         scheduled_at: scheduledAt,
-        status: 'pending'
-      }).catch(err => console.error('Auto follow-up insert failed:', err));
+        status: 'suggested'
+      }).then(({ error }) => { if (error) console.error('Suggested follow-up insert failed:', error.message); });
     }
 
     res.status(200).json({ ok: true, contact: contact?.id, heatScore: analysis.heatScore });

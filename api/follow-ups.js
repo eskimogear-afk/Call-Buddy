@@ -57,6 +57,7 @@ export default async function handler(req, res) {
         .single();
       if (fuError || !followUp) return res.status(404).json({ error: 'Follow-up not found' });
       if (followUp.status === 'sent') return res.status(400).json({ error: 'Already sent' });
+      if (followUp.status === 'suggested') return res.status(400).json({ error: 'Confirm this suggested follow-up before sending' });
 
       const toPhone = followUp.contacts?.phone;
       if (!toPhone) return res.status(400).json({ error: 'Contact has no phone number' });
@@ -88,7 +89,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const { contact_id, call_id, type, message, scheduled_at } = req.body || {};
+      const { contact_id, call_id, type, message, scheduled_at, title } = req.body || {};
       if (!contact_id || !scheduled_at) return res.status(400).json({ error: 'contact_id and scheduled_at required' });
 
       const { data, error } = await supabase
@@ -98,6 +99,7 @@ export default async function handler(req, res) {
           contact_id,
           call_id: call_id || null,
           type: type || 'task',
+          title: title || '',
           message: message || '',
           scheduled_at,
           status: 'pending'
@@ -123,7 +125,7 @@ export default async function handler(req, res) {
       const { id, ...updates } = req.body || {};
       if (!id) return res.status(400).json({ error: 'id required' });
 
-      const allowed = ['message', 'scheduled_at', 'status', 'sent_at', 'type'];
+      const allowed = ['message', 'scheduled_at', 'status', 'sent_at', 'type', 'title'];
       const filtered = Object.fromEntries(Object.entries(updates).filter(([k]) => allowed.includes(k)));
 
       const { data, error } = await supabase

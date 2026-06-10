@@ -224,6 +224,21 @@ tr:hover td{background:var(--bg2)}
 .kanban-card .kc-meta{font-size:11px;color:var(--text3);margin-bottom:8px}
 .kanban-card select{width:100%;font-size:12px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text2);font-family:inherit}
 @media(max-width:900px){.kanban{grid-template-columns:repeat(5,75vw)}}
+
+/* Calendar */
+.cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:6px}
+.cal-dow-row span{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;text-align:center;padding:6px 0}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal-cell{min-height:96px;border:1px solid var(--border);border-radius:8px;padding:6px;background:var(--bg);font-size:12px;overflow:hidden}
+.cal-cell.other{background:var(--bg2);opacity:.55}
+.cal-cell .d{font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:4px}
+.cal-cell.today{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
+.cal-cell.today .d{color:var(--brand)}
+.cal-evt{display:block;width:100%;text-align:left;border:none;color:#fff;font-size:10.5px;font-weight:600;border-radius:5px;padding:3px 6px;margin-bottom:3px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:inherit}
+.cal-evt.done{opacity:.45;text-decoration:line-through}
+.cal-more{font-size:10.5px;color:var(--text3);padding-left:2px}
+@media(max-width:700px){.cal-cell{min-height:64px}}
+
 .badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
 .badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
 .b-green{background:var(--green-bg);color:var(--green)}
@@ -770,6 +785,9 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Follow-ups
         <span id="followups-badge" style="display:none;background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;margin-left:auto"></span>
       </button>
+      <button class="sidebar-item" id="nav-calendar" onclick="switchPanel('calendar')">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Calendar
+      </button>
       <button class="sidebar-item" id="nav-recorder" onclick="switchPanel('recorder')">
         <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>Recorder
       </button>
@@ -1066,6 +1084,33 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         </div>
       </div>
 
+      <!-- Calendar -->
+      <div id="panel-calendar" class="hidden">
+        <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Calendar</h1>
+            <p style="font-size:14px;color:var(--text2);margin-top:4px">Every confirmed follow-up, call, and meeting.</p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-outline" style="font-size:13px;padding:7px 12px" onclick="calNav(-1)">◀</button>
+            <strong id="cal-label" class="num" style="min-width:150px;text-align:center;font-size:15px"></strong>
+            <button class="btn btn-outline" style="font-size:13px;padding:7px 12px" onclick="calNav(1)">▶</button>
+            <button class="btn btn-ghost" style="font-size:13px" onclick="calToday()">Today</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;font-size:12px;color:var(--text2);margin-bottom:12px;flex-wrap:wrap">
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--brand);vertical-align:-1px"></span> Call</span>
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--green);vertical-align:-1px"></span> SMS</span>
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#7C3AED;vertical-align:-1px"></span> Meeting</span>
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--warm);vertical-align:-1px"></span> Task</span>
+          <span style="opacity:.55">Faded = completed</span>
+        </div>
+        <div class="table-card" style="padding:14px">
+          <div class="cal-dow-row" id="cal-dow"></div>
+          <div class="cal-grid" id="cal-grid"></div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1134,6 +1179,37 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       </div>
     </div>
     <div id="email-error" class="alert alert-error hidden"></div>
+  </div>
+</div>
+
+<!-- ══ AI FOLLOW-UP CONFIRM MODAL ══════════════════════════════════════════ -->
+<div id="fc-modal" class="modal-overlay hidden" onclick="bgClose(event,'fc-modal')">
+  <div class="modal" style="max-width:500px">
+    <button class="modal-close" onclick="closeModal('fc-modal')">×</button>
+    <h2 id="fc-title">🤖 Aevaa suggests a follow-up</h2>
+    <p class="modal-sub" id="fc-sub">Based on your call — is this correct?</p>
+    <div style="background:var(--brand-light);border:1px solid #BAE6FD;border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px;font-size:13.5px" id="fc-context"></div>
+    <div class="form-group"><label>Activity</label>
+      <select id="fc-type">
+        <option value="call">📞 Call</option>
+        <option value="sms">💬 Text (SMS)</option>
+        <option value="meeting">🗓 Meeting</option>
+        <option value="task">✅ Task</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Title</label><input type="text" id="fc-title-input" placeholder="Call Liliana to confirm Wednesday demo"></div>
+    <div class="form-group"><label>When</label><input type="datetime-local" id="fc-when"></div>
+    <div class="form-group" id="fc-msg-group"><label id="fc-msg-label">Details</label><textarea id="fc-msg" style="height:70px"></textarea></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap" id="fc-actions-suggest">
+      <button class="btn btn-primary" onclick="fcConfirm()">✓ Add to calendar</button>
+      <button class="btn btn-ghost" onclick="fcDismiss()">Dismiss</button>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap" id="fc-actions-edit">
+      <button class="btn btn-primary" onclick="fcConfirm()">Save changes</button>
+      <button class="btn btn-outline" onclick="fcMarkDone()">Mark done</button>
+      <button class="btn btn-danger" onclick="fcDismiss()">Delete</button>
+    </div>
+    <div id="fc-error" class="alert alert-error hidden" style="margin-top:12px"></div>
   </div>
 </div>
 
@@ -1355,6 +1431,9 @@ async function enterApp() {
   loadDNC();
   refreshDashboard();
   updatePlanBadge();
+  // Surface any AI-suggested follow-ups awaiting review (e.g. from calls
+  // that finished analyzing while the app was closed)
+  setTimeout(() => checkSuggestedFollowUps(null), 2500);
 }
 
 function setNavLoggedIn() {
@@ -1374,7 +1453,7 @@ function showView(v) {
 }
 
 function switchPanel(p) {
-  ['dashboard','recorder','log','settings','contacts','followups','power','inbox'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
+  ['dashboard','recorder','log','settings','contacts','followups','power','inbox','calendar'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
   document.getElementById('panel-' + p).classList.remove('hidden');
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
   document.getElementById('nav-' + p)?.classList.add('active');
@@ -1385,6 +1464,7 @@ function switchPanel(p) {
   if (p === 'power') pdRender();
   if (p === 'inbox') loadInbox();
   if (p === 'settings') { loadDNC().then(renderDNC); }
+  if (p === 'calendar') renderCalendar();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -2304,12 +2384,19 @@ function setFuFilter(f) {
   loadFollowUps();
 }
 
+let suggestedCache = [];
 async function loadFollowUps() {
   const { data: { session } } = await db.auth.getSession();
   if (!session) return;
   try {
-    const r = await fetch('/api/follow-ups?status=' + fuFilter + '&limit=100', { headers: { Authorization: 'Bearer ' + session.access_token } });
+    const [r, rs] = await Promise.all([
+      fetch('/api/follow-ups?status=' + fuFilter + '&limit=100', { headers: { Authorization: 'Bearer ' + session.access_token } }),
+      fetch('/api/follow-ups?status=suggested&limit=50', { headers: { Authorization: 'Bearer ' + session.access_token } })
+    ]);
     followUpsCache = await r.json();
+    suggestedCache = await rs.json().catch(() => []);
+    if (!Array.isArray(suggestedCache)) suggestedCache = [];
+    if (fuFilter !== 'all') followUpsCache = (followUpsCache || []).filter(f => f.status !== 'suggested');
     renderFollowUps();
     updateFollowUpsBadge();
   } catch (e) {
@@ -2335,12 +2422,29 @@ async function updateFollowUpsBadge() {
 
 function renderFollowUps() {
   const list = followUpsCache;
-  if (!list.length) {
+  // AI suggestions awaiting review — always pinned on top
+  const suggestedHtml = (suggestedCache || []).length ? `
+    <div style="background:var(--brand-light);border:1px solid #BAE6FD;border-radius:var(--radius-sm);padding:14px 18px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:13.5px;margin-bottom:8px">🤖 Aevaa suggested ${suggestedCache.length} follow-up${suggestedCache.length === 1 ? '' : 's'} from your calls — review to add to the calendar</div>
+      ${suggestedCache.map(f => `
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 0;font-size:13px;flex-wrap:wrap">
+          <strong>${esc(displayName(f.contacts?.name, f.contacts?.phone))}</strong>
+          <span style="color:var(--text2);flex:1;min-width:140px">${esc(f.title || f.message || '')}</span>
+          <span style="color:var(--text3);font-size:12px" class="num">${new Date(f.scheduled_at).toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+          <button class="btn btn-primary" style="font-size:12px;padding:5px 12px" onclick='openFollowUpModal(${JSON.stringify(f).replace(/'/g, "&#39;")}, "suggest")'>Review</button>
+        </div>`).join('')}
+    </div>` : '';
+
+  if (!list.length && !suggestedHtml) {
     document.getElementById('followups-list').innerHTML = '<p style="color:var(--text3);padding:20px;text-align:center">No follow-ups found.</p>';
     return;
   }
+  if (!list.length) {
+    document.getElementById('followups-list').innerHTML = suggestedHtml + '<p style="color:var(--text3);padding:20px;text-align:center">No confirmed follow-ups yet.</p>';
+    return;
+  }
   const now = new Date();
-  const html = list.map(f => {
+  const html = suggestedHtml + list.map(f => {
     const scheduled = new Date(f.scheduled_at);
     const overdue = f.status === 'pending' && scheduled < now;
     const sent = f.status === 'sent';
@@ -2354,11 +2458,13 @@ function renderFollowUps() {
           ${overdue ? '<span style="font-size:11px;background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:99px;font-weight:600">OVERDUE</span>' : ''}
           ${sent ? '<span style="font-size:11px;background:#d1fae5;color:#059669;padding:2px 8px;border-radius:99px;font-weight:600">SENT</span>' : ''}
         </div>
+        ${f.title ? `<div style="font-size:13.5px;font-weight:600;margin-bottom:2px">${esc(f.title)}</div>` : ''}
         <div style="font-size:13px;color:var(--text2);margin-bottom:6px">${esc(f.message||'')}</div>
         <div style="font-size:12px;color:var(--text3)">Scheduled: ${scheduled.toLocaleString()}${sent && f.sent_at ? ' · Sent: ' + new Date(f.sent_at).toLocaleString() : ''}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
-        ${!sent ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="sendFollowUpNow('${f.id}')">Send now</button>` : ''}
+        ${!sent && f.type === 'sms' ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="sendFollowUpNow('${f.id}')">Send now</button>` : ''}
+        ${!sent ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 12px" onclick='openFollowUpModal(${JSON.stringify(f).replace(/'/g, "&#39;")}, "edit")'>Edit</button>` : ''}
         <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="deleteFollowUp('${f.id}')">✕</button>
       </div>
     </div>`;
@@ -2455,6 +2561,168 @@ async function saveNewFollowUp() {
 
 // Poll for overdue badge on app load
 setTimeout(updateFollowUpsBadge, 3000);
+
+/* ═══════════════════════════════════════════════════════
+   AI FOLLOW-UP SUGGESTION → CONFIRM → CALENDAR
+═══════════════════════════════════════════════════════ */
+let fcCurrent = null; // { row, mode: 'suggest' | 'edit' }
+
+function toLocalInput(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+async function fuFetch(path, opts = {}) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) throw new Error('Not signed in');
+  const r = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token, ...(opts.headers || {}) } });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Request failed');
+  return d;
+}
+
+function openFollowUpModal(row, mode) {
+  fcCurrent = { row, mode };
+  const who = displayName(row.contacts?.name, row.contacts?.phone);
+  document.getElementById('fc-title').textContent = mode === 'suggest' ? '🤖 Aevaa suggests a follow-up' : 'Edit follow-up';
+  document.getElementById('fc-sub').textContent = mode === 'suggest' ? 'Based on your call — is this correct?' : '';
+  document.getElementById('fc-context').innerHTML = `<strong>${esc(who)}</strong>${row.contacts?.phone ? ' · ' + esc(fmtPhone(row.contacts.phone)) : ''}`;
+  document.getElementById('fc-type').value = ['call','sms','meeting','task'].includes(row.type) ? row.type : 'task';
+  document.getElementById('fc-title-input').value = row.title || '';
+  document.getElementById('fc-when').value = toLocalInput(row.scheduled_at);
+  document.getElementById('fc-msg').value = row.message || '';
+  fcSyncMsgLabel();
+  document.getElementById('fc-actions-suggest').style.display = mode === 'suggest' ? 'flex' : 'none';
+  document.getElementById('fc-actions-edit').style.display = mode === 'edit' ? 'flex' : 'none';
+  document.getElementById('fc-error').classList.add('hidden');
+  document.getElementById('fc-modal').classList.remove('hidden');
+}
+function fcSyncMsgLabel() {
+  const t = document.getElementById('fc-type').value;
+  document.getElementById('fc-msg-label').textContent = t === 'sms' ? 'Text message to send' : 'Details';
+}
+document.addEventListener('change', e => { if (e.target && e.target.id === 'fc-type') fcSyncMsgLabel(); });
+
+async function fcConfirm() {
+  if (!fcCurrent) return;
+  try {
+    const when = document.getElementById('fc-when').value;
+    if (!when) throw new Error('Pick a date and time');
+    await fuFetch('/api/follow-ups', {
+      method: 'PUT',
+      body: JSON.stringify({
+        id: fcCurrent.row.id,
+        status: 'pending',
+        type: document.getElementById('fc-type').value,
+        title: document.getElementById('fc-title-input').value.trim(),
+        message: document.getElementById('fc-msg').value.trim(),
+        scheduled_at: new Date(when).toISOString()
+      })
+    });
+    closeModal('fc-modal');
+    fcCurrent = null;
+    loadFollowUps();
+    if (!document.getElementById('panel-calendar').classList.contains('hidden')) renderCalendar();
+    // queue the next suggestion if more are waiting
+    setTimeout(() => checkSuggestedFollowUps(null), 400);
+  } catch (e) {
+    const el = document.getElementById('fc-error');
+    el.textContent = e.message; el.classList.remove('hidden');
+  }
+}
+async function fcDismiss() {
+  if (!fcCurrent) return;
+  if (fcCurrent.mode === 'edit' && !confirm('Delete this follow-up?')) return;
+  try {
+    await fuFetch('/api/follow-ups?id=' + fcCurrent.row.id, { method: 'DELETE' });
+    closeModal('fc-modal');
+    fcCurrent = null;
+    loadFollowUps();
+    if (!document.getElementById('panel-calendar').classList.contains('hidden')) renderCalendar();
+    setTimeout(() => checkSuggestedFollowUps(null), 400);
+  } catch (e) {
+    const el = document.getElementById('fc-error');
+    el.textContent = e.message; el.classList.remove('hidden');
+  }
+}
+async function fcMarkDone() {
+  if (!fcCurrent) return;
+  try {
+    await fuFetch('/api/follow-ups', { method: 'PUT', body: JSON.stringify({ id: fcCurrent.row.id, status: 'sent', sent_at: new Date().toISOString() }) });
+    closeModal('fc-modal');
+    fcCurrent = null;
+    loadFollowUps();
+    renderCalendar();
+  } catch (e) {
+    const el = document.getElementById('fc-error');
+    el.textContent = e.message; el.classList.remove('hidden');
+  }
+}
+
+// Find AI suggestions awaiting review; prefer the one tied to callId
+async function checkSuggestedFollowUps(callId) {
+  try {
+    if (!document.getElementById('fc-modal').classList.contains('hidden')) return; // one at a time
+    const list = await fuFetch('/api/follow-ups?status=suggested&limit=20');
+    if (!Array.isArray(list) || !list.length) return;
+    const row = (callId && list.find(f => f.call_id === callId)) || list[0];
+    openFollowUpModal(row, 'suggest');
+  } catch (e) { console.warn('suggestion check failed', e); }
+}
+window.addEventListener('cb:analysis-ready', e => checkSuggestedFollowUps(e.detail?.callId || null));
+
+/* ── Calendar ── */
+let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+const FU_COLORS = { call: 'var(--brand)', sms: 'var(--green)', meeting: '#7C3AED', task: 'var(--warm)' };
+
+function calNav(dir) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + dir, 1); renderCalendar(); }
+function calToday() { calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1); renderCalendar(); }
+
+async function renderCalendar() {
+  const grid = document.getElementById('cal-grid');
+  if (!grid) return;
+  document.getElementById('cal-label').textContent = calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  document.getElementById('cal-dow').innerHTML = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<span>${d}</span>`).join('');
+
+  let events = [];
+  try {
+    const all = await fuFetch('/api/follow-ups?status=all&limit=300');
+    events = (all || []).filter(f => f.status === 'pending' || f.status === 'sent');
+  } catch (e) { console.warn('calendar load failed', e); }
+
+  const byDay = {};
+  events.forEach(f => {
+    const d = new Date(f.scheduled_at);
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    (byDay[key] = byDay[key] || []).push(f);
+  });
+
+  const first = new Date(calMonth);
+  const startDow = first.getDay();
+  const cells = [];
+  const start = new Date(first); start.setDate(1 - startDow);
+  const today = new Date();
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const inMonth = d.getMonth() === calMonth.getMonth();
+    const isToday = d.toDateString() === today.toDateString();
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    const evts = (byDay[key] || []).sort((a,b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+    const shown = evts.slice(0, 3);
+    cells.push(`<div class="cal-cell ${inMonth ? '' : 'other'} ${isToday ? 'today' : ''}">
+      <div class="d num">${d.getDate()}</div>
+      ${shown.map(f => {
+        const t = new Date(f.scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(' ', '');
+        const label = f.title || f.message || f.type;
+        return `<button class="cal-evt ${f.status === 'sent' ? 'done' : ''}" style="background:${FU_COLORS[f.type] || 'var(--brand)'}" title="${esc(label)}" onclick='openFollowUpModal(${JSON.stringify(f).replace(/'/g, "&#39;")}, "edit")'>${t} ${esc(label)}</button>`;
+      }).join('')}
+      ${evts.length > 3 ? `<div class="cal-more">+${evts.length - 3} more</div>` : ''}
+    </div>`);
+  }
+  grid.innerHTML = cells.join('');
+}
 
 /* ═══════════════════════════════════════════════════════
    POWER DIALER

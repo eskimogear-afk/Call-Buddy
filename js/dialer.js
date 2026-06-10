@@ -170,10 +170,29 @@ async function pollForCallRecord(startedAt, attempt) {
       setStatus('🟢 Ready to call');
       if (typeof renderLog === 'function') renderLog();
       if (typeof refreshDashboard === 'function') refreshDashboard();
+      // Keep watching for the AI analysis + suggested follow-up popup
+      pollForAnalysis(data[0].id, 0);
       return;
     }
   } catch (e) { console.error('Poll error:', e); }
   setTimeout(() => pollForCallRecord(startedAt, attempt + 1), 3000);
+}
+
+// After the call record exists, wait for transcription + AI analysis to finish,
+// then let the app surface the AI-suggested follow-up confirmation popup
+async function pollForAnalysis(callId, attempt) {
+  if (attempt >= 25) return; // ~100s budget
+  try {
+    const { data } = await db.from('calls').select('id, transcript').eq('id', callId).single();
+    const t = String(data?.transcript || '');
+    if (t && !t.startsWith('PENDING:')) {
+      if (typeof renderLog === 'function') renderLog();
+      if (typeof refreshDashboard === 'function') refreshDashboard();
+      window.dispatchEvent(new CustomEvent('cb:analysis-ready', { detail: { callId } }));
+      return;
+    }
+  } catch (e) { console.error('Analysis poll error:', e); }
+  setTimeout(() => pollForAnalysis(callId, attempt + 1), 4000);
 }
 
 function hangUp() {
