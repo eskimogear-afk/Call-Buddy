@@ -1596,8 +1596,9 @@ function buildTable(recs) {
     // Rows come from two flows: browser recorder (prospect_name/outcome/ai_summary)
     // and the dialer pipeline (to_number/heat_score/notes/transcript)
     const name = r.prospect_name || '';
-    const phone = r.phone || r.to_number || '';
-    const display = name || phone || 'Unknown';
+    const phone = r.phone || r.to_number || r.from_number || '';
+    const display = displayName(name, phone);
+    const hasRealName = display !== fmtPhone(phone);
     const heat = r.heat_score || '';
     const pending = String(r.transcript || '').startsWith('PENDING:');
     const transcript = pending ? '' : String(r.transcript || '');
@@ -1605,7 +1606,7 @@ function buildTable(recs) {
     const summary = pending && !rawSummary ? '⏳ AI is transcribing this call…' : rawSummary;
     const next = r.next_steps || r.next_step || '';
     const sentiment = r.sentiment === 'positive' ? '😊 Positive' : r.sentiment === 'negative' ? '😕 Negative' : r.sentiment ? '😐 Neutral' : '';
-    const initials = (name ? name.split(/\s+/).map(w => w[0]).slice(0, 2).join('') : (phone ? phone.replace(/\D/g, '').slice(-2) : '?')).toUpperCase();
+    const initials = (hasRealName ? display.split(/\s+/).map(w => w[0]).slice(0, 2).join('') : (phone ? String(phone).replace(/\D/g, '').slice(-2) : '?')).toUpperCase();
     const color = AVATAR_COLORS[heat] || '#0369A1';
     const outcomeBadge = r.outcome ? badge(r.outcome) : (heat ? heatBadge(heat) : '');
     const when = `${timeAgo(r.created_at)}${(r.duration_seconds || r.duration) ? ' · ' + fmtDuration(r.duration_seconds || r.duration) : ''}`;
@@ -1616,7 +1617,7 @@ function buildTable(recs) {
         <div class="cc-avatar" style="background:${color}">${esc(initials)}</div>
         <div class="cc-main">
           <div class="cc-name">${esc(display)} ${outcomeBadge}</div>
-          <div class="cc-sub">${company}${esc(phone)} · ${when}</div>
+          <div class="cc-sub">${company}${hasRealName && phone ? esc(fmtPhone(phone)) + ' · ' : ''}${when}</div>
           ${summary ? `<div class="cc-summary">${esc(summary)}</div>` : ''}
         </div>
         <div class="cc-right"><span class="cc-chevron">▼</span></div>
@@ -1956,7 +1957,7 @@ function renderContactBoard(rows) {
         const heat = c.heat_score || '';
         const hc = heat === 'Hot' ? '#dc2626' : heat === 'Warm' ? '#f59e0b' : '#6b7280';
         return `<div class="kanban-card">
-          <div class="kc-name">${esc(c.name || 'Unknown')}${heat ? ` <span style="color:${hc};font-size:11px;font-weight:700">● ${heat}</span>` : ''}</div>
+          <div class="kc-name">${esc(displayName(c.name, c.phone))}${heat ? ` <span style="color:${hc};font-size:11px;font-weight:700">● ${heat}</span>` : ''}</div>
           <div class="kc-meta">${esc(c.phone || '')}${c.company ? ' · ' + esc(c.company) : ''}</div>
           <select onchange="moveContactStage('${c.id}', this.value)">
             ${stages.map(x => `<option value="${x}" ${x === s ? 'selected' : ''}>${STAGE_LABELS[x]}</option>`).join('')}
@@ -2001,15 +2002,15 @@ function renderContacts() {
         const nfu = c.next_follow_up_at ? new Date(c.next_follow_up_at).toLocaleDateString() : '—';
         const stage = c.stage || 'new';
         return `<tr style="border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
-          <td style="padding:10px 14px;font-weight:500">${esc(c.name||'Unknown')}</td>
-          <td style="padding:10px 14px;color:var(--text2)">${esc(c.phone||'—')}</td>
+          <td style="padding:10px 14px;font-weight:500">${esc(displayName(c.name, c.phone))}</td>
+          <td style="padding:10px 14px;color:var(--text2)">${esc(fmtPhone(c.phone)||'—')}</td>
           <td style="padding:10px 14px;color:var(--text2)">${esc(c.company||'—')}</td>
           <td style="padding:10px 14px"><span style="background:${STAGE_COLORS[stage]}22;color:${STAGE_COLORS[stage]};font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px">${STAGE_LABELS[stage]||stage}</span></td>
           <td style="padding:10px 14px"><span style="color:${hc};font-weight:600;font-size:13px">${heat}</span></td>
           <td style="padding:10px 14px;color:var(--text2)">${c.call_count||0}</td>
           <td style="padding:10px 14px;color:var(--text2);font-size:13px">${nfu}</td>
           <td style="padding:10px 14px">
-            <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="openContactFollowUp('${c.id}','${esc(c.name||'Unknown')}')">Follow-up</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="openContactFollowUp('${c.id}','${esc(displayName(c.name, c.phone))}')">Follow-up</button>
             <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="deleteContact('${c.id}')">Delete</button>
           </td>
         </tr>`;
@@ -2019,6 +2020,25 @@ function renderContacts() {
 }
 
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// Format a phone for display: pretty-print full US numbers, otherwise show
+// whatever digits we have (partial/restricted caller IDs included)
+function fmtPhone(p) {
+  const raw = String(p || '').trim();
+  if (!raw) return '';
+  const d = raw.replace(/\D/g, '');
+  if (d.length === 11 && d[0] === '1') return `(${d.slice(1,4)}) ${d.slice(4,7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;
+  return raw; // partial or non-standard — show as many digits as we have
+}
+
+// Prefer a real name; fall back to the phone number rather than "Unknown"
+function displayName(name, phone) {
+  const n = String(name || '').trim();
+  if (n && n.toLowerCase() !== 'unknown') return n;
+  const p = fmtPhone(phone);
+  return p || 'Unknown';
+}
 
 function openAddContactModal() {
   document.getElementById('ac-name').value = '';
@@ -2124,8 +2144,8 @@ function renderFollowUps() {
     return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px 20px;margin-bottom:10px;display:flex;gap:14px;align-items:flex-start">
       <div style="flex:1">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
-          <strong>${esc(contact?.name||'Unknown')}</strong>
-          <span style="font-size:12px;color:var(--text3)">${esc(contact?.phone||'')}</span>
+          <strong>${esc(displayName(contact?.name, contact?.phone))}</strong>
+          <span style="font-size:12px;color:var(--text3)">${esc(fmtPhone(contact?.phone))}</span>
           <span style="font-size:11px;background:${f.type==='sms'?'#dbeafe':'#f3f4f6'};color:${f.type==='sms'?'#1d4ed8':'#6b7280'};padding:2px 8px;border-radius:99px;font-weight:600">${f.type?.toUpperCase()||'SMS'}</span>
           ${overdue ? '<span style="font-size:11px;background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:99px;font-weight:600">OVERDUE</span>' : ''}
           ${sent ? '<span style="font-size:11px;background:#d1fae5;color:#059669;padding:2px 8px;border-radius:99px;font-weight:600">SENT</span>' : ''}
@@ -2172,7 +2192,7 @@ async function deleteFollowUp(id) {
 function openAddFollowUpModal() {
   const sel = document.getElementById('fu-contact-select');
   sel.innerHTML = '<option value="">Select contact...</option>' +
-    contactsCache.map(c => `<option value="${c.id}">${esc(c.name||'Unknown')} — ${esc(c.phone||'')}</option>`).join('');
+    contactsCache.map(c => `<option value="${c.id}">${esc(displayName(c.name, c.phone))} — ${esc(fmtPhone(c.phone))}</option>`).join('');
   if (!contactsCache.length) {
     // reload contacts in background
     db.auth.getSession().then(({ data: { session } }) => {
@@ -2181,7 +2201,7 @@ function openAddFollowUpModal() {
         .then(r => r.json()).then(data => {
           contactsCache = data;
           sel.innerHTML = '<option value="">Select contact...</option>' +
-            contactsCache.map(c => `<option value="${c.id}">${esc(c.name||'Unknown')} — ${esc(c.phone||'')}</option>`).join('');
+            contactsCache.map(c => `<option value="${c.id}">${esc(displayName(c.name, c.phone))} — ${esc(fmtPhone(c.phone))}</option>`).join('');
         });
     });
   }
@@ -2332,8 +2352,8 @@ function pdRender() {
   queueEl.innerHTML = `<div class="table-card">${pdQueue.map((l, i) => `
     <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);font-size:13px;${l.status === 'calling' ? 'background:var(--brand-light)' : ''}">
       <span style="font-size:15px">${statusIcon[l.status] || '⚪'}</span>
-      <strong style="min-width:140px">${esc(l.name || 'Unknown')}</strong>
-      <span style="color:var(--text2)">${esc(l.phone)}</span>
+      <strong style="min-width:140px">${esc(displayName(l.name, l.phone))}</strong>
+      <span style="color:var(--text2)">${esc(fmtPhone(l.phone))}</span>
       <span style="color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.company || '')}</span>
       ${l.status === 'pending' ? `<button class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="pdDialOne(${i})">Call now</button>` : ''}
       ${l.status === 'calling' ? '<span style="color:var(--brand);font-weight:600;font-size:12px">On call…</span>' : ''}
@@ -2480,9 +2500,9 @@ function renderInboxThreads() {
   }
   el.innerHTML = `<div class="table-card">${threads.map(t => `
     <div onclick="openThread('${esc(t.phone)}')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
-      <div class="cc-avatar" style="background:${t.unread ? 'var(--brand)' : '#9CA3AF'};width:38px;height:38px;font-size:13px">${esc((t.name || t.phone.replace(/\D/g, '').slice(-2)).split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</div>
+      <div class="cc-avatar" style="background:${t.unread ? 'var(--brand)' : '#9CA3AF'};width:38px;height:38px;font-size:13px">${esc((t.name && t.name.toLowerCase() !== 'unknown' ? t.name.split(/\s+/).map(w => w[0]).slice(0, 2).join('') : t.phone.replace(/\D/g, '').slice(-2)).toUpperCase())}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:${t.unread ? '700' : '600'}">${esc(t.name || t.phone)} ${t.company ? `<span style="font-weight:400;color:var(--text3);font-size:12px">· ${esc(t.company)}</span>` : ''}</div>
+        <div style="font-size:14px;font-weight:${t.unread ? '700' : '600'}">${esc(displayName(t.name, t.phone))} ${t.company ? `<span style="font-weight:400;color:var(--text3);font-size:12px">· ${esc(t.company)}</span>` : ''}</div>
         <div style="font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${t.unread ? 'font-weight:600;color:var(--text)' : ''}">${t.last.direction === 'outbound' ? 'You: ' : ''}${esc(t.last.body)}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
@@ -2497,8 +2517,8 @@ async function openThread(phone) {
   document.getElementById('inbox-threads').classList.add('hidden');
   document.getElementById('inbox-thread-view').classList.remove('hidden');
   const t = groupThreads(inboxCache).find(x => x.phone === phone);
-  document.getElementById('thread-name').textContent = t?.name || phone;
-  document.getElementById('thread-phone').textContent = t?.name ? phone : '';
+  document.getElementById('thread-name').textContent = displayName(t?.name, phone);
+  document.getElementById('thread-phone').textContent = (t?.name && t.name.toLowerCase() !== 'unknown') ? fmtPhone(phone) : '';
   renderThreadMessages();
   // mark read + clear badge
   inboxFetch('/api/twilio-sms', { method: 'PUT', body: JSON.stringify({ phone }) })
