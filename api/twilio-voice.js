@@ -71,12 +71,17 @@ export default async function handler(req, res) {
   // Build Dial verb — omit callerId attribute if we don't have one so Twilio uses account default
   const callerIdAttr = callerId ? ` callerId="${callerId}"` : '';
 
+  // & in the callback URL must be XML-escaped or Twilio fails to parse the TwiML;
+  // strip everything but digits/+ from To (it's user input going into XML)
+  const recordingCallbackXml = recordingCallback.replace(/&/g, '&amp;');
+  const safeTo = To.replace(/[^\d+]/g, '');
+
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial record="record-from-answer-dual"
-        recordingStatusCallback="${recordingCallback}"
+        recordingStatusCallback="${recordingCallbackXml}"
         recordingStatusCallbackMethod="POST"${callerIdAttr}>
-    <Number>${To}</Number>
+    <Number>${safeTo}</Number>
   </Dial>
 </Response>`;
 
