@@ -110,15 +110,13 @@ export default async function handler(req, res) {
         .single();
       if (error) throw error;
 
-      // Update contact's next_follow_up_at if this is sooner
-      await supabase.rpc('update_contact_next_followup', {
-        p_contact_id: contact_id,
-        p_user_id: user.id
-      }).catch(() => {
-        // RPC might not exist — update directly
-        return supabase.from('contacts').update({ next_follow_up_at: scheduled_at })
-          .eq('id', contact_id).eq('user_id', user.id);
-      });
+      // Keep the contact's next_follow_up_at fresh (Supabase builders are
+      // thenables without .catch — the old rpc().catch() here threw a
+      // TypeError AFTER the insert, surfacing a false error to the user)
+      const { error: nfuErr } = await supabase.from('contacts')
+        .update({ next_follow_up_at: scheduled_at })
+        .eq('id', contact_id).eq('user_id', user.id);
+      if (nfuErr) console.error('next_follow_up_at update failed:', nfuErr.message);
 
       return res.status(201).json(data);
     }
