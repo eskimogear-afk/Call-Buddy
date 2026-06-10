@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PitchLog - AI Cold Call Tracker for Loan Officers</title>
 <meta name="description" content="PitchLog listens to your cold calls, transcribes in real time, and automatically logs every prospect. Built for sales professionals in any industry.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%236366F1%22/><text y=%22.9em%22 font-size=%2280%22>&#127908;</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230369A1%22/><text y=%22.9em%22 font-size=%2280%22>&#127908;</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -17,13 +17,19 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --brand:#6366F1;--brand-light:#EEF2FF;--brand-dark:#3730A3;--brand-mid:#4F46E5;
-  --text:#16191C;--text2:#4B5563;--text3:#9CA3AF;
-  --bg:#FFFFFF;--bg2:#F8FAFB;--bg3:#F1F5F0;
-  --border:#E5E7EB;--danger:#DC2626;--danger-light:#FEE2E2;
+  --brand:#0369A1;--brand-light:#E0F2FE;--brand-dark:#075985;--brand-mid:#0284C7;
+  --navy:#0F172A;
+  --text:#020617;--text2:#475569;--text3:#94A3B8;
+  --bg:#FFFFFF;--bg2:#F8FAFC;--bg3:#F1F5F9;
+  --border:#E2E8F0;--danger:#DC2626;--danger-light:#FEF2F2;
+  --hot:#DC2626;--hot-bg:#FEF2F2;--warm:#D97706;--warm-bg:#FFFBEB;--cold:#0369A1;--cold-bg:#EFF6FF;
+  --green:#059669;--green-bg:#ECFDF5;
   --radius:12px;--radius-sm:8px;--radius-xs:6px;
+  --shadow-sm:0 1px 2px rgba(15,23,42,.05);
+  --shadow:0 1px 3px rgba(15,23,42,.06),0 4px 12px rgba(15,23,42,.04);
 }
-body{font-family:'Inter',sans-serif;color:var(--text);background:var(--bg);line-height:1.6;min-height:100vh}
+body{font-family:'Inter',sans-serif;font-size:14px;color:var(--text);background:var(--bg);line-height:1.6;min-height:100vh;-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}
 .btn{font-family:'Inter',sans-serif!important}
 a{color:inherit;text-decoration:none}
 
@@ -53,7 +59,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:16px 4
 /* Landing */
 .hero{text-align:center;padding:88px 48px 72px;background:linear-gradient(180deg,#F5F3FF 0%,#fff 100%)}
 .hero-badge{display:inline-flex;align-items:center;gap:6px;background:var(--brand-light);color:var(--brand-dark);font-size:12px;font-weight:600;padding:5px 14px;border-radius:99px;margin-bottom:28px}
-.hero h1{font-family:'DM Serif Display',serif;font-size:54px;font-weight:400;line-height:1.12;max-width:660px;margin:0 auto 20px}
+.hero h1{font-family:'Plus Jakarta Sans',sans-serif;font-size:54px;font-weight:400;line-height:1.12;max-width:660px;margin:0 auto 20px}
 .hero h1 em{color:var(--brand);font-style:normal}
 .hero p{font-size:19px;color:var(--text2);max-width:500px;margin:0 auto 40px;line-height:1.7}
 .hero-ctas{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
@@ -61,7 +67,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:16px 4
 .section{padding:72px 48px}
 .section-bg{background:var(--bg2)}
 .section-label{font-size:11px;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:1.5px;text-align:center;margin-bottom:10px}
-.section-title{font-family:'DM Serif Display',serif;font-size:38px;font-weight:400;text-align:center;margin-bottom:12px}
+.section-title{font-family:'Plus Jakarta Sans',sans-serif;font-size:38px;font-weight:400;text-align:center;margin-bottom:12px}
 .section-sub{font-size:16px;color:var(--text2);text-align:center;max-width:500px;margin:0 auto 52px;line-height:1.7}
 .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:920px;margin:0 auto}
 .feat-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:28px 24px;transition:all .2s;cursor:default}
@@ -79,7 +85,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:16px 4
 .price-card.featured{border-color:var(--brand)}
 .price-popular{display:inline-block;background:var(--brand);color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;margin-bottom:14px}
 .price-name{font-size:16px;font-weight:600;margin-bottom:8px}
-.price-amount{font-family:'DM Serif Display',serif;font-size:44px;line-height:1;margin-bottom:6px}
+.price-amount{font-family:'Plus Jakarta Sans',sans-serif;font-size:44px;line-height:1;margin-bottom:6px}
 .price-amount sub{font-family:'DM Sans',sans-serif;font-size:14px;font-weight:400;color:var(--text2)}
 .price-desc{font-size:13px;color:var(--text2);margin-bottom:24px;line-height:1.5}
 .price-features{list-style:none;margin-bottom:28px;display:flex;flex-direction:column;gap:10px}
@@ -100,7 +106,7 @@ footer{background:var(--text);padding:48px;display:flex;align-items:center;justi
 /* Auth modal */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999;padding:20px}
 .modal{background:var(--bg);border-radius:var(--radius);padding:36px;width:100%;max-width:420px}
-.modal h2{font-family:'DM Serif Display',serif;font-size:26px;font-weight:400;margin-bottom:6px}
+.modal h2{font-family:'Plus Jakarta Sans',sans-serif;font-size:26px;font-weight:400;margin-bottom:6px}
 .modal-sub{font-size:14px;color:var(--text2);margin-bottom:24px}
 .form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
 .form-group label{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
@@ -116,20 +122,23 @@ footer{background:var(--text);padding:48px;display:flex;align-items:center;justi
 
 /* App */
 .app-layout{display:flex;min-height:calc(100vh - 69px)}
-.sidebar{width:224px;flex-shrink:0;border-right:1px solid var(--border);padding:20px 14px;display:flex;flex-direction:column;gap:2px}
-.sidebar-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);font-size:14px;color:var(--text2);cursor:pointer;border:none;background:none;font-family:'DM Sans',sans-serif;width:100%;text-align:left;transition:all .15s}
+.sidebar{width:236px;flex-shrink:0;border-right:1px solid var(--border);padding:14px 12px;display:flex;flex-direction:column;gap:2px;background:var(--bg)}
+.nav-label{font-size:10.5px;font-weight:700;letter-spacing:1.2px;color:var(--text3);padding:14px 10px 6px;font-family:'Inter',sans-serif}
+.sidebar-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);font-size:13.5px;font-weight:500;color:var(--text2);cursor:pointer;border:none;background:none;font-family:'Inter',sans-serif;width:100%;text-align:left;transition:all .12s;position:relative}
 .sidebar-item:hover{background:var(--bg2);color:var(--text)}
-.sidebar-item.active{background:var(--brand-light);color:var(--brand-dark);font-weight:500}
-.sidebar-item svg{width:17px;height:17px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sidebar-item.active{background:var(--brand-light);color:var(--brand);font-weight:600}
+.sidebar-item.active::before{content:'';position:absolute;left:-12px;top:6px;bottom:6px;width:3px;border-radius:0 3px 3px 0;background:var(--brand)}
+.sidebar-item svg{width:17px;height:17px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .sidebar-divider{height:1px;background:var(--border);margin:6px 0}
-.sidebar-plan{margin-top:auto;padding:14px;background:var(--bg2);border-radius:var(--radius-sm);font-size:12px;color:var(--text2)}
-.sidebar-plan strong{display:block;color:var(--text);font-size:13px;margin-bottom:4px}
-.main-content{flex:1;padding:32px;overflow-y:auto;background:var(--bg2);min-width:0}
+.sidebar-plan{margin-top:auto;padding:14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text2)}
+.sidebar-plan strong{display:block;color:var(--text);font-size:12.5px;margin-bottom:4px;font-weight:600}
+.main-content{flex:1;padding:28px 32px;overflow-y:auto;background:var(--bg2);min-width:0}
 
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
-.stat-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px 18px}
-.stat-val{font-family:'DM Serif Display',serif;font-size:32px;color:var(--text)}
-.stat-lbl{font-size:12px;color:var(--text2);margin-top:2px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.stat-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow-sm);transition:box-shadow .15s}
+.stat-card:hover{box-shadow:var(--shadow)}
+.stat-val{font-family:'Plus Jakarta Sans',sans-serif;font-size:26px;font-weight:700;letter-spacing:-.5px;color:var(--text);font-variant-numeric:tabular-nums}
+.stat-lbl{font-size:12.5px;font-weight:500;color:var(--text2);margin-top:4px}
 
 .recorder-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:24px}
 .card-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg2)}
@@ -139,11 +148,11 @@ footer{background:var(--text);padding:48px;display:flex;align-items:center;justi
 
 .rec-center{text-align:center;padding:12px 0 24px}
 .rec-btn{width:90px;height:90px;border-radius:50%;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .2s;margin-bottom:18px}
-.rec-btn.idle{background:linear-gradient(135deg,#6366F1,#7C3AED)}
+.rec-btn.idle{background:linear-gradient(135deg,#0369A1,#0F172A)}
 .rec-btn.recording{background:var(--danger);animation:pulse 1.4s ease-in-out infinite}
 .rec-btn.processing{background:var(--text3);cursor:not-allowed}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.3)}50%{box-shadow:0 0 0 16px rgba(220,38,38,0)}}
-.rec-timer{font-family:'DM Serif Display',serif;font-size:44px;color:var(--text);margin:10px 0;display:none}
+.rec-timer{font-family:'Plus Jakarta Sans',sans-serif;font-size:44px;color:var(--text);margin:10px 0;display:none}
 .rec-wave{display:flex;align-items:center;justify-content:center;gap:3px;height:34px;margin:6px 0;display:none}
 .rec-wave span{display:inline-block;width:4px;background:var(--brand);border-radius:2px;animation:wave 1s ease-in-out infinite}
 .rec-wave span:nth-child(1){animation-delay:0s;height:8px}
@@ -170,9 +179,9 @@ footer{background:var(--text);padding:48px;display:flex;align-items:center;justi
 .dot-pulse{width:8px;height:8px;border-radius:50%;background:var(--brand);animation:dotPulse 1.2s infinite}
 @keyframes dotPulse{0%,80%,100%{opacity:.2}40%{opacity:1}}
 
-.table-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.table-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px}
-.table-header h2{font-size:16px;font-weight:600}
+.table-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-sm)}
+.table-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px}
+.table-header h2{font-family:'Plus Jakarta Sans',sans-serif;font-size:14.5px;font-weight:700;letter-spacing:-.2px}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px}
 th{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
@@ -182,14 +191,14 @@ tr:hover td{background:var(--bg2)}
 .empty-state{text-align:center;padding:52px 20px;color:var(--text3);font-size:14px}
 
 /* CRM call cards */
-.call-card{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;background:var(--bg);transition:box-shadow .15s;overflow:hidden}
-.call-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.07)}
+.call-card{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;background:var(--bg);transition:all .15s;overflow:hidden;box-shadow:var(--shadow-sm)}
+.call-card:hover{box-shadow:var(--shadow);border-color:#CBD5E1}
 .cc-head{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer}
-.cc-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0}
+.cc-avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;color:#fff;flex-shrink:0}
 .cc-main{flex:1;min-width:0}
-.cc-name{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cc-name{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .cc-sub{font-size:12px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cc-summary{font-size:13px;color:var(--text2);margin-top:4px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.cc-summary{font-size:12.5px;color:var(--text2);margin-top:5px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
 .cc-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .cc-chevron{color:var(--text3);transition:transform .2s;font-size:12px}
 .call-card.open .cc-chevron{transform:rotate(180deg)}
@@ -215,12 +224,13 @@ tr:hover td{background:var(--bg2)}
 .kanban-card .kc-meta{font-size:11px;color:var(--text3);margin-bottom:8px}
 .kanban-card select{width:100%;font-size:12px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text2);font-family:inherit}
 @media(max-width:900px){.kanban{grid-template-columns:repeat(5,75vw)}}
-.badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px}
-.b-green{background:#E0E7FF;color:#3730A3}
-.b-red{background:var(--danger-light);color:#991B1B}
-.b-amber{background:#FEF3C7;color:#92400E}
-.b-blue{background:#DBEAFE;color:#1E40AF}
-.b-gray{background:#F3F4F6;color:#374151}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
+.badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+.b-green{background:var(--green-bg);color:var(--green)}
+.b-red{background:var(--hot-bg);color:var(--hot)}
+.b-amber{background:var(--warm-bg);color:var(--warm)}
+.b-blue{background:var(--cold-bg);color:var(--cold)}
+.b-gray{background:#F1F5F9;color:#475569}
 
 .settings-section{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:20px}
 .settings-section h3{font-size:15px;font-weight:600;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
@@ -231,7 +241,7 @@ tr:hover td{background:var(--bg2)}
 .upgrade-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
 .upgrade-card{border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:20px}
 .upgrade-card.featured{border-color:var(--brand);background:var(--brand-light)}
-.upgrade-price{font-family:'DM Serif Display',serif;font-size:32px;margin:8px 0 4px}
+.upgrade-price{font-family:'Plus Jakarta Sans',sans-serif;font-size:32px;margin:8px 0 4px}
 .upgrade-price sub{font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text2)}
 
 .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle}
@@ -260,7 +270,7 @@ tr:hover td{background:var(--bg2)}
 .mtr-line{font-size:11.5px;color:#374151;line-height:1.65;margin-bottom:5px}
 .mtr-line:last-child{margin-bottom:0}
 .mtr-speaker{font-weight:700;color:#111827;margin-right:5px}
-.mtr-ai-tag{display:inline-block;background:#EEF2FF;color:#3730A3;font-size:10px;font-weight:700;padding:1.5px 7px;border-radius:99px;margin-left:4px}
+.mtr-ai-tag{display:inline-block;background:#E0F2FE;color:#075985;font-size:10px;font-weight:700;padding:1.5px 7px;border-radius:99px;margin-left:4px}
 .mf-row{margin-bottom:12px}
 .mf-row:last-child{margin-bottom:0}
 .mf-label{font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:3px}
@@ -272,7 +282,7 @@ tr:hover td{background:var(--bg2)}
 .hero-stat-strip{display:flex;align-items:stretch;justify-content:center;margin-top:56px;padding-top:40px;border-top:1px solid var(--border);flex-wrap:wrap;max-width:640px;margin-left:auto;margin-right:auto}
 .hero-stat-item{text-align:center;padding:0 36px;border-right:1px solid var(--border);flex:1}
 .hero-stat-item:last-child{border-right:none}
-.hero-stat-val{font-family:'DM Serif Display',serif;font-size:34px;color:var(--brand);font-weight:400;display:block;line-height:1.1}
+.hero-stat-val{font-family:'Plus Jakarta Sans',sans-serif;font-size:34px;color:var(--brand);font-weight:400;display:block;line-height:1.1}
 .hero-stat-lbl{font-size:12px;color:var(--text3);margin-top:5px;font-weight:500;line-height:1.4}
 /* ── TRUST / SOCIAL PROOF ── */
 .hero-trust{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;margin-top:20px}
@@ -403,7 +413,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 <!-- ══ NAV ══════════════════════════════════════════════════════════════════ -->
 <nav id="main-nav">
   <div class="logo" onclick="showView('landing')">
-    <div class="logo-mark" style="background:linear-gradient(135deg,#6366F1,#7C3AED)">
+    <div class="logo-mark" style="background:linear-gradient(135deg,#0369A1,#0F172A)">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
     </div>
     <span class="logo-name">PitchLog</span>
@@ -559,7 +569,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         <div class="testi-stars" style="font-size:13px;letter-spacing:2px;margin-bottom:12px">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
         <p style="font-size:13.5px;color:var(--text2);line-height:1.75;margin-bottom:18px">"I've tried four different CRM tools over eight years in lending. PitchLog is the first one my whole team actually uses daily. The AI fills in the call notes before I can even put my phone down — and it's more accurate than what I used to write myself."</p>
         <div class="testi-meta">
-          <div class="testi-avatar" style="background:linear-gradient(135deg,#6366F1,#7C3AED)">MT</div>
+          <div class="testi-avatar" style="background:linear-gradient(135deg,#0369A1,#0F172A)">MT</div>
           <div class="testi-info">
             <div class="testi-author">Michael Torres</div>
             <div class="testi-role">VP of Sales · CrossCountry Mortgage, Phoenix AZ</div>
@@ -573,7 +583,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         <div class="testi-stars" style="font-size:13px;letter-spacing:2px;margin-bottom:12px">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
         <p style="font-size:13.5px;color:var(--text2);line-height:1.75;margin-bottom:18px">"My pipeline conversion went from 11% to 19% in the first 90 days. Every follow-up date is auto-logged — no prospect slips through anymore. I don't know how I managed a pipeline without this."</p>
         <div class="testi-meta">
-          <div class="testi-avatar" style="background:linear-gradient(135deg,#0EA5E9,#6366F1)">JW</div>
+          <div class="testi-avatar" style="background:linear-gradient(135deg,#0EA5E9,#0369A1)">JW</div>
           <div class="testi-info">
             <div class="testi-author">Jennifer Walsh</div>
             <div class="testi-role">Senior Loan Officer · Guild Mortgage, Dallas TX</div>
@@ -684,11 +694,11 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   </div>
 
   <!-- CTA Banner -->
-  <div style="background:linear-gradient(135deg,#3730A3 0%,#4F46E5 100%);text-align:center;padding:80px 48px">
-    <h2 style="font-family:'DM Serif Display',serif;font-size:44px;font-weight:400;color:#fff;margin-bottom:16px;line-height:1.2">Ready to close more deals?</h2>
+  <div style="background:linear-gradient(135deg,#0F172A 0%,#0369A1 100%);text-align:center;padding:80px 48px">
+    <h2 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:44px;font-weight:400;color:#fff;margin-bottom:16px;line-height:1.2">Ready to close more deals?</h2>
     <p style="font-size:18px;color:rgba(255,255,255,.8);margin-bottom:36px;max-width:480px;margin-left:auto;margin-right:auto">Join sales professionals who have stopped wasting time on manual notes and started focusing on what matters - building relationships and closing deals.</p>
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap">
-      <button class="btn btn-lg" style="background:#fff;color:#3730A3;border-color:#fff" onclick="showAuthModal('signup')">Start free today</button>
+      <button class="btn btn-lg" style="background:#fff;color:#0F172A;border-color:#fff" onclick="showAuthModal('signup')">Start free today</button>
       <button class="btn btn-lg" style="background:transparent;border-color:rgba(255,255,255,.4);color:#fff" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">View pricing</button>
     </div>
     <p style="font-size:13px;color:rgba(255,255,255,.5);margin-top:20px">Free plan available. No credit card required. Set up in under 2 minutes.</p>
@@ -698,7 +708,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     <div class="footer-top">
       <div class="footer-col footer-col-logo">
         <div class="footer-logo">
-          <div class="logo-mark" style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#6366F1,#7C3AED)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg></div>
+          <div class="logo-mark" style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#0369A1,#0F172A)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg></div>
           PitchLog
         </div>
         <p>AI-powered cold call tracking for mortgage and sales professionals. Stop taking notes. Start closing deals.</p>
@@ -737,30 +747,33 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 <div id="view-app" class="view">
   <div class="app-layout">
     <div class="sidebar">
+      <div class="nav-label">OVERVIEW</div>
       <button class="sidebar-item active" id="nav-dashboard" onclick="switchPanel('dashboard')">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>Dashboard
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard
       </button>
-      <button class="sidebar-item" id="nav-recorder" onclick="switchPanel('recorder')">
-        <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>New call
+      <button class="sidebar-item" id="nav-inbox" onclick="switchPanel('inbox')">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Inbox
+        <span id="inbox-badge" style="display:none;background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;margin-left:auto"></span>
+      </button>
+      <div class="nav-label">SALES</div>
+      <button class="sidebar-item" id="nav-contacts" onclick="switchPanel('contacts')">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Pipeline
       </button>
       <button class="sidebar-item" id="nav-log" onclick="switchPanel('log')">
         <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Call log
       </button>
+      <div class="nav-label">OUTREACH</div>
       <button class="sidebar-item" id="nav-power" onclick="switchPanel('power')">
         <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Power Dialer
       </button>
-      <button class="sidebar-item" id="nav-inbox" onclick="switchPanel('inbox')">
-        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Inbox
-        <span id="inbox-badge" style="display:none;background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:auto"></span>
-      </button>
-      <button class="sidebar-item" id="nav-contacts" onclick="switchPanel('contacts')">
-        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Contacts
-      </button>
       <button class="sidebar-item" id="nav-followups" onclick="switchPanel('followups')">
-        <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.79 19.79 19.79 0 01.12 1.18 2 2 0 012.11 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>Follow-ups
-        <span id="followups-badge" style="display:none;background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:auto"></span>
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Follow-ups
+        <span id="followups-badge" style="display:none;background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;margin-left:auto"></span>
       </button>
-      <div class="sidebar-divider"></div>
+      <button class="sidebar-item" id="nav-recorder" onclick="switchPanel('recorder')">
+        <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>Recorder
+      </button>
+      <div class="sidebar-divider" style="margin-top:14px"></div>
       <button class="sidebar-item" id="nav-settings" onclick="switchPanel('settings')">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>Settings
       </button>
@@ -779,37 +792,52 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <!-- Dashboard -->
       <div id="panel-dashboard">
         <div style="margin-bottom:24px">
-          <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400" id="dash-greeting">Dashboard</h1>
+          <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px" id="dash-greeting">Dashboard</h1>
           <p style="font-size:14px;color:var(--text2);margin-top:4px" id="dash-date"></p>
         </div>
         <div class="stats-grid">
-          <div class="stat-card"><div class="stat-val" id="st-total">-</div><div class="stat-lbl">Total calls</div></div>
-          <div class="stat-card"><div class="stat-val" id="st-int" style="color:#DC2626">-</div><div class="stat-lbl">🔥 Hot leads</div></div>
-          <div class="stat-card"><div class="stat-val" id="st-cb" style="color:#D97706">-</div><div class="stat-lbl">Warm leads</div></div>
-                <div class="stat-card"><div class="stat-val" id="st-fu">-</div><div class="stat-lbl">Follow-ups due</div></div>
-        </div>
-        <div style="background:#1e1b4b;border-radius:12px;padding:20px;margin:16px 0;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-            <h3 style="color:#a5b4fc;margin:0;font-size:16px;">📞 Dialer</h3>
-            <span id="dialer-caller-id" style="font-size:12px;color:#6b7280;background:#0f0a2e;padding:3px 10px;border-radius:20px;"></span>
+          <div class="stat-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="stat-lbl" style="margin:0">Total calls</span><div style="width:30px;height:30px;border-radius:8px;background:var(--brand-light);color:var(--brand);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.79 19.79 19.79 0 01.12 1.18 2 2 0 012.11 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></div></div>
+            <div class="stat-val" id="st-total">-</div>
           </div>
-          <div id="dialer-setup-warning" style="display:none;padding:10px 14px;background:#1e3a5f;border-radius:8px;color:#93c5fd;font-size:13px;margin-bottom:10px;">
-            ℹ️ No dedicated caller ID set — calls will use the account default number.
+          <div class="stat-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="stat-lbl" style="margin:0">Hot leads</span><div style="width:30px;height:30px;border-radius:8px;background:var(--hot-bg);color:var(--hot);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg></div></div>
+            <div class="stat-val" id="st-int" style="color:var(--hot)">-</div>
+          </div>
+          <div class="stat-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="stat-lbl" style="margin:0">Warm leads</span><div style="width:30px;height:30px;border-radius:8px;background:var(--warm-bg);color:var(--warm);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></div></div>
+            <div class="stat-val" id="st-cb" style="color:var(--warm)">-</div>
+          </div>
+          <div class="stat-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="stat-lbl" style="margin:0">Follow-ups due</span><div style="width:30px;height:30px;border-radius:8px;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div></div>
+            <div class="stat-val" id="st-fu">-</div>
+          </div>
+        </div>
+        <div class="table-card" style="padding:18px;margin-bottom:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <h3 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:14.5px;font-weight:700;display:flex;align-items:center;gap:8px">
+              <span style="width:26px;height:26px;border-radius:7px;background:var(--brand-light);color:var(--brand);display:inline-flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.79 19.79 19.79 0 01.12 1.18 2 2 0 012.11 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></span>
+              Dialer
+            </h3>
+            <span id="dialer-caller-id" style="font-size:12px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);padding:3px 12px;border-radius:99px"></span>
+          </div>
+          <div id="dialer-setup-warning" style="display:none;padding:10px 14px;background:var(--cold-bg);border:1px solid #BFDBFE;border-radius:8px;color:#1D4ED8;font-size:13px;margin-bottom:10px;">
+            No dedicated caller ID set — calls will use the account default number.
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <input id="dialer-number" type="tel" placeholder="+1 (555) 000-0000"
-              style="flex:1;min-width:180px;padding:10px 14px;border-radius:8px;
-                     border:1px solid #4f46e5;background:#0f0a2e;color:#fff;font-size:14px;"/>
+              style="flex:1;min-width:180px;height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-family:inherit"
+              onfocus="this.style.borderColor='var(--brand)';this.style.boxShadow='0 0 0 3px rgba(3,105,161,.12)';this.style.background='#fff'"
+              onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none';this.style.background='var(--bg2)'"/>
             <button id="btn-call" onclick="makeCall()"
-              style="padding:10px 20px;background:#4f46e5;color:#fff;border:none;
-                     border-radius:8px;cursor:pointer;font-weight:600;">Call</button>
+              style="height:40px;padding:0 22px;background:var(--brand);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13.5px;font-family:inherit;transition:background .15s"
+              onmouseover="this.style.background='var(--brand-mid)'" onmouseout="this.style.background='var(--brand)'">Call</button>
             <button id="btn-hangup" onclick="hangUp()"
-              style="display:none;padding:10px 20px;background:#dc2626;color:#fff;
-                     border:none;border-radius:8px;cursor:pointer;font-weight:600;">Hang Up</button>
+              style="display:none;height:40px;padding:0 22px;background:var(--danger);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13.5px;font-family:inherit">Hang Up</button>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
-            <div id="dialer-status" style="font-size:13px;color:#a5b4fc;flex:1">Initializing...</div>
-            <button id="btn-dialer-retry" onclick="retryDialer()" style="display:none;font-size:12px;padding:4px 10px;background:#4f46e5;color:#fff;border:none;border-radius:6px;cursor:pointer">Retry</button>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+            <div id="dialer-status" style="font-size:12.5px;color:var(--text2);flex:1">Initializing...</div>
+            <button id="btn-dialer-retry" onclick="retryDialer()" style="display:none;font-size:12px;padding:5px 12px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit">Retry</button>
           </div>
         </div>
         <div class="table-card">
@@ -826,7 +854,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <!-- Recorder -->
       <div id="panel-recorder" class="hidden">
         <div style="margin-bottom:20px">
-          <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">New call</h1>
+          <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">New call</h1>
           <p style="font-size:14px;color:var(--text2);margin-top:4px">Record your call and let AI do the rest.</p>
         </div>
         <div class="recorder-card">
@@ -891,7 +919,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <div id="panel-log" class="hidden">
         <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
           <div>
-            <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Call log</h1>
+            <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Call log</h1>
             <p style="font-size:14px;color:var(--text2);margin-top:4px">Every prospect, all in one place.</p>
           </div>
           <button class="btn btn-outline" onclick="exportAll()">Export all to Excel</button>
@@ -901,7 +929,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
       <!-- Settings -->
       <div id="panel-settings" class="hidden">
-        <div style="margin-bottom:24px"><h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Settings</h1></div>
+        <div style="margin-bottom:24px"><h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Settings</h1></div>
         <div class="settings-section">
           <h3>Account</h3>
           <div class="settings-row"><div><strong>Name</strong><br><span id="set-name">-</span></div></div>
@@ -928,7 +956,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <div id="panel-contacts" class="hidden">
         <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
           <div>
-            <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Contacts</h1>
+            <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Contacts</h1>
             <p style="font-size:14px;color:var(--text2);margin-top:4px">Your prospect pipeline.</p>
           </div>
           <button class="btn btn-primary" onclick="openAddContactModal()">+ Add contact</button>
@@ -957,7 +985,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <div id="panel-followups" class="hidden">
         <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
           <div>
-            <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Follow-ups</h1>
+            <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Follow-ups</h1>
             <p style="font-size:14px;color:var(--text2);margin-top:4px">Scheduled SMS and tasks.</p>
           </div>
           <button class="btn btn-primary" onclick="openAddFollowUpModal()">+ Schedule follow-up</button>
@@ -973,7 +1001,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <!-- Power Dialer -->
       <div id="panel-power" class="hidden">
         <div style="margin-bottom:20px">
-          <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">⚡ Power Dialer</h1>
+          <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">⚡ Power Dialer</h1>
           <p style="font-size:14px;color:var(--text2);margin-top:4px">Upload a lead list, hit start, and work through it hands-free. Every call is recorded, transcribed, and logged automatically.</p>
         </div>
 
@@ -1008,7 +1036,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <div id="panel-inbox" class="hidden">
         <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
           <div>
-            <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Inbox</h1>
+            <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Inbox</h1>
             <p style="font-size:14px;color:var(--text2);margin-top:4px">Two-way texting with your leads.</p>
           </div>
           <button class="btn btn-outline" onclick="loadInbox()" style="font-size:13px">↻ Refresh</button>
@@ -1578,7 +1606,7 @@ function buildTable(recs) {
     const next = r.next_steps || r.next_step || '';
     const sentiment = r.sentiment === 'positive' ? '😊 Positive' : r.sentiment === 'negative' ? '😕 Negative' : r.sentiment ? '😐 Neutral' : '';
     const initials = (name ? name.split(/\s+/).map(w => w[0]).slice(0, 2).join('') : (phone ? phone.replace(/\D/g, '').slice(-2) : '?')).toUpperCase();
-    const color = AVATAR_COLORS[heat] || '#6366F1';
+    const color = AVATAR_COLORS[heat] || '#0369A1';
     const outcomeBadge = r.outcome ? badge(r.outcome) : (heat ? heatBadge(heat) : '');
     const when = `${timeAgo(r.created_at)}${(r.duration_seconds || r.duration) ? ' · ' + fmtDuration(r.duration_seconds || r.duration) : ''}`;
     const company = r.company ? esc(r.company) + ' · ' : '';
