@@ -100,11 +100,14 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       const { name, phone, company, email, stage, notes } = req.body;
+      const nameParts = String(name || '').trim().split(/\s+/).filter(Boolean);
       const { data, error } = await supabase
         .from('contacts')
         .insert({
           user_id: user.id,
           name: name || 'Unknown',
+          first_name: nameParts[0] || '',
+          last_name: nameParts.slice(1).join(' ') || '',
           phone, company: company || '', email: email || '',
           stage: stage || 'new', notes: notes || '',
           heat_score: null, call_count: 0

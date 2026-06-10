@@ -3,6 +3,41 @@ import { createClient } from '@supabase/supabase-js';
 
 const SYSTEM_PROMPT = 'You are an expert sales call analyst for mortgage professionals. Be precise and return only valid JSON.';
 
+const isRealName = (n) => n && String(n).trim() && String(n).trim().toLowerCase() !== 'unknown';
+const titleCase = (s) => String(s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).trim();
+const splitName = (full) => {
+  const parts = String(full || '').trim().split(/\s+/).filter(Boolean);
+  return { first: parts[0] || '', last: parts.slice(1).join(' ') || '' };
+};
+const toE164 = (p) => {
+  let d = String(p || '').replace(/\D/g, '');
+  if (d.length === 10) d = '1' + d;
+  return d ? '+' + d : '';
+};
+
+// Carrier caller-name (CNAM) lookup via Twilio Lookup v2 — used as a fallback
+// when the name/company never came up on the call. ~$0.01 per lookup, so it
+// only runs when we actually need it.
+async function lookupCallerName(phone) {
+  try {
+    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) return null;
+    const e164 = toE164(phone);
+    if (!e164 || e164.length < 12) return null;
+    const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+    const r = await fetch(`https://lookups.twilio.com/v2/PhoneNumbers/${encodeURIComponent(e164)}?Fields=caller_name`, {
+      headers: { Authorization: `Basic ${auth}` }
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const cn = d.caller_name || {};
+    if (!cn.caller_name) return null;
+    return { name: titleCase(cn.caller_name), callerType: cn.caller_type || '' }; // CONSUMER | BUSINESS
+  } catch (e) {
+    console.error('CNAM lookup failed:', e.message);
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -45,6 +80,25 @@ export default async function handler(req, res) {
       await supabase.from('calls')
         .update({ transcript: '', notes: 'No speech detected' })
         .eq('transcript', `PENDING:${transcript_id}`);
+      // Still save the contact via carrier lookup so unanswered calls get a name
+      const silentPhone = callRecord?.to_number || callRecord?.from_number || null;
+      if (silentPhone && callRecord?.user_id) {
+        const { data: existing } = await supabase.from('contacts').select('id, name')
+          .eq('user_id', callRecord.user_id).eq('phone', silentPhone).maybeSingle();
+        if (!existing || !isRealName(existing.name)) {
+          const cnam = await lookupCallerName(silentPhone);
+          const nm = cnam && cnam.callerType !== 'BUSINESS' ? cnam.name : '';
+          const co = cnam && cnam.callerType === 'BUSINESS' ? cnam.name : '';
+          const { first, last } = splitName(nm);
+          await supabase.from('contacts').upsert({
+            phone: silentPhone, user_id: callRecord.user_id,
+            name: nm || 'Unknown', first_name: first, last_name: last,
+            company: co || undefined,
+            last_called: new Date().toISOString(), stage: 'contacted'
+          }, { onConflict: 'phone,user_id', ignoreDuplicates: false })
+            .then(({ error }) => { if (error) console.error('silent contact upsert:', error.message); });
+        }
+      }
       return res.status(200).json({ status: 'no_speech' });
     }
 
@@ -92,16 +146,42 @@ ${transcriptText}`
     const phone = callRecord?.to_number || callRecord?.from_number || null;
     const userId = callRecord?.user_id || null;
 
-    // Upsert contact — only if we have a valid phone and user
+    // Upsert contact with layered identity resolution:
+    //   1. what was said on the call (AI analysis)
+    //   2. what we already know (existing contact record)
+    //   3. carrier caller-name lookup on the phone number (CNAM fallback)
     let contact = null;
     if (phone && userId) {
+      const { data: existing } = await supabase
+        .from('contacts').select('id, name, company')
+        .eq('user_id', userId).eq('phone', phone).maybeSingle();
+
+      let finalName = isRealName(analysis.name) ? analysis.name.trim()
+        : (isRealName(existing?.name) ? existing.name : '');
+      let finalCompany = (analysis.company || '').trim() || (existing?.company || '').trim();
+
+      if (!finalName || !finalCompany) {
+        const cnam = await lookupCallerName(phone);
+        if (cnam) {
+          if (cnam.callerType === 'BUSINESS') {
+            if (!finalCompany) finalCompany = cnam.name;
+            // a business line name is not a person's name — leave finalName alone
+          } else if (!finalName) {
+            finalName = cnam.name;
+          }
+        }
+      }
+
+      const { first, last } = splitName(finalName);
       const { data: upsertedContact, error: upsertErr } = await supabase
         .from('contacts')
         .upsert({
           phone,
           user_id: userId,
-          name: analysis.name && analysis.name !== 'Unknown' ? analysis.name : undefined,
-          company: analysis.company || undefined,
+          name: finalName || 'Unknown',
+          first_name: first,
+          last_name: last,
+          company: finalCompany || undefined,
           heat_score: analysis.heatScore || 'Cold',
           last_called: new Date().toISOString(),
           stage: 'contacted'
@@ -115,9 +195,10 @@ ${transcriptText}`
       contact = upsertedContact;
     } else if (phone && !userId) {
       // No user_id — try to insert without conflict handling
+      const { first, last } = splitName(analysis.name);
       const { data: newContact } = await supabase
         .from('contacts')
-        .insert({ phone, name: analysis.name || 'Unknown', heat_score: analysis.heatScore || 'Cold' })
+        .insert({ phone, name: analysis.name || 'Unknown', first_name: first, last_name: last, heat_score: analysis.heatScore || 'Cold' })
         .select()
         .single();
       contact = newContact;
