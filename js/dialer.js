@@ -146,6 +146,7 @@ function endCallUI() {
   if (c) c.style.display = 'inline-block';
   currentCall = null;
   setStatus('✅ Call ended — AI logging...');
+  window.dispatchEvent(new CustomEvent('cb:call-ended'));
   pollForCallRecord(Date.now(), 0);
 }
 

@@ -746,6 +746,9 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <button class="sidebar-item" id="nav-log" onclick="switchPanel('log')">
         <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Call log
       </button>
+      <button class="sidebar-item" id="nav-power" onclick="switchPanel('power')">
+        <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Power Dialer
+      </button>
       <button class="sidebar-item" id="nav-contacts" onclick="switchPanel('contacts')">
         <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Contacts
       </button>
@@ -961,6 +964,40 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <button class="btn btn-ghost" id="fu-filter-all" onclick="setFuFilter('all')" style="font-size:13px">All</button>
         </div>
         <div id="followups-list"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div>
+      </div>
+
+      <!-- Power Dialer -->
+      <div id="panel-power" class="hidden">
+        <div style="margin-bottom:20px">
+          <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">⚡ Power Dialer</h1>
+          <p style="font-size:14px;color:var(--text2);margin-top:4px">Upload a lead list, hit start, and work through it hands-free. Every call is recorded, transcribed, and logged automatically.</p>
+        </div>
+
+        <div class="table-card" style="padding:20px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <input type="file" id="pd-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="pdHandleFile(event)">
+            <button class="btn btn-outline" onclick="document.getElementById('pd-file').click()">📄 Upload Excel / CSV</button>
+            <span id="pd-file-info" style="font-size:13px;color:var(--text2)">Columns needed: <strong>phone</strong> (name &amp; company optional)</span>
+          </div>
+          <div id="pd-controls" style="display:none;margin-top:16px;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-primary" id="pd-start" onclick="pdStart()">▶ Start dialing</button>
+            <button class="btn btn-outline" id="pd-pause" onclick="pdPause()" style="display:none">⏸ Pause</button>
+            <button class="btn btn-outline" onclick="pdSkip()">⏭ Skip current</button>
+            <select id="pd-delay" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-xs);font-size:13px;background:#fff">
+              <option value="3000">3s between calls</option>
+              <option value="5000" selected>5s between calls</option>
+              <option value="10000">10s between calls</option>
+              <option value="15000">15s between calls</option>
+            </select>
+            <button class="btn btn-ghost" onclick="pdReset()">Clear list</button>
+            <span id="pd-progress" style="margin-left:auto;font-size:13px;font-weight:600;color:var(--text2)"></span>
+          </div>
+          <div id="pd-bar" style="display:none;height:6px;background:var(--bg2);border-radius:99px;margin-top:14px;overflow:hidden">
+            <div id="pd-bar-fill" style="height:100%;width:0%;background:var(--brand);border-radius:99px;transition:width .4s"></div>
+          </div>
+        </div>
+
+        <div id="pd-queue"></div>
       </div>
 
     </div>
@@ -1248,7 +1285,7 @@ function showView(v) {
 }
 
 function switchPanel(p) {
-  ['dashboard','recorder','log','settings','contacts','followups'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
+  ['dashboard','recorder','log','settings','contacts','followups','power'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
   document.getElementById('panel-' + p).classList.remove('hidden');
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
   document.getElementById('nav-' + p)?.classList.add('active');
@@ -1256,6 +1293,7 @@ function switchPanel(p) {
   if (p === 'log') renderLog();
   if (p === 'contacts') loadContacts();
   if (p === 'followups') loadFollowUps();
+  if (p === 'power') pdRender();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -2133,6 +2171,206 @@ async function saveNewFollowUp() {
 
 // Poll for overdue badge on app load
 setTimeout(updateFollowUpsBadge, 3000);
+
+/* ═══════════════════════════════════════════════════════
+   POWER DIALER
+═══════════════════════════════════════════════════════ */
+let pdQueue = [];
+let pdActive = false;
+let pdCurrentIdx = -1;
+let pdAdvanceTimer = null;
+
+function pdSave() {
+  try { localStorage.setItem('pd_queue', JSON.stringify(pdQueue)); } catch (e) {}
+}
+function pdLoad() {
+  try { pdQueue = JSON.parse(localStorage.getItem('pd_queue') || '[]'); } catch (e) { pdQueue = []; }
+}
+pdLoad();
+
+function pdNormPhone(raw) {
+  let p = String(raw || '').replace(/[^\d+]/g, '');
+  if (!p) return '';
+  if (!p.startsWith('+')) {
+    const digits = p.replace(/\D/g, '');
+    if (digits.length === 10) p = '+1' + digits;
+    else if (digits.length === 11 && digits.startsWith('1')) p = '+' + digits;
+    else p = '+' + digits;
+  }
+  return p;
+}
+
+function pdHandleFile(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      if (!rows.length) { alert('No rows found in that file.'); return; }
+
+      const keys = Object.keys(rows[0]);
+      const phoneKey = keys.find(k => /phone|mobile|cell|number|tel/i.test(k));
+      if (!phoneKey) { alert('Could not find a phone column. Make sure one column header contains "phone", "mobile", or "cell".'); return; }
+      const nameKey = keys.find(k => /^name$|full.?name|contact|agent/i.test(k));
+      const firstKey = keys.find(k => /first/i.test(k));
+      const lastKey = keys.find(k => /last/i.test(k));
+      const companyKey = keys.find(k => /company|brokerage|office|business/i.test(k));
+
+      const parsed = rows.map(r => {
+        const name = nameKey ? String(r[nameKey]).trim()
+          : [firstKey ? r[firstKey] : '', lastKey ? r[lastKey] : ''].join(' ').trim();
+        return {
+          name: name || '',
+          phone: pdNormPhone(r[phoneKey]),
+          company: companyKey ? String(r[companyKey]).trim() : '',
+          status: 'pending'
+        };
+      }).filter(l => l.phone && l.phone.length >= 11);
+
+      if (!parsed.length) { alert('No valid phone numbers found in the file.'); return; }
+
+      pdQueue = parsed;
+      pdCurrentIdx = -1;
+      pdActive = false;
+      pdSave();
+      document.getElementById('pd-file-info').textContent = `${file.name} — ${parsed.length} leads loaded`;
+      pdRender();
+    } catch (err) {
+      alert('Could not read that file: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  ev.target.value = '';
+}
+
+function pdRender() {
+  const queueEl = document.getElementById('pd-queue');
+  const controls = document.getElementById('pd-controls');
+  const bar = document.getElementById('pd-bar');
+  if (!queueEl) return;
+
+  if (!pdQueue.length) {
+    if (controls) controls.style.display = 'none';
+    if (bar) bar.style.display = 'none';
+    queueEl.innerHTML = '<div class="empty-state">No list loaded yet. Upload an Excel or CSV file with your leads — at minimum a phone column.</div>';
+    return;
+  }
+
+  if (controls) controls.style.display = 'flex';
+  if (bar) bar.style.display = 'block';
+
+  const done = pdQueue.filter(l => l.status === 'done' || l.status === 'skipped').length;
+  document.getElementById('pd-progress').textContent = `${done} / ${pdQueue.length} complete`;
+  document.getElementById('pd-bar-fill').style.width = (done / pdQueue.length * 100) + '%';
+  document.getElementById('pd-start').style.display = pdActive ? 'none' : 'inline-flex';
+  document.getElementById('pd-pause').style.display = pdActive ? 'inline-flex' : 'none';
+
+  const statusIcon = { pending: '⚪', calling: '📞', done: '✅', skipped: '⏭' };
+  queueEl.innerHTML = `<div class="table-card">${pdQueue.map((l, i) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);font-size:13px;${l.status === 'calling' ? 'background:var(--brand-light)' : ''}">
+      <span style="font-size:15px">${statusIcon[l.status] || '⚪'}</span>
+      <strong style="min-width:140px">${esc(l.name || 'Unknown')}</strong>
+      <span style="color:var(--text2)">${esc(l.phone)}</span>
+      <span style="color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.company || '')}</span>
+      ${l.status === 'pending' ? `<button class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="pdDialOne(${i})">Call now</button>` : ''}
+      ${l.status === 'calling' ? '<span style="color:var(--brand);font-weight:600;font-size:12px">On call…</span>' : ''}
+    </div>`).join('')}</div>`;
+}
+
+function pdStart() {
+  if (!twilioDevice) { alert('Dialer is not ready yet — wait for the green "Ready to call" status on the Dashboard.'); return; }
+  if (!pdQueue.some(l => l.status === 'pending')) { alert('No pending leads left. Upload a new list or clear this one.'); return; }
+  pdActive = true;
+  pdRender();
+  pdDialNext();
+}
+
+function pdPause() {
+  pdActive = false;
+  if (pdAdvanceTimer) { clearTimeout(pdAdvanceTimer); pdAdvanceTimer = null; }
+  pdRender();
+}
+
+function pdSkip() {
+  if (pdCurrentIdx >= 0 && pdQueue[pdCurrentIdx]?.status === 'calling') {
+    pdQueue[pdCurrentIdx].status = 'skipped';
+    pdSave();
+    hangUp(); // disconnect fires cb:call-ended which advances if active
+  } else {
+    // skip the next pending without calling it
+    const idx = pdQueue.findIndex(l => l.status === 'pending');
+    if (idx >= 0) { pdQueue[idx].status = 'skipped'; pdSave(); pdRender(); }
+  }
+}
+
+function pdReset() {
+  if (!confirm('Clear the dialing list?')) return;
+  pdPause();
+  pdQueue = [];
+  pdCurrentIdx = -1;
+  pdSave();
+  document.getElementById('pd-file-info').innerHTML = 'Columns needed: <strong>phone</strong> (name &amp; company optional)';
+  pdRender();
+}
+
+function pdDialOne(i) {
+  if (!twilioDevice) { alert('Dialer is not ready yet.'); return; }
+  pdActive = false;
+  pdDial(i);
+}
+
+function pdDial(i) {
+  const lead = pdQueue[i];
+  if (!lead) return;
+  pdCurrentIdx = i;
+  lead.status = 'calling';
+  pdSave();
+  pdRender();
+  const input = document.getElementById('dialer-number');
+  if (input) input.value = lead.phone;
+  // pre-create the contact so the call links to a named record
+  pdEnsureContact(lead);
+  makeCall();
+}
+
+function pdDialNext() {
+  const idx = pdQueue.findIndex(l => l.status === 'pending');
+  if (idx < 0) {
+    pdActive = false;
+    pdCurrentIdx = -1;
+    pdRender();
+    setStatus && setStatus('🎉 List complete!');
+    return;
+  }
+  pdDial(idx);
+}
+
+async function pdEnsureContact(lead) {
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) return;
+    await fetch('/api/contacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ name: lead.name || 'Unknown', phone: lead.phone, company: lead.company || '', stage: 'new' })
+    });
+  } catch (e) { /* duplicate phone is fine — contact already exists */ }
+}
+
+window.addEventListener('cb:call-ended', () => {
+  if (pdCurrentIdx >= 0 && pdQueue[pdCurrentIdx]?.status === 'calling') {
+    pdQueue[pdCurrentIdx].status = 'done';
+    pdSave();
+  }
+  pdRender();
+  if (pdActive) {
+    const delay = parseInt(document.getElementById('pd-delay')?.value || '5000');
+    pdAdvanceTimer = setTimeout(() => { if (pdActive) pdDialNext(); }, delay);
+  }
+});
 
 </script>
 </body>
