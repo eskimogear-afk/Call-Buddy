@@ -979,6 +979,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <textarea id="dnc-bulk-input" placeholder="(555) 123-4567, 5551234568&#10;5551234569" style="width:100%;min-height:72px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;resize:vertical"></textarea>
           <button class="btn btn-primary" id="dnc-bulk-btn" style="font-size:13px;padding:8px 16px;margin-top:10px" onclick="bulkAddDNC()">Add to Do Not Call</button>
           <div id="dnc-list-view" style="margin-top:16px"></div>
+          <div id="scrub-status" style="margin-top:16px;padding:11px 14px;border-radius:var(--radius-sm);font-size:12.5px;border:1px solid var(--border);background:var(--bg2)">Checking registry scrub…</div>
         </div>
         <div class="settings-section">
           <h3>Data</h3>
@@ -1585,7 +1586,7 @@ function switchPanel(p) {
   if (p === 'followups') loadFollowUps();
   if (p === 'power') pdRender();
   if (p === 'inbox') loadInbox();
-  if (p === 'settings') { loadDNC().then(renderDNC); }
+  if (p === 'settings') { loadDNC().then(renderDNC); renderScrubStatus(); }
   if (p === 'calendar') renderCalendar();
   if (p === 'pricing') prInit();
 }
@@ -2513,6 +2514,23 @@ async function bulkAddDNC() {
   btn.disabled = false; btn.textContent = 'Add to Do Not Call';
 }
 
+async function renderScrubStatus() {
+  const el = document.getElementById('scrub-status');
+  if (!el) return;
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const r = await fetch('/api/contacts?resource=scrub', { headers: { Authorization: 'Bearer ' + session.access_token } });
+    const d = await r.json();
+    if (d.configured) {
+      el.innerHTML = '🛡️ <strong>Registry scrub: ACTIVE</strong> — uploaded Power Dialer lists are auto-checked against federal + state DNC and known litigators before you dial.';
+      el.style.borderColor = '#A7F3D0'; el.style.background = 'var(--green-bg)'; el.style.color = '#065F46';
+    } else {
+      el.innerHTML = '⚠️ <strong>Registry scrub: not active.</strong> Your internal list + calling-hours guard are on, but the national/state DNC + litigator scrub needs an API key. Get one (TCPA Litigator List) and it turns on automatically.';
+      el.style.borderColor = '#FDE68A'; el.style.background = 'var(--warm-bg)'; el.style.color = '#92400E';
+    }
+  } catch (e) { el.textContent = ''; }
+}
+
 function renderDNC() {
   const el = document.getElementById('dnc-list-view');
   if (!el) return;
@@ -3435,12 +3453,45 @@ function pdHandleFile(ev) {
         `${file.name} — ${parsed.length} leads loaded` +
         (scrubbed ? ` · ${scrubbed} on Do Not Call (skipped)` : '');
       pdRender();
+      // Registry/litigator scrub (runs only if a scrub API key is configured)
+      pdRegistryScrub();
     } catch (err) {
       alert('Could not read that file: ' + err.message);
     }
   };
   reader.readAsArrayBuffer(file);
   ev.target.value = '';
+}
+
+// Batch-scrub the loaded list against federal/state DNC + litigators (if a key
+// is configured server-side). Flags hits as status 'scrub' before any dialing.
+async function pdRegistryScrub() {
+  const pending = pdQueue.filter(l => l.status === 'pending');
+  if (!pending.length) return;
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) return;
+    const info = document.getElementById('pd-file-info');
+    const baseText = info.textContent;
+    info.textContent = baseText + ' · 🛡️ scrubbing DNC/litigator…';
+    const r = await fetch('/api/contacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ resource: 'scrub', phones: pending.map(l => l.phone) })
+    });
+    const d = await r.json();
+    if (!d.configured) { info.textContent = baseText; return; }  // no key yet — silent
+    const flaggedKeys = new Set((d.flagged || []).map(f => dncKey(f.phone)));
+    let n = 0;
+    pdQueue.forEach(l => { if (l.status === 'pending' && flaggedKeys.has(dncKey(l.phone))) { l.status = 'scrub'; n++; } });
+    pdSave();
+    pdRender();
+    info.textContent = baseText + (n ? ` · 🛡️ ${n} flagged by DNC/litigator scrub` : ' · 🛡️ scrub clean ✓');
+  } catch (e) {
+    const info = document.getElementById('pd-file-info');
+    if (info) info.textContent = info.textContent.replace(' · 🛡️ scrubbing DNC/litigator…', '');
+    console.warn('Registry scrub failed', e);
+  }
 }
 
 function pdRender() {
@@ -3459,13 +3510,13 @@ function pdRender() {
   if (controls) controls.style.display = 'flex';
   if (bar) bar.style.display = 'block';
 
-  const done = pdQueue.filter(l => l.status === 'done' || l.status === 'skipped' || l.status === 'dnc' || l.status === 'hours').length;
+  const done = pdQueue.filter(l => ['done','skipped','dnc','hours','scrub'].includes(l.status)).length;
   document.getElementById('pd-progress').textContent = `${done} / ${pdQueue.length} complete`;
   document.getElementById('pd-bar-fill').style.width = (done / pdQueue.length * 100) + '%';
   document.getElementById('pd-start').style.display = pdActive ? 'none' : 'inline-flex';
   document.getElementById('pd-pause').style.display = pdActive ? 'inline-flex' : 'none';
 
-  const statusIcon = { pending: '⚪', calling: '📞', done: '✅', skipped: '⏭', dnc: '🚫', hours: '⛔' };
+  const statusIcon = { pending: '⚪', calling: '📞', done: '✅', skipped: '⏭', dnc: '🚫', hours: '⛔', scrub: '🛡️' };
   queueEl.innerHTML = `<div class="table-card">${pdQueue.map((l, i) => `
     <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);font-size:13px;${l.status === 'calling' ? 'background:var(--brand-light)' : ''}">
       <span style="font-size:15px">${statusIcon[l.status] || '⚪'}</span>
@@ -3476,6 +3527,7 @@ function pdRender() {
       ${l.status === 'calling' ? '<span style="color:var(--brand);font-weight:600;font-size:12px">On call…</span>' : ''}
       ${l.status === 'dnc' ? '<span style="color:var(--danger);font-weight:600;font-size:12px">Do Not Call</span>' : ''}
       ${l.status === 'hours' ? '<span style="color:var(--warm);font-weight:600;font-size:12px">Outside calling hours</span>' : ''}
+      ${l.status === 'scrub' ? '<span style="color:var(--danger);font-weight:600;font-size:12px">DNC / litigator</span>' : ''}
     </div>`).join('')}</div>`;
 }
 

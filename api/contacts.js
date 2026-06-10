@@ -1,5 +1,42 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Scrub a batch of numbers against federal DNC + state DNC + litigators via
+// the configured provider. Returns [{ phone, reasons:[...] }] for bad numbers.
+// Default: TCPA Litigator List bulk endpoint (https://api.tcpalitigatorlist.com).
+async function scrubPhones(phones) {
+  const user = process.env.SCRUB_API_USER, pass = process.env.SCRUB_API_PASS;
+  const auth = Buffer.from(`${user}:${pass}`).toString('base64');
+  const tens = phones.map(p => {
+    const d = String(p || '').replace(/\D/g, '');
+    return d.length === 11 && d[0] === '1' ? d.slice(1) : d;
+  }).filter(d => d.length === 10);
+  if (!tens.length) return [];
+
+  const r = await fetch('https://api.tcpalitigatorlist.com/scrub/phones/', {
+    method: 'POST',
+    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phones: tens, type: 'all', small_list: true })
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const data = await r.json();
+
+  // Normalize: the bulk endpoint returns per-number results; collect flagged ones.
+  const out = [];
+  const rows = Array.isArray(data?.results) ? data.results
+    : (data?.results && typeof data.results === 'object') ? Object.values(data.results)
+    : Array.isArray(data) ? data : [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const bad = row.is_bad_number === true || row.clean === 0 || row.clean === '0';
+    if (bad) {
+      const reasons = Array.isArray(row.status_array) ? row.status_array
+        : (row.status ? [row.status] : ['flagged']);
+      out.push({ phone: String(row.phone_number || ''), reasons });
+    }
+  }
+  return out;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', 'https://call-buddy-omega.vercel.app');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -50,6 +87,30 @@ export default async function handler(req, res) {
       res.setHeader('Content-Type', 'audio/mpeg');
       res.setHeader('Cache-Control', 'private, max-age=3600');
       return res.status(200).send(buf);
+    }
+
+    // ── Real-time DNC / state / litigator scrub (resource=scrub).
+    //    Proxies to a scrub provider so the API key stays server-side. Inert
+    //    (configured:false) until SCRUB_API_USER/SCRUB_API_PASS env vars are
+    //    set. Default provider: TCPA Litigator List bulk endpoint. ──
+    if ((req.query.resource === 'scrub' || req.body?.resource === 'scrub')) {
+      if (req.method === 'GET') {
+        return res.status(200).json({ configured: !!(process.env.SCRUB_API_USER && process.env.SCRUB_API_PASS), provider: process.env.SCRUB_PROVIDER || 'tcpa_litigator_list' });
+      }
+      if (req.method === 'POST') {
+        const phones = Array.isArray(req.body.phones) ? req.body.phones : [];
+        if (!process.env.SCRUB_API_USER || !process.env.SCRUB_API_PASS) {
+          return res.status(200).json({ configured: false, flagged: [] });
+        }
+        if (!phones.length) return res.status(200).json({ configured: true, flagged: [] });
+        try {
+          const flagged = await scrubPhones(phones.slice(0, 3000));
+          return res.status(200).json({ configured: true, flagged });
+        } catch (e) {
+          console.error('Scrub error:', e);
+          return res.status(502).json({ configured: true, error: 'Scrub provider error: ' + e.message, flagged: [] });
+        }
+      }
     }
 
     // ── Do Not Call list (folded into this endpoint to stay within Vercel's
