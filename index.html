@@ -104,8 +104,9 @@ footer{background:var(--text);padding:48px;display:flex;align-items:center;justi
 .footer-copy{font-size:12px;color:#6B7280}
 
 /* Auth modal */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999;padding:20px}
-.modal{background:var(--bg);border-radius:var(--radius);padding:36px;width:100%;max-width:420px}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999;padding:20px;overflow-y:auto;overscroll-behavior:contain}
+.modal{background:var(--bg);border-radius:var(--radius);padding:36px;width:100%;max-width:420px;max-height:calc(100dvh - 40px);overflow-y:auto;position:relative}
+@media(max-width:600px){.modal{padding:24px 20px;max-height:calc(100dvh - 24px)}}
 .modal h2{font-family:'Plus Jakarta Sans',sans-serif;font-size:26px;font-weight:400;margin-bottom:6px}
 .modal-sub{font-size:14px;color:var(--text2);margin-bottom:24px}
 .form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
