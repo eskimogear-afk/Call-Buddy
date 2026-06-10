@@ -222,6 +222,27 @@ a { color: inherit; text-decoration: none; }
 }
 .chips li:hover { transform: translateY(-2px); border-color: var(--green); box-shadow: 0 8px 20px rgba(37,192,138,.18); }
 
+/* ---- Meet your lender ---- */
+.lender { display: grid; grid-template-columns: auto 1fr; gap: 52px; align-items: center; }
+.lender-photo { width: 240px; flex-shrink: 0; }
+.portrait-svg, .lender-photo img { width: 240px; height: 240px; display: block; border-radius: 50%; object-fit: cover; box-shadow: 0 24px 60px rgba(3,9,24,.5); }
+.lender-copy h2 { font-size: clamp(1.8rem, 3.4vw, 2.6rem); color: #fff; }
+.lender-copy p { color: #c2cfe4; font-size: 1.08rem; max-width: 38rem; }
+.lender-stats { display: flex; flex-wrap: wrap; gap: 32px; margin: 1.6rem 0 1.8rem; }
+.lender-stat strong { font-family: 'Fraunces', serif; display: block; font-size: 1.7rem; color: var(--gold-soft); line-height: 1; }
+.lender-stat span { color: #9fb0cb; font-size: .82rem; letter-spacing: .02em; }
+
+/* ---- Reviews ---- */
+.tcards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.tcard { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; box-shadow: 0 10px 30px rgba(7,13,31,.06); transition: transform .2s ease, box-shadow .2s ease; }
+.tcard:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
+.stars { color: var(--gold); letter-spacing: 2px; margin-bottom: .6rem; }
+.tcard .quote { font-size: 1rem; color: var(--ink); line-height: 1.6; margin: 0 0 1.2rem; }
+.who { display: flex; align-items: center; gap: 12px; }
+.avatar-svg { width: 46px; height: 46px; flex-shrink: 0; }
+.who-name { font-weight: 700; color: var(--navy-700); font-size: .95rem; }
+.who-city { color: var(--muted); font-size: .82rem; }
+
 /* ---- Lead form ---- */
 .form-wrap { display: grid; grid-template-columns: .9fr 1.1fr; gap: 56px; align-items: start; }
 .form-pitch h2 { font-size: clamp(2rem, 3.6vw, 2.8rem); font-weight: 600; color: #fff; }
@@ -276,6 +297,10 @@ a { color: inherit; text-decoration: none; }
   .cards { grid-template-columns: 1fr 1fr; }
   .form-wrap { grid-template-columns: 1fr; gap: 36px; }
   .footer-inner { grid-template-columns: 1fr; }
+  .lender { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: 28px; }
+  .lender-copy p { margin-left: auto; margin-right: auto; }
+  .lender-stats { justify-content: center; }
+  .tcards { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
   .header-phone span { display: none; }
