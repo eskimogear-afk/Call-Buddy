@@ -19,6 +19,18 @@ export default async function handler(req, res) {
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
   const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
+  // Monthly counter reset (absorbed from the old /api/reset-calls cron —
+  // Vercel Hobby allows limited functions and cron jobs, so this runs daily
+  // and resets free-plan counters on the 1st)
+  let monthlyReset = null;
+  if (new Date().getUTCDate() === 1) {
+    const { error: resetErr } = await supabase
+      .from('profiles')
+      .update({ calls_this_month: 0, billing_cycle_start: new Date().toISOString() })
+      .eq('plan', 'free');
+    monthlyReset = resetErr ? 'failed: ' + resetErr.message : 'done';
+  }
+
   try {
     // Fetch pending SMS follow-ups that are due
     const { data: dueFollowUps, error } = await supabase
@@ -77,7 +89,7 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({ ok: true, processed: dueFollowUps?.length || 0, ...results });
+    return res.status(200).json({ ok: true, processed: dueFollowUps?.length || 0, monthlyReset, ...results });
   } catch (err) {
     console.error('Process follow-ups error:', err);
     return res.status(500).json({ error: String(err) });

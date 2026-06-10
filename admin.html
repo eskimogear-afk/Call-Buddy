@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PitchLog — Team Admin</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230369A1%22/><text y=%22.9em%22 font-size=%2280%22>&#128202;</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --brand:#0369A1;--brand-light:#E0F2FE;--brand-mid:#0284C7;--navy:#0F172A;
+  --text:#020617;--text2:#475569;--text3:#94A3B8;
+  --bg:#FFFFFF;--bg2:#F8FAFC;--border:#E2E8F0;
+  --hot:#DC2626;--hot-bg:#FEF2F2;--warm:#D97706;--warm-bg:#FFFBEB;--green:#059669;--green-bg:#ECFDF5;
+  --shadow-sm:0 1px 2px rgba(15,23,42,.05);--shadow:0 1px 3px rgba(15,23,42,.06),0 4px 12px rgba(15,23,42,.04);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;font-size:14px;color:var(--text);background:var(--bg2);line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh}
+h1,h2,h3{font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:-.3px}
+button{font-family:inherit;cursor:pointer}
+.num{font-variant-numeric:tabular-nums}
+.topbar{display:flex;align-items:center;gap:12px;padding:14px 28px;background:var(--bg);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
+.brand-mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#0369A1,#0F172A);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px}
+.topbar strong{font-family:'Plus Jakarta Sans',sans-serif;font-size:15px}
+.topbar .tag{font-size:11px;font-weight:700;background:var(--brand-light);color:var(--brand);padding:2px 10px;border-radius:99px;letter-spacing:.5px}
+.topbar .right{margin-left:auto;display:flex;gap:10px;align-items:center;font-size:13px;color:var(--text2)}
+.btn{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:600;border:1px solid transparent;transition:all .15s}
+.btn-primary{background:var(--brand);color:#fff}
+.btn-primary:hover{background:var(--brand-mid)}
+.btn-ghost{background:transparent;color:var(--text2);border-color:var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:var(--text3)}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 24px}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:22px}
+.kpi{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:var(--shadow-sm)}
+.kpi .lbl{font-size:12px;font-weight:500;color:var(--text2)}
+.kpi .val{font-family:'Plus Jakarta Sans',sans-serif;font-size:24px;font-weight:700;margin-top:2px}
+.card{background:var(--bg);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-sm);overflow:hidden;margin-bottom:22px}
+.card-h{padding:15px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-h h3{font-size:14.5px;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tbody tr{cursor:pointer;transition:background .12s}
+tbody tr:hover{background:var(--bg2)}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#0369A1,#0F172A);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-right:10px;vertical-align:middle}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
+.pill.hot{background:var(--hot-bg);color:var(--hot)}
+.pill.warm{background:var(--warm-bg);color:var(--warm)}
+.pill.green{background:var(--green-bg);color:var(--green)}
+.pill.gray{background:#F1F5F9;color:#475569}
+.gate{max-width:380px;margin:10vh auto;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:34px;box-shadow:var(--shadow)}
+.gate h1{font-size:22px;margin-bottom:4px}
+.gate p{font-size:13.5px;color:var(--text2);margin-bottom:20px}
+.gate label{display:block;font-size:12.5px;font-weight:600;margin:12px 0 5px}
+.gate input{width:100%;height:40px;padding:0 13px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit}
+.gate input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(3,105,161,.12)}
+.gate .err{background:var(--hot-bg);color:var(--hot);font-size:12.5px;padding:9px 12px;border-radius:8px;margin-top:12px;display:none}
+.drawer{padding:18px;background:var(--bg2);border-top:1px solid var(--border)}
+.callrow{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;font-size:13px}
+.callrow .meta{color:var(--text3);font-size:12px;margin-bottom:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.hidden{display:none}
+.spin{width:22px;height:22px;border:3px solid var(--border);border-top-color:var(--brand);border-radius:50%;animation:r 0.8s linear infinite;margin:40px auto}
+@keyframes r{to{transform:rotate(360deg)}}
+@media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.hide-sm{display:none}}
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate">
+  <h1>Team Admin</h1>
+  <p>Sign in with an admin account to view team performance.</p>
+  <label>Email</label>
+  <input id="g-email" type="email" placeholder="you@company.com" autocomplete="email">
+  <label>Password</label>
+  <input id="g-pass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')gateLogin()">
+  <div class="err" id="g-err"></div>
+  <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:18px" onclick="gateLogin()">Sign in</button>
+</div>
+
+<div id="portal" class="hidden">
+  <div class="topbar">
+    <div class="brand-mark">P</div>
+    <strong>PitchLog</strong>
+    <span class="tag">TEAM ADMIN</span>
+    <div class="right">
+      <span id="who"></span>
+      <button class="btn btn-ghost" onclick="loadOverview()">↻ Refresh</button>
+      <a class="btn btn-ghost" href="/" style="text-decoration:none">Open app</a>
+      <button class="btn btn-ghost" onclick="logout()">Log out</button>
+    </div>
+  </div>
+  <div class="wrap">
+    <div class="kpis">
+      <div class="kpi"><div class="lbl">Team calls today</div><div class="val num" id="k-today">—</div></div>
+      <div class="kpi"><div class="lbl">Calls this week</div><div class="val num" id="k-week">—</div></div>
+      <div class="kpi"><div class="lbl">🔥 Hot leads</div><div class="val num" id="k-hot" style="color:var(--hot)">—</div></div>
+      <div class="kpi"><div class="lbl">Warm leads</div><div class="val num" id="k-warm" style="color:var(--warm)">—</div></div>
+      <div class="kpi"><div class="lbl">Pending follow-ups</div><div class="val num" id="k-fu">—</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><h3>Team leaderboard — this week</h3><span style="font-size:12px;color:var(--text3)">Click a rep to see their calls</span></div>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Rep</th><th>Calls (wk)</th><th>Today</th><th class="hide-sm">Talk time (wk)</th>
+          <th>🔥 Hot</th><th class="hide-sm">Warm</th><th class="hide-sm">Contacts</th>
+          <th class="hide-sm">Follow-ups</th><th>Last call</th><th class="hide-sm">Number</th>
+        </tr></thead>
+        <tbody id="reps"></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="card hidden" id="detail-card">
+      <div class="card-h"><h3 id="detail-title">Calls</h3><button class="btn btn-ghost" onclick="document.getElementById('detail-card').classList.add('hidden')">✕ Close</button></div>
+      <div class="drawer" id="detail-body"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://sbwtidnoxtmalmuifdxf.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNid3RpZG5veHRtYWxtdWlmZHhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNjAxNjksImV4cCI6MjA5NTkzNjE2OX0.l56bD3lcSlY1KVwPWydwc9V1ptE5If5-qroMPX-e_2U';
+let db;
+
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function fmtPhone(p){const raw=String(p||'').trim();if(!raw)return'';const d=raw.replace(/\D/g,'');if(d.length===11&&d[0]==='1')return`(${d.slice(1,4)}) ${d.slice(4,7)}-${d.slice(7)}`;if(d.length===10)return`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;return raw}
+function timeAgo(d){if(!d)return'—';const s=Math.floor((Date.now()-new Date(d).getTime())/1000);if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'}
+function fmtTalk(sec){if(!sec)return'0m';const h=Math.floor(sec/3600),m=Math.round((sec%3600)/60);return h?`${h}h ${m}m`:`${m}m`}
+function initials(n){return (n||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase()}
+
+async function init(){
+  db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  const { data: { session } } = await db.auth.getSession();
+  if (session) enter();
+}
+
+async function gateLogin(){
+  const err = document.getElementById('g-err');
+  err.style.display='none';
+  const { error } = await db.auth.signInWithPassword({
+    email: document.getElementById('g-email').value.trim(),
+    password: document.getElementById('g-pass').value
+  });
+  if (error) { err.textContent = error.message; err.style.display='block'; return; }
+  enter();
+}
+
+async function enter(){
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  document.getElementById('who').textContent = session.user.email;
+  // probe admin access
+  const r = await fetch('/api/admin?view=overview', { headers: { Authorization: 'Bearer ' + session.access_token } });
+  if (r.status === 403) {
+    const err = document.getElementById('g-err');
+    err.textContent = 'This account does not have admin access. Ask Damon to grant it.';
+    err.style.display = 'block';
+    await db.auth.signOut();
+    return;
+  }
+  if (!r.ok) {
+    const err = document.getElementById('g-err');
+    err.textContent = 'Could not load team data. Try again.';
+    err.style.display = 'block';
+    return;
+  }
+  document.getElementById('gate').classList.add('hidden');
+  document.getElementById('portal').classList.remove('hidden');
+  render(await r.json());
+}
+
+async function loadOverview(){
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  document.getElementById('reps').innerHTML = '<tr><td colspan="10"><div class="spin"></div></td></tr>';
+  const r = await fetch('/api/admin?view=overview', { headers: { Authorization: 'Bearer ' + session.access_token } });
+  if (r.ok) render(await r.json());
+}
+
+function render(data){
+  document.getElementById('k-today').textContent = data.team.calls_today;
+  document.getElementById('k-week').textContent = data.team.calls_week;
+  document.getElementById('k-hot').textContent = data.team.hot;
+  document.getElementById('k-warm').textContent = data.team.warm;
+  document.getElementById('k-fu').textContent = data.team.pending_followups;
+
+  document.getElementById('reps').innerHTML = data.reps.map(r => `
+    <tr onclick="openRep('${r.id}','${esc(r.name)}')">
+      <td><span class="avatar">${esc(initials(r.name))}</span><strong>${esc(r.name)}</strong>
+        ${r.role==='admin' ? '<span class="pill gray" style="margin-left:6px">ADMIN</span>' : ''}
+        <div style="font-size:11.5px;color:var(--text3);margin-left:42px;margin-top:-3px">${esc(r.email)}</div></td>
+      <td class="num"><strong>${r.calls_week}</strong></td>
+      <td class="num">${r.calls_today}</td>
+      <td class="num hide-sm">${fmtTalk(r.talk_seconds_week)}</td>
+      <td><span class="pill hot">${r.hot}</span></td>
+      <td class="hide-sm"><span class="pill warm">${r.warm}</span></td>
+      <td class="num hide-sm">${r.contacts}</td>
+      <td class="num hide-sm">${r.pending_followups}</td>
+      <td style="white-space:nowrap;color:var(--text2)">${timeAgo(r.last_call_at)}</td>
+      <td class="hide-sm" style="white-space:nowrap;color:var(--text2)">${esc(fmtPhone(r.phone))||'—'}</td>
+    </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:30px">No reps yet.</td></tr>';
+}
+
+async function openRep(id, name){
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  const card = document.getElementById('detail-card');
+  card.classList.remove('hidden');
+  document.getElementById('detail-title').textContent = name + ' — recent calls';
+  document.getElementById('detail-body').innerHTML = '<div class="spin"></div>';
+  const r = await fetch('/api/admin?view=user_calls&user_id=' + id, { headers: { Authorization: 'Bearer ' + session.access_token } });
+  const calls = r.ok ? await r.json() : [];
+  document.getElementById('detail-body').innerHTML = calls.length ? calls.map(c => {
+    const heat = c.heat_score ? `<span class="pill ${c.heat_score==='Hot'?'hot':c.heat_score==='Warm'?'warm':'gray'}">${c.heat_score.toUpperCase()}</span>` : '';
+    return `<div class="callrow">
+      <div class="meta">${heat}<strong>${esc(fmtPhone(c.to_number||c.from_number)||'Unknown')}</strong>
+        <span>· ${timeAgo(c.created_at)}</span>${c.duration?`<span>· ${Math.floor(c.duration/60)}m ${c.duration%60}s</span>`:''}
+        ${c.sentiment?`<span>· ${c.sentiment}</span>`:''}</div>
+      ${c.notes?`<div><strong>AI:</strong> ${esc(c.notes)}</div>`:''}
+      ${c.next_step?`<div style="color:var(--text2);margin-top:3px"><strong>Next:</strong> ${esc(c.next_step)}</div>`:''}
+    </div>`;
+  }).join('') : '<div style="text-align:center;color:var(--text3);padding:24px">No calls yet.</div>';
+  card.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function logout(){ await db.auth.signOut(); location.reload(); }
+
+init();
+</script>
+</body>
+</html>
