@@ -9,13 +9,14 @@ export default async function handler(req, res) {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY)
     return res.status(500).json({ error: 'Supabase not configured' });
 
-  // Validate Twilio signature — URL includes query string because user_id is a query param
+  // Validate Twilio signature against the URL exactly as requested — req.url preserves
+  // the original encoding (Twilio normalizes %3A back to ':' etc., so rebuilding the
+  // query string with URLSearchParams produces a different string and fails validation)
   const twilioSignature = req.headers['x-twilio-signature'] || '';
-  const qs = Object.keys(req.query).length > 0 ? '?' + new URLSearchParams(req.query).toString() : '';
   const baseUrl = process.env.TWILIO_WEBHOOK_BASE_URL
     ? process.env.TWILIO_WEBHOOK_BASE_URL.replace(/\/$/, '')
     : `https://${req.headers.host}`;
-  const webhookUrl = `${baseUrl}/api/twilio-recording${qs}`;
+  const webhookUrl = `${baseUrl}${req.url}`;
 
   const valid = twilio.validateRequest(
     process.env.TWILIO_AUTH_TOKEN,
@@ -28,13 +29,17 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  const { RecordingUrl, RecordingSid, CallSid, From, To, CallDuration, RecordingStatus } = req.body;
+  const { RecordingUrl, RecordingSid, CallSid, RecordingDuration, RecordingStatus } = req.body;
   if (RecordingStatus && RecordingStatus !== 'completed') {
     return res.status(200).json({ status: 'ignored' });
   }
   if (!RecordingUrl) return res.status(400).json({ error: 'No recording URL' });
 
-  const userId = req.query.user_id || null;
+  // Recording callbacks don't carry From/To/CallDuration — twilio-voice.js passes them via query params
+  const rawUserId = (req.query.user_id || '').replace(/^client:/, '');
+  const userId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawUserId) ? rawUserId : null;
+  const From = req.query.from || req.body.From || null;
+  const To = req.query.to || req.body.To || null;
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
   // Always insert the call record, even if transcription fails
@@ -106,7 +111,7 @@ export default async function handler(req, res) {
       recording_url: audioUrl,
       from_number: From,
       to_number: To,
-      duration: parseInt(CallDuration) || 0,
+      duration: parseInt(RecordingDuration) || 0,
       transcript: transcriptPlaceholder,
       notes: transcriptId ? '' : 'Transcription could not be started — check AssemblyAI API key',
       heat_score: null,

@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   const baseUrl = process.env.TWILIO_WEBHOOK_BASE_URL
     ? process.env.TWILIO_WEBHOOK_BASE_URL.replace(/\/$/, '')
     : `https://${req.headers.host}`;
-  const webhookUrl = `${baseUrl}/api/twilio-voice`;
+  const webhookUrl = `${baseUrl}${req.url}`;
 
   if (process.env.TWILIO_AUTH_TOKEN) {
     const valid = twilio.validateRequest(
@@ -39,8 +39,8 @@ export default async function handler(req, res) {
     return res.status(400).send('<Response><Say>No destination number.</Say></Response>');
   }
 
-  // From = Twilio client identity = user.id — look up user's provisioned number
-  const userId = From;
+  // From = "client:<user.id>" for browser calls — strip the client: prefix
+  const userId = (From || '').replace(/^client:/, '');
   let callerId = process.env.TWILIO_PHONE_NUMBER || null;
 
   if (userId && userId.length === 36 && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
@@ -60,7 +60,13 @@ export default async function handler(req, res) {
   const recordingBase = process.env.TWILIO_WEBHOOK_BASE_URL
     ? process.env.TWILIO_WEBHOOK_BASE_URL.replace(/\/$/, '')
     : `https://${req.headers.host}`;
-  const recordingCallback = `${recordingBase}/api/twilio-recording?user_id=${encodeURIComponent(userId || '')}`;
+  // Recording status callbacks don't include From/To/CallDuration — pass them via query params
+  const cbParams = new URLSearchParams({
+    user_id: userId || '',
+    to: To || '',
+    from: callerId || ''
+  });
+  const recordingCallback = `${recordingBase}/api/twilio-recording?${cbParams.toString()}`;
 
   // Build Dial verb — omit callerId attribute if we don't have one so Twilio uses account default
   const callerIdAttr = callerId ? ` callerId="${callerId}"` : '';
