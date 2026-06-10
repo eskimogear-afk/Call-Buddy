@@ -3,20 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aevaa — Team Admin</title>
+<title>PitchLog — Team Admin</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230369A1%22/><text y=%22.9em%22 font-size=%2280%22>&#128202;</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
-  --brand:#0369A1;--brand-light:#E0F2FE;--brand-mid:#0284C7;--navy:#0F172A;
-  --text:#020617;--text2:#475569;--text3:#94A3B8;
-  --bg:#FFFFFF;--bg2:#F8FAFC;--border:#E2E8F0;
-  --hot:#DC2626;--hot-bg:#FEF2F2;--warm:#D97706;--warm-bg:#FFFBEB;--green:#059669;--green-bg:#ECFDF5;
-  --shadow-sm:0 1px 2px rgba(15,23,42,.05);--shadow:0 1px 3px rgba(15,23,42,.06),0 4px 12px rgba(15,23,42,.04);
+  --brand:#5BA3F7;--brand-light:rgba(91,163,247,.15);--brand-mid:#7DB8FF;--navy:#0B0F1A;
+  --text:#EAEDF4;--text2:#9BA6BC;--text3:#697390;
+  --bg:#0E1320;--bg2:#161D2E;--border:#2A3551;
+  --hot:#F87171;--hot-bg:rgba(248,113,113,.14);--warm:#FBBF24;--warm-bg:rgba(251,191,36,.13);--green:#34D399;--green-bg:rgba(52,211,153,.13);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.35);--shadow:0 1px 3px rgba(0,0,0,.45),0 8px 28px rgba(0,0,0,.4);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;font-size:14px;color:var(--text);background:var(--bg2);line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh}
+body{font-family:'Inter',sans-serif;font-size:14px;color:var(--text);background:var(--bg);line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(900px 500px at 50% -8%,rgba(91,163,247,.10),transparent 70%)}
+input,textarea,select{background:var(--bg);color:var(--text);border-color:var(--border)}
+input::placeholder,textarea::placeholder{color:var(--text3)}
+input:-webkit-autofill{-webkit-text-fill-color:var(--text);-webkit-box-shadow:0 0 0 1000px var(--bg) inset}
 h1,h2,h3{font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:-.3px}
 button{font-family:inherit;cursor:pointer}
 .num{font-variant-numeric:tabular-nums}
@@ -49,7 +53,7 @@ tbody tr:hover{background:var(--bg2)}
 .pill.hot{background:var(--hot-bg);color:var(--hot)}
 .pill.warm{background:var(--warm-bg);color:var(--warm)}
 .pill.green{background:var(--green-bg);color:var(--green)}
-.pill.gray{background:#F1F5F9;color:#475569}
+.pill.gray{background:var(--bg);color:#475569}
 .gate{max-width:380px;margin:10vh auto;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:34px;box-shadow:var(--shadow)}
 .gate h1{font-size:22px;margin-bottom:4px}
 .gate p{font-size:13.5px;color:var(--text2);margin-bottom:20px}
@@ -82,7 +86,7 @@ tbody tr:hover{background:var(--bg2)}
 <div id="portal" class="hidden">
   <div class="topbar">
     <div class="brand-mark"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg></div>
-    <strong>Aevaa</strong>
+    <strong>PitchLog</strong>
     <span class="tag">TEAM ADMIN</span>
     <div class="right">
       <span id="who"></span>
