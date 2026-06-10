@@ -1431,20 +1431,37 @@ function badge(o) {
   return o ? `<span class="badge ${m[o]||'b-gray'}">${o}</span>` : '-';
 }
 
+function heatBadge(h) {
+  const m = { Hot:'b-red', Warm:'b-amber', Cold:'b-blue' };
+  return h ? `<span class="badge ${m[h]||'b-gray'}">${h}</span>` : '-';
+}
+
 function buildTable(recs) {
   if (!recs.length) return `<div class="empty-state"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="margin:0 auto 12px;display:block;color:var(--text3)"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.77 9.11 19.79 19.79 0 01.7 6.48A2 2 0 012.68 4h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 11.1a16 16 0 006 6l1.06-1.06a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>No calls logged yet. Hit "New call" to get started.</div>`;
   return `<div class="table-wrap"><table>
-    <thead><tr><th>Name</th><th>Company</th><th>Date</th><th>Outcome</th><th>Follow-up</th><th>Pain points</th><th>Next steps</th><th></th></tr></thead>
-    <tbody>${recs.map(r => `<tr>
-      <td title="${r.prospect_name||''}"><strong>${r.prospect_name||'-'}</strong></td>
-      <td>${r.company||'-'}</td>
-      <td style="white-space:nowrap">${r.call_date||new Date(r.created_at).toLocaleDateString('en-US')}</td>
-      <td>${badge(r.outcome)}</td>
-      <td>${r.follow_up_date||'-'}</td>
-      <td title="${r.pain_points||''}">${r.pain_points||'-'}</td>
-      <td title="${r.next_steps||''}">${r.next_steps||'-'}</td>
-      <td><button class="btn btn-danger" style="font-size:12px;padding:4px 10px" onclick="deleteRecord(${r.id})">Delete</button></td>
-    </tr>`).join('')}</tbody>
+    <thead><tr><th>Name</th><th>Phone</th><th>Date</th><th>Outcome</th><th>Summary</th><th>Next steps</th><th></th></tr></thead>
+    <tbody>${recs.map(r => {
+      // Rows come from two flows: browser recorder (prospect_name/outcome/ai_summary)
+      // and the dialer pipeline (to_number/heat_score/notes/transcript)
+      const name = r.prospect_name || '-';
+      const phone = r.phone || r.to_number || '-';
+      const dur = (r.duration_seconds || r.duration) ? ` · ${r.duration_seconds || r.duration}s` : '';
+      const date = r.call_date || new Date(r.created_at).toLocaleDateString('en-US');
+      const outcome = r.outcome ? badge(r.outcome) : heatBadge(r.heat_score);
+      const pending = String(r.transcript || '').startsWith('PENDING:');
+      const rawSummary = r.ai_summary || r.notes || (pending ? '' : String(r.transcript || '').slice(0, 120));
+      const summary = pending && !rawSummary ? '⏳ AI transcribing…' : (rawSummary || '-');
+      const next = r.next_steps || r.next_step || '-';
+      return `<tr>
+      <td title="${esc(name)}"><strong>${esc(name)}</strong></td>
+      <td style="white-space:nowrap">${esc(phone)}${dur}</td>
+      <td style="white-space:nowrap">${esc(date)}</td>
+      <td>${outcome}</td>
+      <td title="${esc(summary)}">${esc(String(summary).slice(0, 110))}</td>
+      <td title="${esc(next)}">${esc(String(next).slice(0, 80))}</td>
+      <td><button class="btn btn-danger" style="font-size:12px;padding:4px 10px" onclick="deleteRecord('${r.id}')">Delete</button></td>
+    </tr>`;
+    }).join('')}</tbody>
   </table></div>`;
 }
 
