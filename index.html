@@ -180,6 +180,41 @@ td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:top;ma
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--bg2)}
 .empty-state{text-align:center;padding:52px 20px;color:var(--text3);font-size:14px}
+
+/* CRM call cards */
+.call-card{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;background:var(--bg);transition:box-shadow .15s;overflow:hidden}
+.call-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.07)}
+.cc-head{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer}
+.cc-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0}
+.cc-main{flex:1;min-width:0}
+.cc-name{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cc-sub{font-size:12px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cc-summary{font-size:13px;color:var(--text2);margin-top:4px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.cc-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.cc-chevron{color:var(--text3);transition:transform .2s;font-size:12px}
+.call-card.open .cc-chevron{transform:rotate(180deg)}
+.cc-detail{display:none;border-top:1px solid var(--border);padding:16px 18px;background:var(--bg2)}
+.call-card.open .cc-detail{display:block}
+.cc-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.cc-field{font-size:13px}
+.cc-field b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:3px;font-weight:700}
+.cc-transcript{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-xs);padding:12px 14px;font-size:13px;line-height:1.7;color:var(--text2);max-height:220px;overflow-y:auto;white-space:pre-wrap;margin-bottom:14px}
+.cc-actions{display:flex;gap:8px;flex-wrap:wrap}
+@media(max-width:700px){.cc-detail-grid{grid-template-columns:1fr}.cc-summary{display:none}}
+
+/* Pipeline board */
+.view-toggle{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius-xs);overflow:hidden}
+.view-toggle button{border:none;background:var(--bg);padding:7px 14px;font-size:13px;cursor:pointer;color:var(--text2);font-family:inherit}
+.view-toggle button.active{background:var(--brand);color:#fff}
+.kanban{display:grid;grid-template-columns:repeat(5,minmax(190px,1fr));gap:12px;overflow-x:auto;align-items:start}
+.kanban-col{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;min-height:120px}
+.kanban-col h4{font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin:2px 4px 10px;display:flex;justify-content:space-between;align-items:center}
+.kanban-col h4 span.kc-count{background:var(--bg);border:1px solid var(--border);border-radius:99px;font-size:11px;padding:1px 8px;color:var(--text2)}
+.kanban-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-xs);padding:10px 12px;margin-bottom:8px;font-size:13px}
+.kanban-card .kc-name{font-weight:600;margin-bottom:2px}
+.kanban-card .kc-meta{font-size:11px;color:var(--text3);margin-bottom:8px}
+.kanban-card select{width:100%;font-size:12px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text2);font-family:inherit}
+@media(max-width:900px){.kanban{grid-template-columns:repeat(5,75vw)}}
 .badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px}
 .b-green{background:#E0E7FF;color:#3730A3}
 .b-red{background:var(--danger-light);color:#991B1B}
@@ -742,8 +777,8 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         </div>
         <div class="stats-grid">
           <div class="stat-card"><div class="stat-val" id="st-total">-</div><div class="stat-lbl">Total calls</div></div>
-          <div class="stat-card"><div class="stat-val" id="st-int">-</div><div class="stat-lbl">Interested</div></div>
-          <div class="stat-card"><div class="stat-val" id="st-cb">-</div><div class="stat-lbl">Callbacks</div></div>
+          <div class="stat-card"><div class="stat-val" id="st-int" style="color:#DC2626">-</div><div class="stat-lbl">🔥 Hot leads</div></div>
+          <div class="stat-card"><div class="stat-val" id="st-cb" style="color:#D97706">-</div><div class="stat-lbl">Warm leads</div></div>
                 <div class="stat-card"><div class="stat-val" id="st-fu">-</div><div class="stat-lbl">Follow-ups due</div></div>
         </div>
         <div style="background:#1e1b4b;border-radius:12px;padding:20px;margin:16px 0;">
@@ -903,6 +938,10 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <option value="appointment">Appointment set</option>
             <option value="closed">Closed</option>
           </select>
+          <div class="view-toggle">
+            <button id="cv-list" class="active" onclick="setContactView('list')">List</button>
+            <button id="cv-board" onclick="setContactView('board')">Pipeline</button>
+          </div>
         </div>
         <div id="contacts-table"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div>
       </div>
@@ -1436,39 +1475,95 @@ function heatBadge(h) {
   return h ? `<span class="badge ${m[h]||'b-gray'}">${h}</span>` : '-';
 }
 
+function timeAgo(d) {
+  const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  if (s < 604800) return Math.floor(s / 86400) + 'd ago';
+  return new Date(d).toLocaleDateString('en-US');
+}
+
+function fmtDuration(sec) {
+  if (!sec) return '';
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m ? `${m}m ${s}s` : `${s}s`;
+}
+
+const AVATAR_COLORS = { Hot: '#DC2626', Warm: '#D97706', Cold: '#3B82F6' };
+
 function buildTable(recs) {
-  if (!recs.length) return `<div class="empty-state"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="margin:0 auto 12px;display:block;color:var(--text3)"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.77 9.11 19.79 19.79 0 01.7 6.48A2 2 0 012.68 4h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 11.1a16 16 0 006 6l1.06-1.06a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>No calls logged yet. Hit "New call" to get started.</div>`;
-  return `<div class="table-wrap"><table>
-    <thead><tr><th>Name</th><th>Phone</th><th>Date</th><th>Outcome</th><th>Summary</th><th>Next steps</th><th></th></tr></thead>
-    <tbody>${recs.map(r => {
-      // Rows come from two flows: browser recorder (prospect_name/outcome/ai_summary)
-      // and the dialer pipeline (to_number/heat_score/notes/transcript)
-      const name = r.prospect_name || '-';
-      const phone = r.phone || r.to_number || '-';
-      const dur = (r.duration_seconds || r.duration) ? ` · ${r.duration_seconds || r.duration}s` : '';
-      const date = r.call_date || new Date(r.created_at).toLocaleDateString('en-US');
-      const outcome = r.outcome ? badge(r.outcome) : heatBadge(r.heat_score);
-      const pending = String(r.transcript || '').startsWith('PENDING:');
-      const rawSummary = r.ai_summary || r.notes || (pending ? '' : String(r.transcript || '').slice(0, 120));
-      const summary = pending && !rawSummary ? '⏳ AI transcribing…' : (rawSummary || '-');
-      const next = r.next_steps || r.next_step || '-';
-      return `<tr>
-      <td title="${esc(name)}"><strong>${esc(name)}</strong></td>
-      <td style="white-space:nowrap">${esc(phone)}${dur}</td>
-      <td style="white-space:nowrap">${esc(date)}</td>
-      <td>${outcome}</td>
-      <td title="${esc(summary)}">${esc(String(summary).slice(0, 110))}</td>
-      <td title="${esc(next)}">${esc(String(next).slice(0, 80))}</td>
-      <td><button class="btn btn-danger" style="font-size:12px;padding:4px 10px" onclick="deleteRecord('${r.id}')">Delete</button></td>
-    </tr>`;
-    }).join('')}</tbody>
-  </table></div>`;
+  if (!recs.length) return `<div class="empty-state"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="margin:0 auto 12px;display:block;color:var(--text3)"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.77 9.11 19.79 19.79 0 01.7 6.48A2 2 0 012.68 4h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 11.1a16 16 0 006 6l1.06-1.06a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>No calls logged yet. Use the dialer or hit "New call" to get started.</div>`;
+  return recs.map(r => {
+    // Rows come from two flows: browser recorder (prospect_name/outcome/ai_summary)
+    // and the dialer pipeline (to_number/heat_score/notes/transcript)
+    const name = r.prospect_name || '';
+    const phone = r.phone || r.to_number || '';
+    const display = name || phone || 'Unknown';
+    const heat = r.heat_score || '';
+    const pending = String(r.transcript || '').startsWith('PENDING:');
+    const transcript = pending ? '' : String(r.transcript || '');
+    const rawSummary = r.ai_summary || r.notes || '';
+    const summary = pending && !rawSummary ? '⏳ AI is transcribing this call…' : rawSummary;
+    const next = r.next_steps || r.next_step || '';
+    const sentiment = r.sentiment === 'positive' ? '😊 Positive' : r.sentiment === 'negative' ? '😕 Negative' : r.sentiment ? '😐 Neutral' : '';
+    const initials = (name ? name.split(/\s+/).map(w => w[0]).slice(0, 2).join('') : (phone ? phone.replace(/\D/g, '').slice(-2) : '?')).toUpperCase();
+    const color = AVATAR_COLORS[heat] || '#6366F1';
+    const outcomeBadge = r.outcome ? badge(r.outcome) : (heat ? heatBadge(heat) : '');
+    const when = `${timeAgo(r.created_at)}${(r.duration_seconds || r.duration) ? ' · ' + fmtDuration(r.duration_seconds || r.duration) : ''}`;
+    const company = r.company ? esc(r.company) + ' · ' : '';
+
+    return `<div class="call-card" id="cc-${r.id}">
+      <div class="cc-head" onclick="toggleCallDetail('${r.id}')">
+        <div class="cc-avatar" style="background:${color}">${esc(initials)}</div>
+        <div class="cc-main">
+          <div class="cc-name">${esc(display)} ${outcomeBadge}</div>
+          <div class="cc-sub">${company}${esc(phone)} · ${when}</div>
+          ${summary ? `<div class="cc-summary">${esc(summary)}</div>` : ''}
+        </div>
+        <div class="cc-right"><span class="cc-chevron">▼</span></div>
+      </div>
+      <div class="cc-detail">
+        <div class="cc-detail-grid">
+          ${summary ? `<div class="cc-field"><b>AI summary</b>${esc(summary)}</div>` : ''}
+          ${next ? `<div class="cc-field"><b>Next step</b>${esc(next)}</div>` : ''}
+          ${sentiment ? `<div class="cc-field"><b>Sentiment</b>${sentiment}</div>` : ''}
+          ${r.pain_points ? `<div class="cc-field"><b>Pain points</b>${esc(r.pain_points)}</div>` : ''}
+        </div>
+        ${transcript ? `<div class="cc-field" style="margin-bottom:6px"><b>Transcript</b></div><div class="cc-transcript">${esc(transcript)}</div>` : ''}
+        <div class="cc-actions">
+          ${phone ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="callAgain('${esc(phone)}')">📞 Call again</button>` : ''}
+          ${phone ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="followUpFromCall('${r.contact_id || ''}','${esc(display)}','${esc(phone)}')">⏰ Schedule follow-up</button>` : ''}
+          <button class="btn btn-danger" style="font-size:12px;padding:6px 14px;margin-left:auto" onclick="deleteRecord('${r.id}')">Delete</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleCallDetail(id) {
+  document.getElementById('cc-' + id)?.classList.toggle('open');
+}
+
+function callAgain(phone) {
+  switchPanel('dashboard');
+  const input = document.getElementById('dialer-number');
+  if (input) { input.value = phone; input.focus(); }
+}
+
+function followUpFromCall(contactId, name, phone) {
+  openAddFollowUpModal();
+  setTimeout(() => {
+    const sel = document.getElementById('fu-contact-select');
+    if (contactId && sel) sel.value = contactId;
+    document.getElementById('fu-message').value = `Hi ${name && name !== phone ? name.split(' ')[0] : 'there'}, great speaking with you! Let me know if any questions came up — happy to help.`;
+  }, 150);
 }
 
 function refreshDashboard() {
   document.getElementById('st-total').textContent = records.length;
-  document.getElementById('st-int').textContent = records.filter(r => r.outcome === 'Interested').length;
-  document.getElementById('st-cb').textContent = records.filter(r => r.outcome === 'Callback').length;
+  document.getElementById('st-int').textContent = records.filter(r => r.heat_score === 'Hot' || r.outcome === 'Interested').length;
+  document.getElementById('st-cb').textContent = records.filter(r => r.heat_score === 'Warm' || r.outcome === 'Callback').length;
   document.getElementById('dash-table').innerHTML = buildTable(records.slice(0, 8));
   // Load overdue follow-ups count from API
   db.auth.getSession().then(({ data: { session } }) => {
@@ -1731,12 +1826,60 @@ async function loadContacts() {
   }
 }
 
+let contactView = 'list';
+
+function setContactView(v) {
+  contactView = v;
+  document.getElementById('cv-list')?.classList.toggle('active', v === 'list');
+  document.getElementById('cv-board')?.classList.toggle('active', v === 'board');
+  renderContacts();
+}
+
+async function moveContactStage(id, stage) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  const c = contactsCache.find(x => x.id === id);
+  if (c) c.stage = stage;
+  renderContacts();
+  await fetch('/api/contacts', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+    body: JSON.stringify({ id, stage })
+  }).catch(() => loadContacts());
+}
+
+function renderContactBoard(rows) {
+  const stages = ['new', 'contacted', 'qualified', 'appointment', 'closed'];
+  return `<div class="kanban">${stages.map(s => {
+    const cards = rows.filter(c => (c.stage || 'new') === s);
+    return `<div class="kanban-col">
+      <h4 style="color:${STAGE_COLORS[s]}">${STAGE_LABELS[s]} <span class="kc-count">${cards.length}</span></h4>
+      ${cards.map(c => {
+        const heat = c.heat_score || '';
+        const hc = heat === 'Hot' ? '#dc2626' : heat === 'Warm' ? '#f59e0b' : '#6b7280';
+        return `<div class="kanban-card">
+          <div class="kc-name">${esc(c.name || 'Unknown')}${heat ? ` <span style="color:${hc};font-size:11px;font-weight:700">● ${heat}</span>` : ''}</div>
+          <div class="kc-meta">${esc(c.phone || '')}${c.company ? ' · ' + esc(c.company) : ''}</div>
+          <select onchange="moveContactStage('${c.id}', this.value)">
+            ${stages.map(x => `<option value="${x}" ${x === s ? 'selected' : ''}>${STAGE_LABELS[x]}</option>`).join('')}
+          </select>
+        </div>`;
+      }).join('') || '<div style="font-size:12px;color:var(--text3);text-align:center;padding:14px 4px">Empty</div>'}
+    </div>`;
+  }).join('')}</div>`;
+}
+
 function renderContacts() {
   const search = (document.getElementById('contact-search')?.value || '').toLowerCase();
   const stage = document.getElementById('contact-stage-filter')?.value || '';
   let rows = contactsCache;
   if (search) rows = rows.filter(c => (c.name||'').toLowerCase().includes(search) || (c.company||'').toLowerCase().includes(search) || (c.phone||'').includes(search));
   if (stage) rows = rows.filter(c => c.stage === stage);
+
+  if (contactView === 'board') {
+    document.getElementById('contacts-table').innerHTML = renderContactBoard(rows);
+    return;
+  }
 
   if (!rows.length) {
     document.getElementById('contacts-table').innerHTML = '<p style="color:var(--text3);padding:20px;text-align:center">No contacts found.</p>';
