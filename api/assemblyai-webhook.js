@@ -11,6 +11,7 @@ export default async function handler(req, res) {
   if (!process.env.ASSEMBLYAI_API_KEY)
     return res.status(500).json({ error: 'ASSEMBLYAI_API_KEY not configured' });
 
+  console.log('AAI webhook body:', JSON.stringify(req.body || {}).slice(0, 300));
   const { transcript_id, status } = req.body || {};
   if (!transcript_id) return res.status(400).json({ error: 'No transcript_id' });
 
@@ -87,7 +88,7 @@ ${transcriptText}`
     // Upsert contact — only if we have a valid phone and user
     let contact = null;
     if (phone && userId) {
-      const { data: upsertedContact } = await supabase
+      const { data: upsertedContact, error: upsertErr } = await supabase
         .from('contacts')
         .upsert({
           phone,
@@ -103,6 +104,7 @@ ${transcriptText}`
         })
         .select()
         .single();
+      if (upsertErr) console.error('contact upsert error:', upsertErr.message);
       contact = upsertedContact;
     } else if (phone && !userId) {
       // No user_id — try to insert without conflict handling
@@ -115,7 +117,7 @@ ${transcriptText}`
     }
 
     // Update the call record
-    await supabase.from('calls')
+    const { data: updatedRows, error: updateErr } = await supabase.from('calls')
       .update({
         transcript: transcriptText,
         notes: analysis.notes || '',
@@ -124,7 +126,9 @@ ${transcriptText}`
         next_step: analysis.nextStep || '',
         contact_id: contact?.id || null
       })
-      .eq('transcript', `PENDING:${transcript_id}`);
+      .eq('transcript', `PENDING:${transcript_id}`)
+      .select('id');
+    console.log('calls update:', JSON.stringify({ matched: updatedRows?.length ?? null, error: updateErr?.message || null }));
 
     // Auto-schedule a follow-up SMS for Hot/Warm leads with a next step
     if (contact?.id && userId && analysis.nextStep && analysis.heatScore !== 'Cold') {
