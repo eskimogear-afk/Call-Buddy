@@ -71,7 +71,7 @@
 
   <!-- ===== Cinematic Hero ===== -->
   <section class="hero">
-    <!-- Layered SVG dusk scene (self-contained, no external images) -->
+    <!-- Photographic hero (Pexels CDN) layered over an SVG dusk-scene fallback -->
     <div class="hero-scene" aria-hidden="true">
       <svg class="hero-svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice">
         <defs>
@@ -124,6 +124,8 @@
           </g>
         </g>
       </svg>
+      <!-- Pexels: "House with palm trees, Key West FL" (#18326885) · free for commercial use -->
+      <img class="hero-bg" src="https://images.pexels.com/photos/18326885/pexels-photo-18326885.jpeg?auto=compress&cs=tinysrgb&w=1920" alt="" loading="eager" fetchpriority="high" onerror="this.remove()" />
       <div class="hero-glow"></div>
     </div>
 
@@ -369,6 +371,19 @@
           </div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- ===== Closing band (keys handoff) ===== -->
+  <section class="closing-band">
+    <!-- Pexels: "Real estate agent handing house keys" (#8815915) · free for commercial use -->
+    <img class="band-bg" src="https://images.pexels.com/photos/8815915/pexels-photo-8815915.jpeg?auto=compress&cs=tinysrgb&w=1920" alt="" loading="lazy" onerror="this.remove()" />
+    <div class="band-overlay"></div>
+    <div class="wrap band-inner reveal">
+      <span class="kicker">From first call to keys</span>
+      <h2>Your next Florida rental is one conversation away</h2>
+      <p>DSCR financing built around your deal — Orlando, Tampa, and across Florida.</p>
+      <a href="#apply" class="btn btn-primary" data-cta="band-apply">Get my options →</a>
     </div>
   </section>
 
