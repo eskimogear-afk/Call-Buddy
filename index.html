@@ -1397,7 +1397,7 @@ async function loadProfile() {
 
 async function loadRecords() {
   try {
-    const { data, error } = await db.from('calls').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false });
+    const { data, error } = await db.from('calls').select('*, contacts(name, first_name, last_name, company, email)').eq('user_id', currentUser.id).order('created_at', { ascending: false });
     if (error) throw error;
     records = data || [];
   } catch(e) { console.warn('Records load error:', e); records = []; }
@@ -1705,8 +1705,10 @@ function buildTable(recs) {
   if (!recs.length) return `<div class="empty-state"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="margin:0 auto 12px;display:block;color:var(--text3)"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.77 9.11 19.79 19.79 0 01.7 6.48A2 2 0 012.68 4h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 11.1a16 16 0 006 6l1.06-1.06a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>No calls logged yet. Use the dialer or hit "New call" to get started.</div>`;
   return recs.map(r => {
     // Rows come from two flows: browser recorder (prospect_name/outcome/ai_summary)
-    // and the dialer pipeline (to_number/heat_score/notes/transcript)
-    const name = r.prospect_name || '';
+    // and the dialer pipeline (to_number/heat_score/notes/transcript). Dialer
+    // calls keep the person's name on the linked contact, so fall back to it.
+    const contactName = r.contacts && isRealNameUi(r.contacts.name) ? r.contacts.name : '';
+    const name = r.prospect_name || contactName || '';
     const phone = r.phone || r.to_number || r.from_number || '';
     const display = displayName(name, phone);
     const hasRealName = display !== fmtPhone(phone);
@@ -1721,7 +1723,8 @@ function buildTable(recs) {
     const color = AVATAR_COLORS[heat] || '#0369A1';
     const outcomeBadge = r.outcome ? badge(r.outcome) : (heat ? heatBadge(heat) : '');
     const when = `${timeAgo(r.created_at)}${(r.duration_seconds || r.duration) ? ' · ' + fmtDuration(r.duration_seconds || r.duration) : ''}`;
-    const company = r.company ? esc(r.company) + ' · ' : '';
+    const companyVal = r.company || (r.contacts && r.contacts.company) || '';
+    const company = companyVal ? esc(companyVal) + ' · ' : '';
 
     return `<div class="call-card" id="cc-${r.id}">
       <div class="cc-head" onclick="toggleCallDetail('${r.id}')">
@@ -2217,6 +2220,8 @@ function fmtPhone(p) {
   if (d.length === 10) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;
   return raw; // partial or non-standard — show as many digits as we have
 }
+
+function isRealNameUi(n) { const s = String(n || '').trim(); return !!s && s.toLowerCase() !== 'unknown'; }
 
 // Prefer a real name; fall back to the phone number rather than "Unknown"
 function displayName(name, phone) {
