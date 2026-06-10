@@ -108,6 +108,15 @@ async function makeCall() {
     alert('This number is on your Do Not Call list and was not dialed.\n\nRemove it under Settings → Do Not Call list if this is a mistake.');
     return;
   }
+  // Calling-hours guard (Compliance Mode) — block outside 8am–9pm prospect-local
+  if (typeof complianceOn === 'function' && complianceOn() && typeof callingHoursCheck === 'function') {
+    const chk = callingHoursCheck(number);
+    if (!chk.ok && !chk.unknown) {
+      setStatus('⛔ Outside calling hours — blocked');
+      alert('Compliance Mode blocked this call.\n\nIt is ' + chk.label + ' for this number — outside the federal 8:00am–9:00pm calling window in their local time.\n\nTry again during their business hours.');
+      return;
+    }
+  }
   if (!twilioDevice) { alert('Dialer not ready — please wait'); return; }
   if (twilioDevice.isBusy) { alert('Already on a call'); return; }
 

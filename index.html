@@ -855,7 +855,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             No dedicated caller ID set — calls will use the account default number.
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <input id="dialer-number" type="tel" placeholder="+1 (555) 000-0000"
+            <input id="dialer-number" type="tel" placeholder="+1 (555) 000-0000" oninput="updateDialerLocalTime()"
               style="flex:1;min-width:180px;height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-family:inherit"
               onfocus="this.style.borderColor='var(--brand)';this.style.boxShadow='0 0 0 3px rgba(3,105,161,.12)';this.style.background='#fff'"
               onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none';this.style.background='var(--bg2)'"/>
@@ -867,8 +867,11 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <button id="btn-research" onclick="researchProspect()" title="AI web research on this prospect"
               style="height:40px;padding:0 16px;background:var(--bg2);color:var(--text2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-weight:600;font-size:13.5px;font-family:inherit">🔍 Research</button>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+          <div id="dialer-localtime" style="font-size:12px;margin-top:8px;color:var(--text3)"></div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
             <div id="dialer-status" style="font-size:12.5px;color:var(--text2);flex:1">Initializing...</div>
+            <span id="compliance-badge" style="display:none;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--green);background:var(--green-bg);border:1px solid #A7F3D0;border-radius:99px;padding:2px 9px">🛡️ COMPLIANCE MODE</span>
+            <label style="font-size:11.5px;color:var(--text2);display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="compliance-toggle" style="width:auto" onchange="setComplianceMode(this.checked)"> Compliance mode</label>
             <button id="btn-dialer-retry" onclick="retryDialer()" style="display:none;font-size:12px;padding:5px 12px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit">Retry</button>
           </div>
           <div id="research-panel" class="hidden" style="margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg2);padding:16px 18px"></div>
@@ -1552,6 +1555,7 @@ async function enterApp() {
   // Surface any AI-suggested follow-ups awaiting review (e.g. from calls
   // that finished analyzing while the app was closed)
   setTimeout(() => checkSuggestedFollowUps(null), 2500);
+  setComplianceMode(complianceOn());
 }
 
 function setNavLoggedIn() {
@@ -2352,6 +2356,72 @@ function fmtPhone(p) {
 }
 
 function isRealNameUi(n) { const s = String(n || '').trim(); return !!s && s.toLowerCase() !== 'unknown'; }
+
+/* ═══════════════════════════════════════════════════════
+   COMPLIANCE: calling-hours guard (TCPA 8am–9pm prospect-local)
+═══════════════════════════════════════════════════════ */
+// US/Canada area code → IANA timezone (primary tz; DST handled by Intl)
+const AREA_TZ = (() => {
+  const groups = {
+    'America/New_York': '202 203 207 215 216 220 223 234 239 240 248 252 260 267 272 276 283 301 302 304 305 313 315 317 321 326 330 332 336 339 351 352 364 380 386 401 404 407 410 412 413 419 423 434 440 443 445 470 475 478 484 502 508 513 516 517 518 540 551 561 567 570 571 585 603 606 607 609 610 614 616 617 631 646 667 678 680 681 689 703 704 706 716 717 718 724 727 732 740 743 754 757 762 765 770 772 774 781 786 802 803 813 814 828 835 838 839 843 845 854 856 857 859 862 863 864 865 878 904 910 912 914 917 919 929 934 937 939 947 954 959 978 980 984 989',
+    'America/Chicago': '205 210 214 217 218 224 225 228 251 254 256 262 270 281 309 312 314 316 318 319 320 325 331 334 337 346 361 364x 402 405 409 414 417 430 432 447 469 479 501 504 507 512 515 531 534 539 563 573 580 601 605 608 612 615 618 620 629 630 636 641 651 660 662 682 701 708 712 713 715 726 731 737 763 769 773 779 785 806 815 816 817 830 832 847 870 872 901 903 913 918 920 930 931 936 938 940 945 952 956 972 979 985',
+    'America/Denver': '303 307 385 406 435 505 575 720 801 970 983 986',
+    'America/Phoenix': '480 520 602 623 928',
+    'America/Los_Angeles': '206 209 213 253 279 310 323 408 415 424 425 442 458 503 509 510 530 541 559 562 564 619 626 628 650 657 661 669 702 707 714 725 747 760 775 805 818 831 858 909 916 925 949 951 971',
+    'America/Anchorage': '907',
+    'Pacific/Honolulu': '808'
+  };
+  const m = {};
+  for (const [tz, codes] of Object.entries(groups)) {
+    codes.split(/\s+/).forEach(c => { const code = c.replace('x', ''); if (!m[code]) m[code] = tz; });
+  }
+  return m;
+})();
+
+function prospectTimezone(phone) {
+  const d = String(phone || '').replace(/\D/g, '');
+  const ten = d.length === 11 && d[0] === '1' ? d.slice(1) : d;
+  if (ten.length < 10) return null;
+  return AREA_TZ[ten.slice(0, 3)] || null;
+}
+function prospectLocalInfo(phone) {
+  const tz = prospectTimezone(phone);
+  if (!tz) return { tz: null, hour: null, label: '' };
+  try {
+    const h24 = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date()));
+    const time = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date());
+    const abbr = { 'America/New_York': 'ET', 'America/Chicago': 'CT', 'America/Denver': 'MT', 'America/Phoenix': 'MST', 'America/Los_Angeles': 'PT', 'America/Anchorage': 'AKT', 'Pacific/Honolulu': 'HT' }[tz] || '';
+    return { tz, hour: h24, label: time + ' ' + abbr };
+  } catch (e) { return { tz, hour: null, label: '' }; }
+}
+// Federal safe-harbor: 8:00am–9:00pm called-party local time
+function callingHoursCheck(phone) {
+  const info = prospectLocalInfo(phone);
+  if (info.hour == null) return { ok: true, unknown: true, label: '' };
+  const ok = info.hour >= 8 && info.hour < 21;
+  return { ok, unknown: false, label: info.label, hour: info.hour };
+}
+function complianceOn() { return localStorage.getItem('compliance_mode') === '1'; }
+function setComplianceMode(on) {
+  localStorage.setItem('compliance_mode', on ? '1' : '0');
+  const badge = document.getElementById('compliance-badge');
+  if (badge) badge.style.display = on ? 'inline-flex' : 'none';
+  const tog = document.getElementById('compliance-toggle');
+  if (tog) tog.checked = on;
+  updateDialerLocalTime();
+}
+// Live "prospect local time" + calling-hours state under the dialer input
+function updateDialerLocalTime() {
+  const el = document.getElementById('dialer-localtime');
+  if (!el) return;
+  const num = document.getElementById('dialer-number')?.value?.trim();
+  if (!num || num.replace(/\D/g, '').length < 10) { el.textContent = ''; el.style.color = 'var(--text3)'; return; }
+  const chk = callingHoursCheck(num);
+  if (chk.unknown) { el.textContent = ''; return; }
+  const within = chk.ok;
+  el.textContent = (within ? '🕐 ' : '⛔ ') + 'Their local time: ' + chk.label + (within ? ' · OK to call' : ' · outside 8am–9pm');
+  el.style.color = within ? 'var(--text3)' : 'var(--danger)';
+}
 
 // Prefer a real name; fall back to the phone number rather than "Unknown"
 function displayName(name, phone) {
@@ -3389,13 +3459,13 @@ function pdRender() {
   if (controls) controls.style.display = 'flex';
   if (bar) bar.style.display = 'block';
 
-  const done = pdQueue.filter(l => l.status === 'done' || l.status === 'skipped' || l.status === 'dnc').length;
+  const done = pdQueue.filter(l => l.status === 'done' || l.status === 'skipped' || l.status === 'dnc' || l.status === 'hours').length;
   document.getElementById('pd-progress').textContent = `${done} / ${pdQueue.length} complete`;
   document.getElementById('pd-bar-fill').style.width = (done / pdQueue.length * 100) + '%';
   document.getElementById('pd-start').style.display = pdActive ? 'none' : 'inline-flex';
   document.getElementById('pd-pause').style.display = pdActive ? 'inline-flex' : 'none';
 
-  const statusIcon = { pending: '⚪', calling: '📞', done: '✅', skipped: '⏭', dnc: '🚫' };
+  const statusIcon = { pending: '⚪', calling: '📞', done: '✅', skipped: '⏭', dnc: '🚫', hours: '⛔' };
   queueEl.innerHTML = `<div class="table-card">${pdQueue.map((l, i) => `
     <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);font-size:13px;${l.status === 'calling' ? 'background:var(--brand-light)' : ''}">
       <span style="font-size:15px">${statusIcon[l.status] || '⚪'}</span>
@@ -3405,6 +3475,7 @@ function pdRender() {
       ${l.status === 'pending' ? `<button class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="pdDialOne(${i})">Call now</button>` : ''}
       ${l.status === 'calling' ? '<span style="color:var(--brand);font-weight:600;font-size:12px">On call…</span>' : ''}
       ${l.status === 'dnc' ? '<span style="color:var(--danger);font-weight:600;font-size:12px">Do Not Call</span>' : ''}
+      ${l.status === 'hours' ? '<span style="color:var(--warm);font-weight:600;font-size:12px">Outside calling hours</span>' : ''}
     </div>`).join('')}</div>`;
 }
 
@@ -3460,6 +3531,17 @@ function pdDial(i) {
     pdRender();
     if (pdActive) { pdAdvanceTimer = setTimeout(() => { if (pdActive) pdDialNext(); }, 400); }
     return;
+  }
+  // Compliance Mode: hold numbers outside the prospect's 8am–9pm window
+  if (complianceOn()) {
+    const chk = callingHoursCheck(lead.phone);
+    if (!chk.ok && !chk.unknown) {
+      lead.status = 'hours';
+      pdSave();
+      pdRender();
+      if (pdActive) { pdAdvanceTimer = setTimeout(() => { if (pdActive) pdDialNext(); }, 400); }
+      return;
+    }
   }
   pdCurrentIdx = i;
   lead.status = 'calling';
