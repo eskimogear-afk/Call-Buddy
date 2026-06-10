@@ -33,6 +33,35 @@ async function initTwilioDevice() {
       const retryBtn = document.getElementById('btn-dialer-retry');
       if (retryBtn) retryBtn.style.display = 'none';
     });
+
+    // Incoming calls — ring the browser, let the user answer or decline
+    twilioDevice.on('incoming', (call) => {
+      const from = call.parameters.From || 'Unknown';
+      currentCall = call;
+      setStatus('📞 Incoming call: ' + from);
+
+      const c = document.getElementById('btn-call');
+      const h = document.getElementById('btn-hangup');
+      if (c) {
+        c.textContent = '✅ Answer';
+        c.onclick = () => call.accept();
+        c.style.display = 'inline-block';
+      }
+      if (h) {
+        h.textContent = 'Decline';
+        h.style.display = 'inline-block';
+        h.onclick = () => { call.reject(); restoreDialerUI(); setStatus('🟢 Ready to call'); };
+      }
+
+      call.on('accept', () => {
+        setStatus('📞 Connected: ' + from);
+        if (c) c.style.display = 'none';
+        if (h) { h.textContent = 'Hang Up'; h.onclick = hangUp; }
+      });
+      call.on('disconnect', () => { restoreDialerUI(); endCallUI(); });
+      call.on('cancel', () => { restoreDialerUI(); currentCall = null; setStatus('Missed call: ' + from); });
+      call.on('reject', () => { restoreDialerUI(); currentCall = null; });
+    });
     twilioDevice.on('registering', () => setStatus('Registering...'));
     twilioDevice.on('unregistered', () => setStatus('⚪ Offline'));
     twilioDevice.on('error', (err) => {
@@ -101,6 +130,13 @@ async function makeCall() {
     setStatus('🔴 ' + (err.message || 'Call failed'));
     endCallUI();
   }
+}
+
+function restoreDialerUI() {
+  const c = document.getElementById('btn-call');
+  const h = document.getElementById('btn-hangup');
+  if (c) { c.textContent = 'Call'; c.onclick = makeCall; c.style.display = 'inline-block'; }
+  if (h) { h.textContent = 'Hang Up'; h.onclick = hangUp; h.style.display = 'none'; }
 }
 
 function endCallUI() {

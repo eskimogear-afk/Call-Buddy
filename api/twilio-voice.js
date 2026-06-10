@@ -1,6 +1,8 @@
 import twilio from 'twilio';
 import { createClient } from '@supabase/supabase-js';
 
+const xmlEscape = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'text/xml');
 
@@ -12,9 +14,9 @@ export default async function handler(req, res) {
     return res.status(405).send('<Response></Response>');
   }
 
-  // Validate Twilio signature.
-  // Use TWILIO_WEBHOOK_BASE_URL env var if set (must match exactly what's in Twilio console TwiML App).
-  // Falls back to reconstructing from the host header.
+  // Validate Twilio signature against the URL exactly as requested — req.url preserves
+  // the original encoding (Twilio normalizes %3A back to ':' etc., so rebuilding the
+  // query string with URLSearchParams produces a different string and fails validation)
   const twilioSignature = req.headers['x-twilio-signature'] || '';
   const baseUrl = process.env.TWILIO_WEBHOOK_BASE_URL
     ? process.env.TWILIO_WEBHOOK_BASE_URL.replace(/\/$/, '')
@@ -34,18 +36,88 @@ export default async function handler(req, res) {
     }
   }
 
-  const { To, From } = req.body;
+  const { To, From, DialCallStatus } = req.body;
+  const isClientCall = (From || '').startsWith('client:');
+
+  const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY)
+    ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
+    : null;
+
+  /* ── INBOUND: someone calling one of our Twilio numbers ────────────────── */
+  if (!isClientCall) {
+    // Which user owns the number that was called?
+    let ownerId = null;
+    let ownerName = '';
+    if (supabase && To) {
+      try {
+        const { data: owner } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .eq('twilio_phone_number', To)
+          .single();
+        ownerId = owner?.id || null;
+        ownerName = owner?.full_name || '';
+      } catch (e) {
+        console.error('Inbound owner lookup error:', e);
+      }
+    }
+
+    // Contact phone for the call log is the CALLER on inbound — pass it as "to"
+    // so the recording pipeline upserts the right contact
+    const cbParams = new URLSearchParams({
+      user_id: ownerId || '',
+      to: From || '',
+      from: To || ''
+    });
+    const recordingCallback = xmlEscape(`${baseUrl}/api/twilio-recording?${cbParams.toString()}`);
+
+    // Second leg: browser didn't answer (or finished) — action callback after <Dial>
+    if (req.query.fallback === '1') {
+      if (DialCallStatus === 'completed') {
+        return res.status(200).send('<Response><Hangup/></Response>');
+      }
+      const greeting = ownerName
+        ? `You have reached ${xmlEscape(ownerName)}. Please leave a message after the tone.`
+        : 'Please leave a message after the tone.';
+      return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>${greeting}</Say>
+  <Record maxLength="120" playBeep="true"
+          recordingStatusCallback="${recordingCallback}"
+          recordingStatusCallbackMethod="POST"/>
+  <Say>Thank you. Goodbye.</Say>
+</Response>`);
+    }
+
+    if (!ownerId) {
+      return res.status(200).send('<Response><Say>This number is not configured. Goodbye.</Say><Hangup/></Response>');
+    }
+
+    // Ring the owner's browser dialer; fall through to voicemail via action URL
+    const fallbackParams = new URLSearchParams({ fallback: '1', user_id: ownerId, to: From || '', from: To || '' });
+    const actionUrl = xmlEscape(`${baseUrl}/api/twilio-voice?${fallbackParams.toString()}`);
+
+    return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial timeout="20" record="record-from-answer-dual"
+        recordingStatusCallback="${recordingCallback}"
+        recordingStatusCallbackMethod="POST"
+        action="${actionUrl}" method="POST">
+    <Client>${xmlEscape(ownerId)}</Client>
+  </Dial>
+</Response>`);
+  }
+
+  /* ── OUTBOUND: browser dialer call (From = "client:<user.id>") ─────────── */
   if (!To) {
     return res.status(400).send('<Response><Say>No destination number.</Say></Response>');
   }
 
-  // From = "client:<user.id>" for browser calls — strip the client: prefix
   const userId = (From || '').replace(/^client:/, '');
   let callerId = process.env.TWILIO_PHONE_NUMBER || null;
 
-  if (userId && userId.length === 36 && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+  if (userId && userId.length === 36 && supabase) {
     try {
-      const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
       const { data: profile } = await supabase
         .from('profiles')
         .select('twilio_phone_number')
@@ -57,23 +129,17 @@ export default async function handler(req, res) {
     }
   }
 
-  const recordingBase = process.env.TWILIO_WEBHOOK_BASE_URL
-    ? process.env.TWILIO_WEBHOOK_BASE_URL.replace(/\/$/, '')
-    : `https://${req.headers.host}`;
   // Recording status callbacks don't include From/To/CallDuration — pass them via query params
   const cbParams = new URLSearchParams({
     user_id: userId || '',
     to: To || '',
     from: callerId || ''
   });
-  const recordingCallback = `${recordingBase}/api/twilio-recording?${cbParams.toString()}`;
+  const recordingCallbackXml = xmlEscape(`${baseUrl}/api/twilio-recording?${cbParams.toString()}`);
 
-  // Build Dial verb — omit callerId attribute if we don't have one so Twilio uses account default
-  const callerIdAttr = callerId ? ` callerId="${callerId}"` : '';
-
-  // & in the callback URL must be XML-escaped or Twilio fails to parse the TwiML;
+  // Omit callerId attribute if we don't have one so Twilio uses account default;
   // strip everything but digits/+ from To (it's user input going into XML)
-  const recordingCallbackXml = recordingCallback.replace(/&/g, '&amp;');
+  const callerIdAttr = callerId ? ` callerId="${xmlEscape(callerId)}"` : '';
   const safeTo = To.replace(/[^\d+]/g, '');
 
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
