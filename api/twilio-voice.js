@@ -76,6 +76,40 @@ export default async function handler(req, res) {
       if (DialCallStatus === 'completed') {
         return res.status(200).send('<Response><Hangup/></Response>');
       }
+
+      // Missed-call text-back: fire an SMS to the caller (real numbers only)
+      const missedUserId = req.query.user_id || ownerId;
+      if (missedUserId && From && /^\+\d{10,15}$/.test(From) && To &&
+          process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+        try {
+          // Don't double-text the same caller within 24h
+          const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          const { data: recent } = await supabase.from('messages')
+            .select('id')
+            .eq('user_id', missedUserId)
+            .eq('phone', From)
+            .eq('direction', 'outbound')
+            .gte('created_at', since)
+            .limit(1);
+
+          if (!recent?.length) {
+            const firstName = (ownerName || '').split(/\s+/)[0];
+            const txt = `Sorry I missed your call${firstName ? ` — this is ${firstName}` : ''}! What's the best time to reach you?`;
+            const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+            const sms = await client.messages.create({ body: txt, from: To, to: From });
+
+            const { data: contact } = await supabase.from('contacts')
+              .select('id').eq('user_id', missedUserId).eq('phone', From).maybeSingle();
+            await supabase.from('messages').insert({
+              user_id: missedUserId, contact_id: contact?.id || null, phone: From,
+              direction: 'outbound', body: txt, twilio_sid: sms.sid, read: true
+            });
+          }
+        } catch (e) {
+          console.error('Missed-call text-back error:', e);
+        }
+      }
+
       const greeting = ownerName
         ? `You have reached ${xmlEscape(ownerName)}. Please leave a message after the tone.`
         : 'Please leave a message after the tone.';

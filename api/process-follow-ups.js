@@ -57,11 +57,17 @@ export default async function handler(req, res) {
         const body = fu.message ||
           `Hi ${fu.contacts?.name || 'there'}, just following up on our conversation. Feel free to reach out with any questions!`;
 
-        await client.messages.create({ body, from: fromPhone, to: toPhone });
+        const sms = await client.messages.create({ body, from: fromPhone, to: toPhone });
 
         await supabase.from('follow_ups')
           .update({ status: 'sent', sent_at: new Date().toISOString() })
           .eq('id', fu.id);
+
+        // Log into the SMS inbox thread
+        await supabase.from('messages').insert({
+          user_id: fu.user_id, contact_id: fu.contact_id, phone: toPhone,
+          direction: 'outbound', body, twilio_sid: sms.sid, read: true
+        });
 
         results.sent++;
       } catch (sendErr) {

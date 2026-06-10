@@ -41,6 +41,52 @@ export default async function handler(req, res) {
       return res.status(200).json(data);
     }
 
+    if (req.method === 'POST' && req.body?.action === 'send_now') {
+      // Send a pending follow-up SMS immediately (was /api/send-follow-up,
+      // merged here to stay within the 12-function Vercel Hobby limit)
+      const { follow_up_id } = req.body || {};
+      if (!follow_up_id) return res.status(400).json({ error: 'follow_up_id required' });
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN)
+        return res.status(500).json({ error: 'Twilio not configured' });
+
+      const { data: followUp, error: fuError } = await supabase
+        .from('follow_ups')
+        .select('*, contacts(id, name, phone, follow_up_count)')
+        .eq('id', follow_up_id)
+        .eq('user_id', user.id)
+        .single();
+      if (fuError || !followUp) return res.status(404).json({ error: 'Follow-up not found' });
+      if (followUp.status === 'sent') return res.status(400).json({ error: 'Already sent' });
+
+      const toPhone = followUp.contacts?.phone;
+      if (!toPhone) return res.status(400).json({ error: 'Contact has no phone number' });
+
+      const { data: profile } = await supabase
+        .from('profiles').select('twilio_phone_number').eq('id', user.id).single();
+      const fromPhone = profile?.twilio_phone_number || process.env.TWILIO_PHONE_NUMBER;
+      if (!fromPhone) return res.status(500).json({ error: 'No outbound phone number configured for your account' });
+
+      const twilio = (await import('twilio')).default;
+      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      const smsBody = followUp.message ||
+        `Hi ${followUp.contacts?.name || 'there'}, just following up. Let me know if you have any questions!`;
+      const sms = await client.messages.create({ body: smsBody, from: fromPhone, to: toPhone });
+
+      await supabase.from('follow_ups')
+        .update({ status: 'sent', sent_at: new Date().toISOString() })
+        .eq('id', follow_up_id);
+      await supabase.from('contacts')
+        .update({ follow_up_count: (followUp.contacts?.follow_up_count || 0) + 1 })
+        .eq('id', followUp.contact_id).eq('user_id', user.id);
+      // Log into the SMS inbox thread
+      await supabase.from('messages').insert({
+        user_id: user.id, contact_id: followUp.contact_id, phone: toPhone,
+        direction: 'outbound', body: smsBody, twilio_sid: sms.sid, read: true
+      });
+
+      return res.status(200).json({ success: true, sid: sms.sid });
+    }
+
     if (req.method === 'POST') {
       const { contact_id, call_id, type, message, scheduled_at } = req.body || {};
       if (!contact_id || !scheduled_at) return res.status(400).json({ error: 'contact_id and scheduled_at required' });

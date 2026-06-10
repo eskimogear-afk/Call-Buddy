@@ -749,6 +749,10 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <button class="sidebar-item" id="nav-power" onclick="switchPanel('power')">
         <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Power Dialer
       </button>
+      <button class="sidebar-item" id="nav-inbox" onclick="switchPanel('inbox')">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Inbox
+        <span id="inbox-badge" style="display:none;background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:auto"></span>
+      </button>
       <button class="sidebar-item" id="nav-contacts" onclick="switchPanel('contacts')">
         <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Contacts
       </button>
@@ -998,6 +1002,33 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         </div>
 
         <div id="pd-queue"></div>
+      </div>
+
+      <!-- SMS Inbox -->
+      <div id="panel-inbox" class="hidden">
+        <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Inbox</h1>
+            <p style="font-size:14px;color:var(--text2);margin-top:4px">Two-way texting with your leads.</p>
+          </div>
+          <button class="btn btn-outline" onclick="loadInbox()" style="font-size:13px">↻ Refresh</button>
+        </div>
+        <div id="inbox-threads"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div>
+        <div id="inbox-thread-view" class="hidden">
+          <button class="btn btn-ghost" onclick="closeThread()" style="margin-bottom:12px">← All conversations</button>
+          <div class="table-card" style="display:flex;flex-direction:column;height:62vh">
+            <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+              <strong id="thread-name">—</strong>
+              <span id="thread-phone" style="font-size:13px;color:var(--text3)"></span>
+              <button class="btn btn-ghost" style="font-size:12px;margin-left:auto;padding:4px 10px" onclick="callAgain(currentThreadPhone)">📞 Call</button>
+            </div>
+            <div id="thread-messages" style="flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:8px"></div>
+            <div style="padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:8px">
+              <input id="thread-input" type="text" placeholder="Type a message…" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px" onkeydown="if(event.key==='Enter')sendThreadMessage()">
+              <button class="btn btn-primary" id="thread-send" onclick="sendThreadMessage()">Send</button>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -1285,7 +1316,7 @@ function showView(v) {
 }
 
 function switchPanel(p) {
-  ['dashboard','recorder','log','settings','contacts','followups','power'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
+  ['dashboard','recorder','log','settings','contacts','followups','power','inbox'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
   document.getElementById('panel-' + p).classList.remove('hidden');
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
   document.getElementById('nav-' + p)?.classList.add('active');
@@ -1294,6 +1325,7 @@ function switchPanel(p) {
   if (p === 'contacts') loadContacts();
   if (p === 'followups') loadFollowUps();
   if (p === 'power') pdRender();
+  if (p === 'inbox') loadInbox();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -2088,10 +2120,10 @@ async function sendFollowUpNow(id) {
   const btn = event.target;
   btn.disabled = true; btn.textContent = 'Sending...';
   try {
-    const r = await fetch('/api/send-follow-up', {
+    const r = await fetch('/api/follow-ups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
-      body: JSON.stringify({ follow_up_id: id })
+      body: JSON.stringify({ action: 'send_now', follow_up_id: id })
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Send failed');
@@ -2371,6 +2403,153 @@ window.addEventListener('cb:call-ended', () => {
     pdAdvanceTimer = setTimeout(() => { if (pdActive) pdDialNext(); }, delay);
   }
 });
+
+/* ═══════════════════════════════════════════════════════
+   SMS INBOX
+═══════════════════════════════════════════════════════ */
+let inboxCache = [];
+let currentThreadPhone = null;
+let threadPollTimer = null;
+
+async function inboxFetch(path, opts = {}) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return null;
+  const r = await fetch(path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token, ...(opts.headers || {}) }
+  });
+  if (!r.ok) throw new Error((await r.json()).error || 'Request failed');
+  return r.json();
+}
+
+async function loadInbox() {
+  try {
+    inboxCache = await inboxFetch('/api/twilio-sms?limit=300') || [];
+    renderInboxThreads();
+    updateInboxBadge();
+  } catch (e) {
+    document.getElementById('inbox-threads').innerHTML = '<p style="color:var(--danger);padding:20px">Failed to load messages.</p>';
+  }
+}
+
+function groupThreads(msgs) {
+  const threads = {};
+  for (const m of msgs) {
+    if (!threads[m.phone]) threads[m.phone] = { phone: m.phone, name: m.contacts?.name, company: m.contacts?.company, last: m, unread: 0 };
+    if (new Date(m.created_at) > new Date(threads[m.phone].last.created_at)) threads[m.phone].last = m;
+    if (!threads[m.phone].name && m.contacts?.name) threads[m.phone].name = m.contacts.name;
+    if (m.direction === 'inbound' && !m.read) threads[m.phone].unread++;
+  }
+  return Object.values(threads).sort((a, b) => new Date(b.last.created_at) - new Date(a.last.created_at));
+}
+
+function renderInboxThreads() {
+  const el = document.getElementById('inbox-threads');
+  const threads = groupThreads(inboxCache);
+  if (!threads.length) {
+    el.innerHTML = '<div class="empty-state">No conversations yet. Texts you send — and replies from your leads — will show up here.</div>';
+    return;
+  }
+  el.innerHTML = `<div class="table-card">${threads.map(t => `
+    <div onclick="openThread('${esc(t.phone)}')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+      <div class="cc-avatar" style="background:${t.unread ? 'var(--brand)' : '#9CA3AF'};width:38px;height:38px;font-size:13px">${esc((t.name || t.phone.replace(/\D/g, '').slice(-2)).split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase())}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:${t.unread ? '700' : '600'}">${esc(t.name || t.phone)} ${t.company ? `<span style="font-weight:400;color:var(--text3);font-size:12px">· ${esc(t.company)}</span>` : ''}</div>
+        <div style="font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${t.unread ? 'font-weight:600;color:var(--text)' : ''}">${t.last.direction === 'outbound' ? 'You: ' : ''}${esc(t.last.body)}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:12px;color:var(--text3)">${timeAgo(t.last.created_at)}</div>
+        ${t.unread ? `<span style="background:var(--brand);color:#fff;font-size:11px;font-weight:700;padding:1px 8px;border-radius:99px">${t.unread}</span>` : ''}
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+async function openThread(phone) {
+  currentThreadPhone = phone;
+  document.getElementById('inbox-threads').classList.add('hidden');
+  document.getElementById('inbox-thread-view').classList.remove('hidden');
+  const t = groupThreads(inboxCache).find(x => x.phone === phone);
+  document.getElementById('thread-name').textContent = t?.name || phone;
+  document.getElementById('thread-phone').textContent = t?.name ? phone : '';
+  renderThreadMessages();
+  // mark read + clear badge
+  inboxFetch('/api/twilio-sms', { method: 'PUT', body: JSON.stringify({ phone }) })
+    .then(() => { inboxCache.forEach(m => { if (m.phone === phone && m.direction === 'inbound') m.read = true; }); updateInboxBadge(); })
+    .catch(() => {});
+  // poll for new replies while the thread is open
+  if (threadPollTimer) clearInterval(threadPollTimer);
+  threadPollTimer = setInterval(async () => {
+    if (!currentThreadPhone) return;
+    try {
+      const fresh = await inboxFetch('/api/twilio-sms?phone=' + encodeURIComponent(currentThreadPhone) + '&limit=100');
+      const known = new Set(inboxCache.map(m => m.id));
+      let added = false;
+      (fresh || []).forEach(m => { if (!known.has(m.id)) { inboxCache.push(m); added = true; } });
+      if (added) renderThreadMessages();
+    } catch (e) {}
+  }, 8000);
+}
+
+function closeThread() {
+  currentThreadPhone = null;
+  if (threadPollTimer) { clearInterval(threadPollTimer); threadPollTimer = null; }
+  document.getElementById('inbox-thread-view').classList.add('hidden');
+  document.getElementById('inbox-threads').classList.remove('hidden');
+  loadInbox();
+}
+
+function renderThreadMessages() {
+  const msgs = inboxCache.filter(m => m.phone === currentThreadPhone)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const el = document.getElementById('thread-messages');
+  el.innerHTML = msgs.map(m => `
+    <div style="max-width:75%;align-self:${m.direction === 'outbound' ? 'flex-end' : 'flex-start'}">
+      <div style="padding:9px 14px;border-radius:14px;font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word;${m.direction === 'outbound' ? 'background:var(--brand);color:#fff;border-bottom-right-radius:4px' : 'background:var(--bg2);border:1px solid var(--border);border-bottom-left-radius:4px'}">${esc(m.body)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px;text-align:${m.direction === 'outbound' ? 'right' : 'left'}">${timeAgo(m.created_at)}</div>
+    </div>`).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+async function sendThreadMessage() {
+  const input = document.getElementById('thread-input');
+  const btn = document.getElementById('thread-send');
+  const body = input.value.trim();
+  if (!body || !currentThreadPhone) return;
+  btn.disabled = true;
+  try {
+    const t = groupThreads(inboxCache).find(x => x.phone === currentThreadPhone);
+    const contactMsg = inboxCache.find(m => m.phone === currentThreadPhone && m.contact_id);
+    const saved = await inboxFetch('/api/twilio-sms', {
+      method: 'POST',
+      body: JSON.stringify({ to: currentThreadPhone, body, contact_id: contactMsg?.contact_id || null })
+    });
+    inboxCache.push(saved);
+    input.value = '';
+    renderThreadMessages();
+  } catch (e) {
+    alert('Failed to send: ' + e.message);
+  }
+  btn.disabled = false;
+  input.focus();
+}
+
+async function updateInboxBadge() {
+  try {
+    if (!inboxCache.length) inboxCache = await inboxFetch('/api/twilio-sms?limit=300') || [];
+    const unread = inboxCache.filter(m => m.direction === 'inbound' && !m.read).length;
+    const badge = document.getElementById('inbox-badge');
+    if (badge) {
+      if (unread > 0) { badge.textContent = unread; badge.style.display = 'inline-block'; }
+      else badge.style.display = 'none';
+    }
+  } catch (e) {}
+}
+
+// Refresh unread badge periodically
+setTimeout(updateInboxBadge, 4000);
+setInterval(() => {
+  if (currentUser) { inboxCache = []; updateInboxBadge(); }
+}, 60000);
 
 </script>
 </body>
