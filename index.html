@@ -162,7 +162,8 @@ footer{background:var(--navy);padding:48px;display:flex;align-items:center;justi
 .sidebar-plan strong{display:block;color:var(--text);font-size:12.5px;margin-bottom:4px;font-weight:600}
 .main-content{flex:1;padding:28px 32px;overflow-y:auto;background:var(--bg2);min-width:0}
 
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:24px}
+@media(max-width:1280px){.stats-grid{grid-template-columns:repeat(3,1fr)}}
 .stat-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow-sm);transition:box-shadow .15s}
 .stat-card:hover{box-shadow:var(--shadow)}
 .stat-val{font-family:'Plus Jakarta Sans',sans-serif;font-size:26px;font-weight:700;letter-spacing:-.5px;color:var(--text);font-variant-numeric:tabular-nums}
@@ -862,6 +863,14 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <div class="stat-card">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="stat-lbl" style="margin:0">Follow-ups due</span><div style="width:30px;height:30px;border-radius:8px;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div></div>
             <div class="stat-val" id="st-fu">-</div>
+          </div>
+          <div class="stat-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="stat-lbl" style="margin:0">Talk time today</span><div style="width:30px;height:30px;border-radius:8px;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div></div>
+            <div class="stat-val num" id="st-talk-day">-</div>
+          </div>
+          <div class="stat-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="stat-lbl" style="margin:0">Talk time (7 days)</span><div style="width:30px;height:30px;border-radius:8px;background:var(--brand-light);color:var(--brand);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 1 .5 4"/><polyline points="3 5 3 11 9 11"/></svg></div></div>
+            <div class="stat-val num" id="st-talk-week">-</div>
           </div>
         </div>
         <div class="table-card" style="padding:18px;margin-bottom:20px">
@@ -2186,8 +2195,23 @@ function copyEmail(btn) {
   });
 }
 
+function fmtTalk(sec) {
+  sec = Math.round(sec || 0);
+  if (sec < 60) return sec > 0 ? '<1m' : '0m';
+  const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+  return h ? h + 'h ' + m + 'm' : m + 'm';
+}
+
 function refreshDashboard() {
   document.getElementById('st-total').textContent = records.length;
+  const now = Date.now();
+  const todayStr = new Date().toDateString();
+  const secsOf = r => Number(r.duration_seconds || r.duration || 0);
+  const talkDay = records.filter(r => new Date(r.created_at).toDateString() === todayStr).reduce((s, r) => s + secsOf(r), 0);
+  const talkWeek = records.filter(r => now - new Date(r.created_at).getTime() < 7 * 86400000).reduce((s, r) => s + secsOf(r), 0);
+  const td = document.getElementById('st-talk-day'), tw = document.getElementById('st-talk-week');
+  if (td) td.textContent = fmtTalk(talkDay);
+  if (tw) tw.textContent = fmtTalk(talkWeek);
   document.getElementById('st-int').textContent = records.filter(r => r.heat_score === 'Hot' || r.outcome === 'Interested').length;
   document.getElementById('st-cb').textContent = records.filter(r => r.heat_score === 'Warm' || r.outcome === 'Callback').length;
   document.getElementById('dash-table').innerHTML = buildTable(records.slice(0, 8));
