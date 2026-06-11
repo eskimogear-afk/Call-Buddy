@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PitchLog App — Dashboard</title>
+<meta name="description" content="PitchLog listens to your cold calls, transcribes in real time, and automatically logs every prospect. Built for sales professionals in any industry.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%236366F1%22/><text y=%22.9em%22 font-size=%2280%22>&#127908;</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/site.css">
+<meta name="robots" content="noindex, nofollow">
+</head>
+<body>
+
+
+
+<!-- ══ NAV ══════════════════════════════════════════════════════════════════ -->
+<nav id="main-nav">
+  <div class="logo" onclick="window.location.href='/'">
+    <div class="logo-mark" style="background:linear-gradient(135deg,#6366F1,#7C3AED)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+    </div>
+    <span class="logo-name">PitchLog</span>
+  </div>
+  <div class="nav-right" id="nav-right"></div>
+</nav>
+
+<!-- ══ APP ══════════════════════════════════════════════════════════════════ -->
+<div id="view-app" class="view active">
+  <div class="app-layout">
+    <div class="sidebar">
+      <button class="sidebar-item active" id="nav-dashboard" onclick="switchPanel('dashboard')">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>Dashboard
+      </button>
+      <button class="sidebar-item" id="nav-analytics" onclick="switchPanel('analytics')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Analytics
+      </button>
+      <button class="sidebar-item" id="nav-recorder" onclick="switchPanel('recorder')">
+        <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>New call
+      </button>
+      <button class="sidebar-item" id="nav-log" onclick="switchPanel('log')">
+        <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Call log
+      </button>
+      <button class="sidebar-item" id="nav-contacts" onclick="switchPanel('contacts')">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Contacts
+      </button>
+      <button class="sidebar-item" id="nav-followups" onclick="switchPanel('followups')">
+        <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.79 19.79 19.79 0 01.12 1.18 2 2 0 012.11 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>Follow-ups
+        <span id="followups-badge" style="display:none;background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:auto"></span>
+      </button>
+      <div class="sidebar-divider"></div>
+      <button class="sidebar-item" id="nav-settings" onclick="switchPanel('settings')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>Settings
+      </button>
+      <button class="sidebar-item" onclick="logout()">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>Log out
+      </button>
+      <div class="sidebar-plan" id="sidebar-plan">
+        <strong id="plan-name">Free plan</strong>
+        <span id="plan-usage">0 / 25 calls used</span>
+        <div id="usage-warning" class="hidden" style="margin-top:8px;font-size:11px;color:#b45309;background:#fffbeb;padding:6px 8px;border-radius:6px;line-height:1.4"></div>
+        <button class="btn btn-primary" style="margin-top:10px;font-size:12px;padding:7px 14px;width:100%;justify-content:center" onclick="showUpgradeModal()">Upgrade plan →</button>
+      </div>
+    </div>
+
+    <div class="main-content">
+
+      <!-- Dashboard -->
+      <div id="panel-dashboard">
+        <div style="margin-bottom:24px">
+          <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400" id="dash-greeting">Dashboard</h1>
+          <p style="font-size:14px;color:var(--text2);margin-top:4px" id="dash-date"></p>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-val" id="st-total">-</div><div class="stat-lbl">Total calls</div></div>
+          <div class="stat-card"><div class="stat-val" id="st-int">-</div><div class="stat-lbl">Interested</div></div>
+          <div class="stat-card"><div class="stat-val" id="st-cb">-</div><div class="stat-lbl">Callbacks</div></div>
+                <div class="stat-card"><div class="stat-val" id="st-fu">-</div><div class="stat-lbl">Follow-ups due</div></div>
+        </div>
+        <div style="background:#1e1b4b;border-radius:12px;padding:20px;margin:16px 0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <h3 style="color:#a5b4fc;margin:0;font-size:16px;">📞 Dialer</h3>
+            <span id="dialer-caller-id" style="font-size:12px;color:#6b7280;background:#0f0a2e;padding:3px 10px;border-radius:20px;"></span>
+          </div>
+          <div id="dialer-setup-warning" style="display:none;padding:10px 14px;background:#1e3a5f;border-radius:8px;color:#93c5fd;font-size:13px;margin-bottom:10px;">
+            ℹ️ No dedicated caller ID set — calls will use the account default number.
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input id="dialer-number" type="tel" placeholder="+1 (555) 000-0000"
+              style="flex:1;min-width:180px;padding:10px 14px;border-radius:8px;
+                     border:1px solid #4f46e5;background:#0f0a2e;color:#fff;font-size:14px;"/>
+            <button id="btn-call" onclick="makeCall()"
+              style="padding:10px 20px;background:#4f46e5;color:#fff;border:none;
+                     border-radius:8px;cursor:pointer;font-weight:600;">Call</button>
+            <button id="btn-hangup" onclick="hangUp()"
+              style="display:none;padding:10px 20px;background:#dc2626;color:#fff;
+                     border:none;border-radius:8px;cursor:pointer;font-weight:600;">Hang Up</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+            <div id="dialer-status" style="font-size:13px;color:#a5b4fc;flex:1">Initializing...</div>
+            <button id="btn-dialer-retry" onclick="retryDialer()" style="display:none;font-size:12px;padding:4px 10px;background:#4f46e5;color:#fff;border:none;border-radius:6px;cursor:pointer">Retry</button>
+          </div>
+        </div>
+        <div class="table-card">
+          <div class="table-header">
+            <h2>Recent calls</h2>
+            <button class="btn btn-outline" onclick="exportAll()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export to Excel
+            </button>
+          </div>
+          <div id="dash-table"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div>
+        </div>
+      </div>
+
+      <!-- Analytics -->
+      <div id="panel-analytics" class="hidden">
+        <div style="margin-bottom:24px">
+          <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Analytics</h1>
+          <p style="font-size:14px;color:var(--text2);margin-top:4px">Your cold-calling numbers at a glance.</p>
+        </div>
+        <div id="analytics-empty" class="hidden table-card" style="padding:48px 24px;text-align:center;color:var(--text3);font-size:14px">
+          No calls logged yet — analytics light up after your first few dials.
+        </div>
+        <div id="analytics-body">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-val" id="an-dials">–</div>
+              <div class="stat-lbl">Dials today</div>
+              <div style="height:4px;background:var(--bg3);border-radius:2px;margin-top:10px;overflow:hidden"><div id="an-goal-bar" style="height:100%;width:0%;background:var(--brand)"></div></div>
+              <div class="stat-lbl" id="an-goal-lbl" style="cursor:pointer;margin-top:6px" title="Click to change your daily goal" onclick="changeDialGoal()">goal 50</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-val" id="an-connect">–</div>
+              <div class="stat-lbl">Connect rate · 7 days</div>
+              <div class="stat-lbl" id="an-connect-sub" style="margin-top:6px;color:var(--text3)"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-val" id="an-interested">–</div>
+              <div class="stat-lbl">Interested per connect · 7 days</div>
+              <div class="stat-lbl" id="an-interested-sub" style="margin-top:6px;color:var(--text3)"></div>
+            </div>
+            <div class="stat-card" style="cursor:pointer" title="Open follow-ups" onclick="switchPanel('followups')">
+              <div class="stat-val" id="an-due">–</div>
+              <div class="stat-lbl">Follow-ups due today</div>
+              <div class="stat-lbl" id="an-due-sub" style="margin-top:6px;color:var(--text3)"></div>
+            </div>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-card" style="cursor:pointer" title="Open contacts" onclick="switchPanel('contacts')">
+              <div class="stat-val" id="an-hotnonext">–</div>
+              <div class="stat-lbl">Hot, no next step</div>
+              <div class="stat-lbl" style="margin-top:6px;color:var(--text3)">hot leads without a scheduled follow-up</div>
+            </div>
+            <div class="stat-card" style="cursor:pointer" title="Open contacts" onclick="switchPanel('contacts')">
+              <div id="an-heat" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 8px">–</div>
+              <div class="stat-lbl">Pipeline heat</div>
+            </div>
+            <div class="stat-card" style="cursor:pointer" title="Open contacts" onclick="switchPanel('contacts')">
+              <div class="stat-val" id="an-stale">–</div>
+              <div class="stat-lbl">Going stale</div>
+              <div class="stat-lbl" style="margin-top:6px;color:var(--text3)">open leads untouched for 14+ days</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-val" id="an-sms">–</div>
+              <div class="stat-lbl">SMS reply rate</div>
+              <div class="stat-lbl" id="an-sms-sub" style="margin-top:6px;color:var(--text3)"></div>
+            </div>
+          </div>
+          <div class="table-card" style="padding:18px 22px;margin-bottom:14px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+              <h2 style="font-size:16px;font-weight:600">Calls per day — last 14 days</h2>
+            </div>
+            <div style="height:240px"><canvas id="chart-daily"></canvas></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;margin-bottom:14px">
+            <div class="table-card" style="padding:18px 22px">
+              <h2 style="font-size:16px;font-weight:600;margin-bottom:12px">Best hour to call — connect rate</h2>
+              <div style="height:200px"><canvas id="chart-hour"></canvas></div>
+              <div class="stat-lbl" id="an-hour-note" style="margin-top:10px;color:var(--text3)"></div>
+            </div>
+            <div class="table-card" style="padding:18px 22px">
+              <h2 style="font-size:16px;font-weight:600;margin-bottom:12px">Outcome mix — last 30 days</h2>
+              <div style="height:200px"><canvas id="chart-outcomes"></canvas></div>
+            </div>
+          </div>
+          <div class="table-card" style="padding:18px 22px">
+            <h2 style="font-size:16px;font-weight:600;margin-bottom:14px">Funnel — all time</h2>
+            <div id="an-funnel" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start"></div>
+            <div class="stat-lbl" style="margin-top:12px;color:var(--text3)">Appointments and closed pull from contact stages — set a contact to “Appointment set” or “Closed” when it happens.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recorder -->
+      <div id="panel-recorder" class="hidden">
+        <div style="margin-bottom:20px">
+          <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">New call</h1>
+          <p style="font-size:14px;color:var(--text2);margin-top:4px">Record your call and let AI do the rest.</p>
+        </div>
+        <div class="recorder-card">
+          <div class="card-tabs">
+            <button class="card-tab active" id="tab-record" onclick="switchRecTab('record')">Record</button>
+            <button class="card-tab" id="tab-review" onclick="switchRecTab('review')">Review &amp; save</button>
+          </div>
+          <div id="rec-panel" class="card-body">
+            <div class="tip-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Put your phone on <strong>speaker</strong> near your computer. PitchLog will hear both sides of the conversation.
+            </div>
+            <div class="rec-center">
+              <button class="rec-btn idle" id="rec-btn" onclick="toggleRec()">
+                <svg id="rec-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+              </button>
+              <div class="rec-timer" id="rec-timer">0:00</div>
+              <div class="rec-wave" id="rec-wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+              <div class="rec-status" id="rec-status">Ready to record</div>
+              <div class="rec-sub" id="rec-sub">Tap the mic to begin</div>
+            </div>
+            <div id="live-tx-wrap" class="hidden">
+              <div class="field-label" style="margin-bottom:8px">Live transcript</div>
+              <div class="transcript-area" id="live-tx">Listening...</div>
+            </div>
+          </div>
+          <div id="review-panel" class="card-body hidden">
+            <div id="ai-thinking" class="ai-thinking hidden"><div class="dot-pulse"></div> AI is analyzing your call...</div>
+            <div class="field-label" style="margin-bottom:8px">Full transcript</div>
+            <div class="transcript-area" id="final-tx">Transcript will appear here after recording.</div>
+            <div class="field-label" style="margin:14px 0 8px">AI summary</div>
+            <div class="transcript-area" id="ai-summary" style="min-height:56px">Summary will appear here.</div>
+            <div style="font-size:15px;font-weight:600;margin:20px 0 14px">Prospect details</div>
+            <div class="field-grid">
+              <div class="field-group"><div class="field-label">Name</div><input id="f-name" type="text" placeholder="Jane Smith"></div>
+              <div class="field-group"><div class="field-label">Company</div><input id="f-company" type="text" placeholder="ABC Realty"></div>
+              <div class="field-group"><div class="field-label">Phone</div><input id="f-phone" type="text" placeholder="(555) 000-0000"></div>
+              <div class="field-group"><div class="field-label">Email</div><input id="f-email" type="text" placeholder="jane@email.com"></div>
+              <div class="field-group full"><div class="field-label">Property address</div><input id="f-address" type="text" placeholder="123 Main St, City, State ZIP"></div>
+              <div class="field-group"><div class="field-label">Outcome</div>
+                <select id="f-outcome">
+                  <option value="">Select...</option>
+                  <option>Interested</option><option>Not interested</option>
+                  <option>Callback</option><option>Voicemail</option><option>No answer</option>
+                </select>
+              </div>
+              <div class="field-group"><div class="field-label">Follow-up date</div><input id="f-followup" type="date"></div>
+              <div class="field-group full"><div class="field-label">Pain points</div><textarea id="f-pain" placeholder="AI will fill this in..."></textarea></div>
+              <div class="field-group full"><div class="field-label">Next steps</div><textarea id="f-nextsteps" placeholder="AI will fill this in..."></textarea></div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+              <button class="btn btn-primary" id="save-btn" onclick="saveRecord()">Save to log</button>
+              <button class="btn btn-outline" onclick="exportOne()">Export this call</button>
+              <button class="btn btn-ghost" onclick="switchRecTab('record')">Back</button>
+              <span id="save-msg" class="hidden" style="font-size:13px;color:var(--brand)">✓ Saved!</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Log -->
+      <div id="panel-log" class="hidden">
+        <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Call log</h1>
+            <p style="font-size:14px;color:var(--text2);margin-top:4px">Every prospect, all in one place.</p>
+          </div>
+          <button class="btn btn-outline" onclick="exportAll()">Export all to Excel</button>
+        </div>
+        <div class="table-card"><div id="log-table"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div></div>
+      </div>
+
+      <!-- Settings -->
+      <div id="panel-settings" class="hidden">
+        <div style="margin-bottom:24px"><h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Settings</h1></div>
+        <div class="settings-section">
+          <h3>Account</h3>
+          <div class="settings-row"><div><strong>Name</strong><br><span id="set-name">-</span></div></div>
+          <div class="settings-row"><div><strong>Email</strong><br><span id="set-email">-</span></div></div>
+          <div class="settings-row"><div><strong>Plan</strong><br><span id="set-plan">Free - 25 calls/month</span></div><button class="btn btn-primary" style="font-size:13px;padding:7px 16px;flex-shrink:0" onclick="showUpgradeModal()">Upgrade plan</button></div>
+          <div class="settings-row"><div><strong>Calls this month</strong><br><span id="set-calls">-</span></div></div>
+        </div>
+        <div class="settings-section">
+          <h3>Data</h3>
+          <div class="settings-row"><div><strong>Export all records</strong><br><span>Download your full call log as Excel.</span></div><button class="btn btn-outline" style="font-size:13px;padding:7px 16px;flex-shrink:0" onclick="exportAll()">Export to Excel</button></div>
+          <div class="settings-row"><div><strong>Delete all records</strong><br><span>Permanently remove all your call data. Cannot be undone.</span></div><button class="btn btn-danger" style="font-size:13px;padding:7px 16px;flex-shrink:0" onclick="clearAllRecords()">Delete all</button></div>
+        </div>
+        <div class="settings-section">
+          <h3>Support</h3>
+          <div class="settings-row"><div><strong>Email support</strong><br><span>Get help from the PitchLog team.</span></div><a href="mailto:eskimogear@gmail.com" class="btn btn-outline" style="font-size:13px;padding:7px 16px;flex-shrink:0">Email us</a></div>
+        </div>
+        <div class="settings-section">
+          <h3>Session</h3>
+          <div class="settings-row"><div><strong>Log out</strong><br><span>Sign out of your account.</span></div><button class="btn btn-ghost" onclick="logout()">Log out</button></div>
+        </div>
+      </div>
+
+      <!-- Contacts CRM -->
+      <div id="panel-contacts" class="hidden">
+        <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Contacts</h1>
+            <p style="font-size:14px;color:var(--text2);margin-top:4px">Your prospect pipeline.</p>
+          </div>
+          <button class="btn btn-primary" onclick="openAddContactModal()">+ Add contact</button>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+          <input id="contact-search" type="text" placeholder="Search name, company, phone..." oninput="renderContacts()"
+            style="flex:1;min-width:200px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+          <select id="contact-stage-filter" onchange="renderContacts()"
+            style="padding:9px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:#fff">
+            <option value="">All stages</option>
+            <option value="new">New lead</option>
+            <option value="contacted">Contacted</option>
+            <option value="qualified">Qualified</option>
+            <option value="appointment">Appointment set</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+        <div id="contacts-table"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div>
+      </div>
+
+      <!-- Follow-ups -->
+      <div id="panel-followups" class="hidden">
+        <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div>
+            <h1 style="font-family:'DM Serif Display',serif;font-size:28px;font-weight:400">Follow-ups</h1>
+            <p style="font-size:14px;color:var(--text2);margin-top:4px">Scheduled SMS and tasks.</p>
+          </div>
+          <button class="btn btn-primary" onclick="openAddFollowUpModal()">+ Schedule follow-up</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="btn btn-outline" id="fu-filter-pending" onclick="setFuFilter('pending')" style="font-size:13px">Pending</button>
+          <button class="btn btn-ghost" id="fu-filter-sent" onclick="setFuFilter('sent')" style="font-size:13px">Sent</button>
+          <button class="btn btn-ghost" id="fu-filter-all" onclick="setFuFilter('all')" style="font-size:13px">All</button>
+        </div>
+        <div id="followups-list"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD CONTACT MODAL ══════════════════════════════════════════════════ -->
+<div id="add-contact-modal" class="modal-overlay hidden" onclick="bgClose(event,'add-contact-modal')">
+  <div class="modal" style="max-width:480px">
+    <button class="modal-close" onclick="closeModal('add-contact-modal')">×</button>
+    <h2>Add contact</h2>
+    <div id="add-contact-alert" class="alert alert-error hidden"></div>
+    <div class="form-group"><label>Name</label><input type="text" id="ac-name" placeholder="Jane Smith"></div>
+    <div class="form-group"><label>Phone</label><input type="tel" id="ac-phone" placeholder="+1 (555) 000-0000"></div>
+    <div class="form-group"><label>Company</label><input type="text" id="ac-company" placeholder="ABC Realty"></div>
+    <div class="form-group"><label>Email</label><input type="email" id="ac-email" placeholder="jane@email.com"></div>
+    <div class="form-group"><label>Stage</label>
+      <select id="ac-stage">
+        <option value="new">New lead</option>
+        <option value="contacted">Contacted</option>
+        <option value="qualified">Qualified</option>
+        <option value="appointment">Appointment set</option>
+        <option value="closed">Closed</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Notes</label><textarea id="ac-notes" placeholder="Initial notes..." style="height:80px"></textarea></div>
+    <button class="btn btn-primary btn-full" onclick="saveNewContact()">Save contact</button>
+  </div>
+</div>
+
+<!-- ══ ADD FOLLOW-UP MODAL ══════════════════════════════════════════════ -->
+<div id="add-followup-modal" class="modal-overlay hidden" onclick="bgClose(event,'add-followup-modal')">
+  <div class="modal" style="max-width:480px">
+    <button class="modal-close" onclick="closeModal('add-followup-modal')">×</button>
+    <h2>Schedule follow-up</h2>
+    <div id="add-followup-alert" class="alert alert-error hidden"></div>
+    <div class="form-group"><label>Contact</label>
+      <select id="fu-contact-select"><option value="">Select contact...</option></select>
+    </div>
+    <div class="form-group"><label>Type</label>
+      <select id="fu-type">
+        <option value="sms">SMS</option>
+        <option value="task">Task reminder</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Message</label><textarea id="fu-message" placeholder="Hi [name], just following up..." style="height:80px"></textarea></div>
+    <div class="form-group"><label>Schedule for</label><input type="datetime-local" id="fu-scheduled-at"></div>
+    <button class="btn btn-primary btn-full" onclick="saveNewFollowUp()">Schedule</button>
+  </div>
+</div>
+
+<!-- ══ AUTH MODAL ══════════════════════════════════════════════════════════ -->
+<div id="auth-modal" class="modal-overlay hidden" onclick="bgClose(event,'auth-modal')">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('auth-modal')">×</button>
+    <h2 id="auth-title">Create your account</h2>
+    <p class="modal-sub" id="auth-sub">Free forever. No credit card needed.</p>
+    <div id="auth-alert" class="alert alert-error hidden"></div>
+    <div class="form-group" id="name-row">
+      <label>Full name</label>
+      <input type="text" id="a-name" placeholder="Jane Smith" autocomplete="name">
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="a-email" placeholder="you@email.com" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="a-pass" placeholder="Min. 6 characters" autocomplete="current-password">
+    </div>
+    <div class="auth-switch" id="forgot-row"><span onclick="handleForgotPassword()">Forgot password?</span></div>
+    <button class="btn btn-primary btn-full" id="auth-btn" onclick="handleAuth()" style="margin-top:6px">Create account</button>
+    <div class="auth-switch" id="auth-switch">Already have an account? <span onclick="toggleAuth()">Log in</span></div>
+  </div>
+</div>
+
+<!-- ══ UPGRADE MODAL ══════════════════════════════════════════════════════ -->
+<div id="upgrade-modal" class="modal-overlay hidden" onclick="bgClose(event,'upgrade-modal')">
+  <div class="modal" style="max-width:560px">
+    <button class="modal-close" onclick="closeModal('upgrade-modal')">×</button>
+    <h2>Upgrade your plan</h2>
+    <p class="modal-sub">You've hit your monthly limit. Pick a plan to keep analyzing calls.</p>
+    <div class="billing-toggle" style="margin-bottom:16px">
+      <button type="button" id="bill-monthly" class="billing-btn active" onclick="setBillingInterval('monthly')">Monthly</button>
+      <button type="button" id="bill-annual" class="billing-btn" onclick="setBillingInterval('annual')">Annual <span class="save-pill">Save 20%</span></button>
+    </div>
+    <div class="upgrade-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="upgrade-card upgrade-tier" data-tier="starter" onclick="selectUpgradeTier('starter')"><div style="font-size:12px;font-weight:600;color:var(--text2)">Starter</div><div class="upgrade-price">$19<sub>/mo</sub></div><div style="font-size:12px;color:var(--text2)">100 calls/mo</div></div>
+      <div class="upgrade-card upgrade-tier featured" data-tier="pro" onclick="selectUpgradeTier('pro')"><div style="font-size:12px;font-weight:600;color:var(--brand-dark)">Pro ⭐</div><div class="upgrade-price">$49<sub>/mo</sub></div><div style="font-size:12px;color:var(--brand-dark)">Unlimited + dialer</div></div>
+      <div class="upgrade-card upgrade-tier" data-tier="team" onclick="selectUpgradeTier('team')"><div style="font-size:12px;font-weight:600;color:var(--text2)">Team</div><div class="upgrade-price">$99<sub>/mo</sub></div><div style="font-size:12px;color:var(--text2)">5 seats + reports</div></div>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="handleStripe()" style="margin-top:16px">
+      Continue to checkout
+    </button>
+    <p style="font-size:12px;color:var(--text3);text-align:center;margin-top:12px">30-day money-back guarantee · Cancel anytime</p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://js.stripe.com/v3/"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+<script src="https://unpkg.com/@twilio/voice-sdk@2/dist/twilio.min.js" defer></script>
+<script src="/js/config.js"></script>
+<script src="/js/dialer.js" defer></script>
+<script src="/js/app.js" defer></script>
+<script src="/js/analytics.js" defer></script>
