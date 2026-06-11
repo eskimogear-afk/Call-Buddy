@@ -889,6 +889,9 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <button class="sidebar-item active" id="nav-dashboard" onclick="switchPanel('dashboard')">
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard
       </button>
+      <button class="sidebar-item" id="nav-analytics" onclick="switchPanel('analytics')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Analytics
+      </button>
       <button class="sidebar-item" id="nav-inbox" onclick="switchPanel('inbox')">
         <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Inbox
         <span id="inbox-badge" style="display:none;background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;margin-left:auto"></span>
@@ -1003,6 +1006,84 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             </button>
           </div>
           <div id="dash-table"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div>
+        </div>
+      </div>
+
+      <!-- Analytics -->
+      <div id="panel-analytics" class="hidden">
+        <div style="margin-bottom:24px">
+          <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Analytics</h1>
+          <p style="font-size:14px;color:var(--text2);margin-top:4px">Your cold-calling numbers at a glance.</p>
+        </div>
+        <div id="analytics-empty" class="hidden table-card" style="padding:44px 24px;text-align:center;color:var(--text3);font-size:14px">
+          No calls logged yet — analytics light up after your first few dials.
+        </div>
+        <div id="analytics-body">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px;margin-bottom:10px">
+            <div class="sb-item sb-blue">
+              <div class="sb-lbl">Dials today</div>
+              <div class="sb-val num" id="an-dials">–</div>
+              <div style="height:4px;border-radius:99px;overflow:hidden;background:rgba(127,127,127,.18);margin-top:7px"><div id="an-goal-bar" style="height:100%;width:0%;background:var(--brand)"></div></div>
+              <div class="sb-sub" id="an-goal-lbl" style="cursor:pointer" title="Click to change your daily goal" onclick="changeDialGoal()">goal 50</div>
+            </div>
+            <div class="sb-item sb-sky">
+              <div class="sb-lbl">Pickup rate · 7d</div>
+              <div class="sb-val num" id="an-connect">–</div>
+              <div class="sb-sub" id="an-connect-sub"></div>
+            </div>
+            <div class="sb-item sb-green">
+              <div class="sb-lbl">Interested per convo · 7d</div>
+              <div class="sb-val num" id="an-interested">–</div>
+              <div class="sb-sub" id="an-interested-sub"></div>
+            </div>
+            <div class="sb-item sb-violet" style="cursor:pointer" title="Open follow-ups" onclick="switchPanel('followups')">
+              <div class="sb-lbl">Follow-ups due today</div>
+              <div class="sb-val num" id="an-due">–</div>
+              <div class="sb-sub" id="an-due-sub"></div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px;margin-bottom:20px">
+            <div class="sb-item sb-red" style="cursor:pointer" title="Open contacts" onclick="switchPanel('contacts')">
+              <div class="sb-lbl">Hot, no next step</div>
+              <div class="sb-val num" id="an-hotnonext">–</div>
+              <div class="sb-sub">hot leads w/o a scheduled follow-up</div>
+            </div>
+            <div class="sb-item sb-amber" style="cursor:pointer" title="Open contacts" onclick="switchPanel('contacts')">
+              <div class="sb-lbl">Going stale</div>
+              <div class="sb-val num" id="an-stale">–</div>
+              <div class="sb-sub">open leads untouched 14+ days</div>
+            </div>
+            <div class="sb-item sb-teal">
+              <div class="sb-lbl">SMS reply rate</div>
+              <div class="sb-val num" id="an-sms">–</div>
+              <div class="sb-sub" id="an-sms-sub"></div>
+            </div>
+            <div class="sb-item sb-emerald" style="cursor:pointer" title="Open contacts" onclick="switchPanel('contacts')">
+              <div class="sb-lbl">Pipeline heat</div>
+              <div id="an-heat" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">–</div>
+            </div>
+          </div>
+          <div class="table-card" style="padding:18px;margin-bottom:14px">
+            <h3 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:14.5px;font-weight:700;margin-bottom:12px">Dials per day — last 14 days</h3>
+            <div style="height:230px;position:relative"><canvas id="chart-daily"></canvas></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:8px" id="an-daily-note"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:14px">
+            <div class="table-card" style="padding:18px">
+              <h3 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:14.5px;font-weight:700;margin-bottom:12px">Best hour to call</h3>
+              <div style="height:190px;position:relative"><canvas id="chart-hour"></canvas></div>
+              <div style="font-size:11px;color:var(--text3);margin-top:8px" id="an-hour-note"></div>
+            </div>
+            <div class="table-card" style="padding:18px">
+              <h3 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:14.5px;font-weight:700;margin-bottom:12px">Outcome mix — last 30 days</h3>
+              <div style="height:190px;position:relative"><canvas id="chart-outcomes"></canvas></div>
+            </div>
+          </div>
+          <div class="table-card" style="padding:18px">
+            <h3 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:14.5px;font-weight:700;margin-bottom:14px">Funnel — all time</h3>
+            <div id="an-funnel" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start"></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:10px">Meetings and partnerships pull from contact stages — move a contact to “Meeting set” or beyond when it happens.</div>
+          </div>
         </div>
       </div>
 
@@ -1644,6 +1725,8 @@ function toggleTheme(){
   document.body.classList.toggle('light', light);
   try { localStorage.setItem('plw_theme', light ? 'light' : 'dark'); } catch(e){}
   applyThemeIcon();
+  // Charts sample CSS variables at render time — redraw if analytics is open
+  if (typeof renderAnalytics === 'function' && !document.getElementById('panel-analytics')?.classList.contains('hidden')) renderAnalytics();
 }
 document.addEventListener('DOMContentLoaded', applyThemeIcon);
 
@@ -1855,11 +1938,12 @@ function showView(v) {
 }
 
 function switchPanel(p) {
-  ['dashboard','recorder','log','settings','contacts','followups','power','inbox','calendar','pricing','partner'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
+  ['dashboard','analytics','recorder','log','settings','contacts','followups','power','inbox','calendar','pricing','partner'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
   document.getElementById('panel-' + p).classList.remove('hidden');
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
   document.getElementById('nav-' + p)?.classList.add('active');
   if (p === 'dashboard') refreshDashboard();
+  if (p === 'analytics') renderAnalytics();
   if (p === 'log') renderLog();
   if (p === 'contacts') loadContacts();
   if (p === 'followups') loadFollowUps();
@@ -4767,5 +4851,6 @@ setInterval(() => {
 
 <div id="quote-sheet"></div>
 <div id="partner-sheet"></div>
+<script src="/js/analytics.js"></script>
 </body>
 </html>
