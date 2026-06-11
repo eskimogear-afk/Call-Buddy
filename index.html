@@ -220,7 +220,7 @@ tr:hover td{background:var(--bg2)}
 .view-toggle{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius-xs);overflow:hidden}
 .view-toggle button{border:none;background:var(--bg);padding:7px 14px;font-size:13px;cursor:pointer;color:var(--text2);font-family:inherit}
 .view-toggle button.active{background:var(--brand);color:#fff}
-.kanban{display:grid;grid-template-columns:repeat(5,minmax(190px,1fr));gap:12px;overflow-x:auto;align-items:start}
+.kanban{display:grid;grid-template-columns:repeat(6,minmax(180px,1fr));gap:12px;overflow-x:auto;align-items:start}
 .kanban-col{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;min-height:120px}
 .kanban-col h4{font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin:2px 4px 10px;display:flex;justify-content:space-between;align-items:center}
 .kanban-col h4 span.kc-count{background:var(--bg);border:1px solid var(--border);border-radius:99px;font-size:11px;padding:1px 8px;color:var(--text2)}
@@ -232,10 +232,13 @@ tr:hover td{background:var(--bg2)}
 
 @media(max-width:980px){#pr-grid{grid-template-columns:1fr !important}}
 #quote-sheet{display:none}
+#partner-sheet{display:none}
 @media print{
   body > *:not(#quote-sheet){display:none !important}
   #quote-sheet{display:block !important;background:#fff;color:#0F172A}
   body.free-plan #quote-sheet::after{content:'Made with PitchLog — the cold-call CRM for loan officers';display:block;text-align:center;font-size:9px;color:#94A3B8;padding:14px 0 4px;border-top:1px solid #E2E8F0;margin-top:18px}
+  body.print-partner > *:not(#partner-sheet){display:none !important}
+  body.print-partner #partner-sheet{display:block !important;background:#fff;color:#0F172A}
   @page{margin:14mm}
 }
 
@@ -349,6 +352,7 @@ footer{background:var(--navy);border-top:1px solid var(--border);padding:0}
 /* ── RESPONSIVE ── */
 @media(max-width:900px){
   .pricing-grid{grid-template-columns:1fr 1fr!important}
+  .partner-grid{grid-template-columns:1fr!important}
   .footer-top{grid-template-columns:1fr 1fr!important}
 }
 @media(max-width:768px){
@@ -781,6 +785,9 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <button class="sidebar-item" id="nav-pricing" onclick="switchPanel('pricing')">
         <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Pricing
       </button>
+      <button class="sidebar-item" id="nav-partner" onclick="switchPanel('partner')">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Partner Tools
+      </button>
       <button class="sidebar-item" id="nav-recorder" onclick="switchPanel('recorder')">
         <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>Recorder
       </button>
@@ -813,6 +820,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <button class="btn btn-ghost" onclick="dismissUpgradeNudge()" title="Hide for the rest of this month">Not now</button>
           </div>
         </div>
+        <div id="roi-panel" class="hidden" style="margin-bottom:20px"></div>
         <div class="stats-grid">
           <div class="stat-card">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="stat-lbl" style="margin:0">Total calls</span><div style="width:30px;height:30px;border-radius:8px;background:var(--brand-light);color:var(--brand);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.79 19.79 19.79 0 01.12 1.18 2 2 0 012.11 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></div></div>
@@ -1086,6 +1094,44 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         <div id="pd-queue"></div>
       </div>
 
+      <!-- Partner Tools -->
+      <div id="panel-partner" class="hidden">
+        <div style="margin-bottom:20px">
+          <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Partner Tools</h1>
+          <p style="font-size:14px;color:var(--text2);margin-top:4px">Co-branded, RESPA-safe collateral to hand your agent partners. Marketing to the general public — never a payment for referrals.</p>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" class="partner-grid">
+          <div class="table-card" style="padding:22px">
+            <h3 style="font-size:15px;margin-bottom:4px">🏡 Co-branded Open House flyer</h3>
+            <p style="font-size:12.5px;color:var(--text2);margin-bottom:14px">The agent's listing + your financing block. Print or save as PDF.</p>
+            <div class="field-group"><label>Agent name</label><input id="pt-agent" placeholder="Jane Smith"></div>
+            <div class="field-group"><label>Brokerage</label><input id="pt-brokerage" placeholder="ABC Realty"></div>
+            <div class="field-group"><label>Agent phone</label><input id="pt-agent-phone" placeholder="(555) 123-4567"></div>
+            <div class="field-group"><label>Property address</label><input id="pt-address" placeholder="123 Main St, Orlando FL 32801"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div class="field-group"><label>Open house date &amp; time</label><input id="pt-when" placeholder="Sat June 14 · 1–4 PM"></div>
+              <div class="field-group"><label>List price</label><input id="pt-price" placeholder="$425,000"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+              <div class="field-group"><label>Beds</label><input id="pt-beds" placeholder="4"></div>
+              <div class="field-group"><label>Baths</label><input id="pt-baths" placeholder="2.5"></div>
+              <div class="field-group"><label>Sq ft</label><input id="pt-sqft" placeholder="2,150"></div>
+            </div>
+            <div class="field-group"><label>One-line highlight</label><input id="pt-blurb" placeholder="Corner lot, new roof 2024, A-rated schools"></div>
+            <button class="btn btn-primary btn-full" style="margin-top:6px" onclick="generateFlyer()">Generate flyer PDF</button>
+          </div>
+          <div class="table-card" style="padding:22px">
+            <h3 style="font-size:15px;margin-bottom:4px">📘 First-Time Buyer 101 one-pager</h3>
+            <p style="font-size:12.5px;color:var(--text2);margin-bottom:14px">An educational handout the agent can give every open-house visitor — co-branded with both of you.</p>
+            <div class="field-group"><label>Agent name</label><input id="pt2-agent" placeholder="Jane Smith"></div>
+            <div class="field-group"><label>Brokerage</label><input id="pt2-brokerage" placeholder="ABC Realty"></div>
+            <div class="field-group"><label>Agent phone</label><input id="pt2-agent-phone" placeholder="(555) 123-4567"></div>
+            <button class="btn btn-primary btn-full" style="margin-top:6px" onclick="generateOnePager()">Generate one-pager PDF</button>
+            <div style="margin-top:16px;padding:11px 14px;border:1px solid var(--border);background:var(--bg2);border-radius:var(--radius-sm);font-size:12px;color:var(--text2);line-height:1.6">Both PDFs carry the disclaimer: <em>"Marketing material for general public distribution. Not a payment or thing of value for referrals (RESPA §8)."</em> Keep it that way — never pay an agent's share of anything.</div>
+          </div>
+        </div>
+      </div>
+
       <!-- SMS Inbox -->
       <div id="panel-inbox" class="hidden">
         <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
@@ -1247,15 +1293,42 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     <div class="form-group"><label>Email</label><input type="email" id="ac-email" placeholder="jane@email.com"></div>
     <div class="form-group"><label>Stage</label>
       <select id="ac-stage">
-        <option value="new">New lead</option>
+        <option value="new">Researching</option>
         <option value="contacted">Contacted</option>
-        <option value="qualified">Qualified</option>
-        <option value="appointment">Appointment set</option>
-        <option value="closed">Closed</option>
+        <option value="meeting">Meeting set</option>
+        <option value="comarketing">Co-marketing live</option>
+        <option value="referral">First referral</option>
+        <option value="partner">Repeat partner</option>
       </select>
     </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><label>Brokerage</label><input type="text" id="ac-brokerage" placeholder="ABC Realty"></div>
+      <div class="form-group"><label>Agent type</label>
+        <select id="ac-agent-type">
+          <option value="">Unknown</option>
+          <option value="Buyer-side">Buyer-side</option>
+          <option value="Listing-side">Listing-side</option>
+          <option value="Both">Both</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Annual volume</label><input type="text" id="ac-volume" placeholder="e.g. 24 sides / $8M"></div>
+      <div class="form-group"><label>Current lender</label><input type="text" id="ac-lender" placeholder="Who gets their referrals now?"></div>
+    </div>
+    <div class="form-group"><label>Last closing date</label><input type="date" id="ac-last-closing"></div>
     <div class="form-group"><label>Notes</label><textarea id="ac-notes" placeholder="Initial notes..." style="height:80px"></textarea></div>
     <button class="btn btn-primary btn-full" onclick="saveNewContact()">Save contact</button>
+  </div>
+</div>
+
+<div id="funded-modal" class="modal-overlay hidden" onclick="bgClose(event,'funded-modal')">
+  <div class="modal" style="max-width:420px">
+    <button class="modal-close" onclick="closeModal('funded-modal')">×</button>
+    <h2>Log a funded loan 💰</h2>
+    <p class="modal-sub">Referred by <strong id="funded-agent-name"></strong></p>
+    <div class="form-group"><label>Loan amount ($)</label><input type="number" id="funded-amount" placeholder="400000"></div>
+    <div class="form-group"><label>Your commission ($)</label><input type="number" id="funded-commission" placeholder="4000"></div>
+    <div class="form-group"><label>Funded date</label><input type="date" id="funded-date"></div>
+    <button class="btn btn-primary btn-full" onclick="saveFunded()">Save referral</button>
   </div>
 </div>
 
@@ -1584,6 +1657,7 @@ async function enterApp() {
   refreshDashboard();
   updatePlanBadge();
   loadUsage();
+  loadROI();
   maybeShowWelcome();
   // Surface any AI-suggested follow-ups awaiting review (e.g. from calls
   // that finished analyzing while the app was closed)
@@ -1608,7 +1682,7 @@ function showView(v) {
 }
 
 function switchPanel(p) {
-  ['dashboard','recorder','log','settings','contacts','followups','power','inbox','calendar','pricing'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
+  ['dashboard','recorder','log','settings','contacts','followups','power','inbox','calendar','pricing','partner'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
   document.getElementById('panel-' + p).classList.remove('hidden');
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
   document.getElementById('nav-' + p)?.classList.add('active');
@@ -2118,6 +2192,174 @@ function maybeShowWelcome() {
   if ((records?.length || 0) > 0 || lsGet(plwKey('welcome'))) return;
   document.getElementById('welcome-modal').classList.remove('hidden');
 }
+/* — Referral ROI (Pro / Team / founding) — */
+function roiEligible() { return ['pro', 'team', 'pro_legacy'].includes(userProfile?.plan); }
+
+let fundedContactId = null;
+function openFundedModal(id, name) {
+  fundedContactId = id;
+  document.getElementById('funded-agent-name').textContent = name;
+  document.getElementById('funded-amount').value = '';
+  document.getElementById('funded-commission').value = '';
+  document.getElementById('funded-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('funded-modal').classList.remove('hidden');
+}
+
+async function saveFunded() {
+  if (!fundedContactId) return;
+  const amount = parseFloat(document.getElementById('funded-amount').value) || null;
+  const commission = parseFloat(document.getElementById('funded-commission').value) || null;
+  const funded_at = document.getElementById('funded-date').value || new Date().toISOString().slice(0, 10);
+  try {
+    const { error } = await db.from('referrals').insert({
+      user_id: currentUser.id, contact_id: fundedContactId,
+      loan_amount: amount, commission, funded_at
+    });
+    if (error) throw error;
+    // a funded referral moves the agent forward in the pipeline
+    const c = (window.__contactsCache || []).find(x => x.id === fundedContactId);
+    const newStage = (c && (c.stage === 'referral' || c.stage === 'partner')) ? 'partner' : 'referral';
+    const { data: { session } } = await db.auth.getSession();
+    await fetch('/api/contacts', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify({ id: fundedContactId, stage: newStage }) });
+    closeModal('funded-modal');
+    if (typeof loadContacts === 'function') loadContacts();
+    loadROI();
+  } catch (e) { alert('Could not save: ' + (e.message || e)); }
+}
+
+async function loadROI() {
+  const el = document.getElementById('roi-panel');
+  if (!el || !currentUser) return;
+  el.classList.remove('hidden');
+  if (!roiEligible()) {
+    el.innerHTML = `<div class="table-card" style="padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+      <div style="font-size:13.5px"><strong>📈 Referral ROI dashboard</strong> <span style="color:var(--text2)">— see exactly which agent partnerships turn into funded loans and commission. A Pro feature.</span></div>
+      <button class="btn btn-primary" style="font-size:12.5px" onclick="showUpgradeModal()">Upgrade to Pro</button>
+    </div>`;
+    return;
+  }
+  try {
+    const [{ data: refs }, { data: cons }] = await Promise.all([
+      db.from('referrals').select('contact_id, loan_amount, commission, funded_at').order('funded_at', { ascending: false }),
+      db.from('contacts').select('id, name, phone')
+    ]);
+    window.__contactsCache = cons || [];
+    if (!refs?.length) {
+      el.innerHTML = `<div class="table-card" style="padding:18px 22px;font-size:13.5px"><strong>📈 Referral ROI</strong> <span style="color:var(--text2)">— when an agent's referral funds, hit <strong>💰 Funded</strong> on their contact row. Your partner-by-partner ROI builds here.</span></div>`;
+      return;
+    }
+    const nameOf = id => { const c = (cons || []).find(x => x.id === id); return c ? (c.name || c.phone || 'Unknown') : 'Unknown'; };
+    const byAgent = {};
+    let vol = 0, comm = 0;
+    refs.forEach(r => {
+      vol += Number(r.loan_amount || 0); comm += Number(r.commission || 0);
+      const k = r.contact_id || 'unknown';
+      byAgent[k] = byAgent[k] || { n: 0, comm: 0 };
+      byAgent[k].n++; byAgent[k].comm += Number(r.commission || 0);
+    });
+    const partners = Object.keys(byAgent).length;
+    const top = Object.entries(byAgent).sort((a, b) => b[1].n - a[1].n).slice(0, 8);
+    const maxN = Math.max(...top.map(([, v]) => v.n));
+    const money = n => '$' + Math.round(n).toLocaleString();
+    el.innerHTML = `<div class="table-card" style="padding:20px 22px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+        <h3 style="font-size:14.5px">📈 Referral ROI — what PitchLog has paid you</h3>
+        <span style="font-size:11.5px;color:var(--text3)">${refs.length} funded referral${refs.length === 1 ? '' : 's'}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px">
+        <div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Agent partners</div><div class="num" style="font-size:22px;font-weight:700">${partners}</div></div>
+        <div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Funded volume</div><div class="num" style="font-size:22px;font-weight:700">${money(vol)}</div></div>
+        <div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Commission earned</div><div class="num" style="font-size:22px;font-weight:700;color:var(--green)">${money(comm)}</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Referrals by agent partner</div>
+      ${top.map(([id, v]) => `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+          <div style="width:140px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(nameOf(id))}</div>
+          <div style="flex:1;height:16px;background:var(--bg3);border-radius:5px;overflow:hidden"><div style="height:100%;width:${v.n / maxN * 100}%;background:var(--brand);border-radius:5px"></div></div>
+          <div class="num" style="width:90px;font-size:12px;color:var(--text2);text-align:right">${v.n} · ${money(v.comm)}</div>
+        </div>`).join('')}
+    </div>`;
+  } catch (e) { console.warn('ROI load failed', e); el.classList.add('hidden'); }
+}
+
+/* — Partner Tools: RESPA-safe co-branded PDFs — */
+function loBlock() {
+  const lo = userProfile?.pricing_config?.lo || {};
+  return {
+    name: lo.name || userProfile?.full_name || '',
+    nmls: lo.nmls || '', phone: lo.phone || '', email: lo.email || '',
+    company: lo.company || 'Visto Mortgage'
+  };
+}
+const PT_DISCLAIMER = '<div style="margin-top:18px;padding-top:10px;border-top:1px solid #E2E8F0;font-size:8.5px;color:#94A3B8;text-align:center">Marketing material for general public distribution. Not a payment or thing of value for referrals (RESPA §8 compliant). Equal Housing Opportunity. All loan scenarios are estimates, not a commitment to lend.</div>';
+
+function printPartnerSheet(html) {
+  const sheet = document.getElementById('partner-sheet');
+  sheet.innerHTML = html;
+  document.body.classList.add('print-partner');
+  const done = () => { document.body.classList.remove('print-partner'); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => window.print(), 60);
+}
+
+function ptCoBrand(agent, brokerage, agentPhone) {
+  const lo = loBlock();
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:22px">
+    <div style="border:1px solid #E2E8F0;border-radius:10px;padding:13px 16px">
+      <div style="font-size:9.5px;color:#64748B;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Your agent</div>
+      <div style="font-size:14px;font-weight:700">${esc(agent || '')}</div>
+      <div style="font-size:11px;color:#475569">${esc(brokerage || '')}${agentPhone ? ' · ' + esc(agentPhone) : ''}</div>
+    </div>
+    <div style="border:1px solid #E2E8F0;border-radius:10px;padding:13px 16px">
+      <div style="font-size:9.5px;color:#64748B;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Financing questions</div>
+      <div style="font-size:14px;font-weight:700">${esc(lo.name)}</div>
+      <div style="font-size:11px;color:#475569">${esc(lo.company)}${lo.nmls ? ' · NMLS #' + esc(lo.nmls) : ''}</div>
+      <div style="font-size:11px;color:#475569">${esc(lo.phone)}${lo.email ? ' · ' + esc(lo.email) : ''}</div>
+    </div>
+  </div>`;
+}
+
+function generateFlyer() {
+  const g = id => document.getElementById(id).value.trim();
+  const agent = g('pt-agent'), brokerage = g('pt-brokerage'), phone = g('pt-agent-phone');
+  const addr = g('pt-address'), when = g('pt-when'), price = g('pt-price');
+  const beds = g('pt-beds'), baths = g('pt-baths'), sqft = g('pt-sqft'), blurb = g('pt-blurb');
+  if (!addr) { alert('Add the property address first.'); return; }
+  const fact = (v, l) => v ? `<div style="text-align:center"><div style="font-size:20px;font-weight:700">${esc(v)}</div><div style="font-size:9.5px;color:#64748B;text-transform:uppercase;letter-spacing:1px">${l}</div></div>` : '';
+  printPartnerSheet(`<div style="font-family:'Inter',sans-serif;max-width:7.2in;margin:0 auto;padding:34px 12px">
+    <div style="text-align:center;margin-bottom:6px;font-size:11px;font-weight:700;letter-spacing:3px;color:#0369A1">OPEN HOUSE${when ? ' · ' + esc(when.toUpperCase()) : ''}</div>
+    <div style="text-align:center;font-size:30px;font-weight:800;letter-spacing:-.5px;line-height:1.2">${esc(addr)}</div>
+    ${price ? `<div style="text-align:center;font-size:22px;font-weight:700;color:#0369A1;margin-top:6px">${esc(price)}</div>` : ''}
+    ${blurb ? `<div style="text-align:center;font-size:13px;color:#475569;margin-top:8px">${esc(blurb)}</div>` : ''}
+    <div style="display:flex;justify-content:center;gap:40px;margin:22px 0;padding:16px 0;border-top:1px solid #E2E8F0;border-bottom:1px solid #E2E8F0">
+      ${fact(beds, 'Beds')}${fact(baths, 'Baths')}${fact(sqft, 'Sq Ft')}
+    </div>
+    <div style="font-size:12px;color:#475569;text-align:center">Wondering what this home would cost per month? Get a same-day pre-approval and a personalized payment quote — no obligation.</div>
+    ${ptCoBrand(agent, brokerage, phone)}
+    ${PT_DISCLAIMER}
+  </div>`);
+}
+
+function generateOnePager() {
+  const g = id => document.getElementById(id).value.trim();
+  const agent = g('pt2-agent'), brokerage = g('pt2-brokerage'), phone = g('pt2-agent-phone');
+  const step = (n, t, d) => `<div style="display:flex;gap:12px;margin-bottom:13px"><div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#E0F2FE;color:#0369A1;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">${n}</div><div><div style="font-size:13px;font-weight:700">${t}</div><div style="font-size:11.5px;color:#475569;line-height:1.55">${d}</div></div></div>`;
+  printPartnerSheet(`<div style="font-family:'Inter',sans-serif;max-width:7.2in;margin:0 auto;padding:34px 12px">
+    <div style="text-align:center;font-size:11px;font-weight:700;letter-spacing:3px;color:#0369A1;margin-bottom:6px">FIRST-TIME BUYER 101</div>
+    <div style="text-align:center;font-size:26px;font-weight:800;letter-spacing:-.5px">Buying your first home, in plain English</div>
+    <div style="margin-top:24px">
+      ${step(1, 'Get pre-approved before you shop', 'A pre-approval tells you your real budget and makes your offer credible. It takes about a day and costs nothing.')}
+      ${step(2, 'You don\'t need 20% down', 'Conventional loans start at 3% down, FHA at 3.5%, and VA/USDA can be 0%. Down-payment assistance programs exist in most states.')}
+      ${step(3, 'Your monthly payment is more than the mortgage', 'Budget for principal + interest, property taxes, homeowner\'s insurance, and possibly mortgage insurance and HOA dues.')}
+      ${step(4, 'Closing costs run roughly 2–5% of the price', 'These can sometimes be negotiated into the deal as seller credits — your agent fights for this.')}
+      ${step(5, 'Don\'t open new credit before closing', 'New cards, car loans, or big purchases can change your approval. Keep finances quiet until you have the keys.')}
+      ${step(6, 'Rates change daily — locks protect you', 'Once under contract you can lock your rate so a market move doesn\'t change your payment.')}
+    </div>
+    ${ptCoBrand(agent, brokerage, phone)}
+    ${PT_DISCLAIMER}
+  </div>`);
+}
+
 async function saveCellSafety(on) {
   if (!currentUser) return;
   try {
@@ -2392,8 +2634,8 @@ db.auth.onAuthStateChange((event) => {
    CONTACTS CRM
 ═══════════════════════════════════════════════════════ */
 let contactsCache = [];
-const STAGE_LABELS = { new:'New lead', contacted:'Contacted', qualified:'Qualified', appointment:'Appointment set', closed:'Closed' };
-const STAGE_COLORS = { new:'#6b7280', contacted:'#3b82f6', qualified:'#f59e0b', appointment:'#8b5cf6', closed:'#10b981' };
+const STAGE_LABELS = { new:'Researching', contacted:'Contacted', meeting:'Meeting set', comarketing:'Co-marketing live', referral:'First referral', partner:'Repeat partner' };
+const STAGE_COLORS = { new:'#6b7280', contacted:'#3b82f6', meeting:'#f59e0b', comarketing:'#8b5cf6', referral:'#10b981', partner:'#34d399' };
 
 async function loadContacts() {
   const { data: { session } } = await db.auth.getSession();
@@ -2437,7 +2679,7 @@ async function moveContactStage(id, stage) {
 }
 
 function renderContactBoard(rows) {
-  const stages = ['new', 'contacted', 'qualified', 'appointment', 'closed'];
+  const stages = ['new', 'contacted', 'meeting', 'comarketing', 'referral', 'partner'];
   return `<div class="kanban">${stages.map(s => {
     const cards = rows.filter(c => (c.stage || 'new') === s);
     return `<div class="kanban-col">
@@ -2447,7 +2689,7 @@ function renderContactBoard(rows) {
         const hc = heat === 'Hot' ? '#dc2626' : heat === 'Warm' ? '#f59e0b' : '#6b7280';
         return `<div class="kanban-card">
           <div class="kc-name">${esc(displayName(c.name, c.phone))}${heat ? ` <span style="color:${hc};font-size:11px;font-weight:700">● ${heat}</span>` : ''}</div>
-          <div class="kc-meta">${esc(c.phone || '')}${c.company ? ' · ' + esc(c.company) : ''}</div>
+          <div class="kc-meta">${esc(c.phone || '')}${(c.brokerage || c.company) ? ' · ' + esc(c.brokerage || c.company) : ''}${c.agent_type ? ` · <span style="color:var(--brand-mid)">${esc(c.agent_type)}</span>` : ''}</div>
           <select onchange="moveContactStage('${c.id}', this.value)">
             ${stages.map(x => `<option value="${x}" ${x === s ? 'selected' : ''}>${STAGE_LABELS[x]}</option>`).join('')}
           </select>
@@ -2493,13 +2735,14 @@ function renderContacts() {
         return `<tr style="border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
           <td style="padding:10px 14px;font-weight:500">${esc(displayName(c.name, c.phone))}</td>
           <td style="padding:10px 14px;color:var(--text2)">${esc(fmtPhone(c.phone)||'—')}</td>
-          <td style="padding:10px 14px;color:var(--text2)">${esc(c.company||'—')}</td>
+          <td style="padding:10px 14px;color:var(--text2)">${esc(c.brokerage||c.company||'—')}${c.agent_type ? ` <span style="font-size:11px;color:var(--brand-mid)">· ${esc(c.agent_type)}</span>` : ''}${c.current_lender ? `<div style="font-size:11px;color:var(--text3)">Lender: ${esc(c.current_lender)}</div>` : ''}</td>
           <td style="padding:10px 14px"><span style="background:${STAGE_COLORS[stage]}22;color:${STAGE_COLORS[stage]};font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px">${STAGE_LABELS[stage]||stage}</span></td>
           <td style="padding:10px 14px"><span style="color:${hc};font-weight:600;font-size:13px">${heat}</span></td>
           <td style="padding:10px 14px;color:var(--text2)">${c.call_count||0}</td>
           <td style="padding:10px 14px;color:var(--text2);font-size:13px">${nfu}</td>
           <td style="padding:10px 14px">
             <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="openContactFollowUp('${c.id}','${esc(displayName(c.name, c.phone))}')">Follow-up</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="openFundedModal('${c.id}','${esc(displayName(c.name, c.phone))}')">💰 Funded</button>
             <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="deleteContact('${c.id}')">Delete</button>
           </td>
         </tr>`;
@@ -2756,6 +2999,11 @@ function openAddContactModal() {
   document.getElementById('ac-company').value = '';
   document.getElementById('ac-email').value = '';
   document.getElementById('ac-stage').value = 'new';
+  document.getElementById('ac-brokerage').value = '';
+  document.getElementById('ac-agent-type').value = '';
+  document.getElementById('ac-volume').value = '';
+  document.getElementById('ac-lender').value = '';
+  document.getElementById('ac-last-closing').value = '';
   document.getElementById('ac-notes').value = '';
   document.getElementById('add-contact-alert').classList.add('hidden');
   document.getElementById('add-contact-modal').classList.remove('hidden');
@@ -2770,7 +3018,12 @@ async function saveNewContact() {
     company: document.getElementById('ac-company').value.trim(),
     email: document.getElementById('ac-email').value.trim(),
     stage: document.getElementById('ac-stage').value,
-    notes: document.getElementById('ac-notes').value.trim()
+    notes: document.getElementById('ac-notes').value.trim(),
+    brokerage: document.getElementById('ac-brokerage').value.trim(),
+    agent_type: document.getElementById('ac-agent-type').value,
+    annual_transaction_volume: document.getElementById('ac-volume').value.trim(),
+    current_lender: document.getElementById('ac-lender').value.trim(),
+    last_closing_date: document.getElementById('ac-last-closing').value || null
   };
   if (!body.phone) {
     const el = document.getElementById('add-contact-alert');
@@ -3512,7 +3765,9 @@ function renderResearchPanel(d) {
       ${chip('Active', d.active_listings)}
       ${chip('Brokerage', d.brokerages?.current)}
       ${chip('Focus', d.client_focus)}
+      ${chip('Mix', d.buyer_listing_mix)}
     </div>
+    ${d.partnership_opener ? `<div style="font-size:13px;background:var(--brand-light);border:1px solid var(--brand);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:10px"><strong style="color:var(--brand-mid)">Suggested opener:</strong> <em>&ldquo;${esc(d.partnership_opener)}&rdquo;</em></div>` : ''}
     ${d.online_presence ? `<div style="font-size:12.5px;color:var(--text2);margin-bottom:10px"><strong>Online:</strong> ${esc(d.online_presence)}</div>` : ''}
     ${Array.isArray(d.talking_points) && d.talking_points.length ? `<div style="font-size:12.5px;margin-bottom:10px"><strong>Talking points</strong><ul style="margin:5px 0 0 18px;color:var(--text2)">${d.talking_points.map(t => '<li>' + esc(t) + '</li>').join('')}</ul></div>` : ''}
     ${Array.isArray(d.sources) && d.sources.length ? `<div style="font-size:11.5px;color:var(--text3)">Sources: ${d.sources.slice(0, 4).map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener" style="color:var(--brand)">${esc(s.title || 'link')}</a>`).join(' · ')}</div>` : ''}`;
@@ -4058,5 +4313,6 @@ setInterval(() => {
 </div>
 
 <div id="quote-sheet"></div>
+<div id="partner-sheet"></div>
 </body>
 </html>

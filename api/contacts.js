@@ -182,7 +182,8 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const { name, phone, company, email, stage, notes } = req.body;
+      const { name, phone, company, email, stage, notes,
+              brokerage, agent_type, annual_transaction_volume, current_lender, last_closing_date } = req.body;
       const nameParts = String(name || '').trim().split(/\s+/).filter(Boolean);
       const { data, error } = await supabase
         .from('contacts')
@@ -193,6 +194,10 @@ export default async function handler(req, res) {
           last_name: nameParts.slice(1).join(' ') || '',
           phone, company: company || '', email: email || '',
           stage: stage || 'new', notes: notes || '',
+          brokerage: brokerage || '', agent_type: agent_type || '',
+          annual_transaction_volume: annual_transaction_volume || '',
+          current_lender: current_lender || '',
+          last_closing_date: last_closing_date || null,
           heat_score: null, call_count: 0
         })
         .select().single();

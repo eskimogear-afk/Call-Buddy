@@ -92,7 +92,7 @@ Search public sources (Zillow and realtor.com agent profiles, brokerage bios, Li
 Rules: never invent numbers — if a fact isn't supported by a source, use null or "unknown". If multiple agents share this name and you can't disambiguate with the company/area, set identity_confidence to "low" and say what you'd need.
 
 After your research, output ONLY this JSON object (no prose before or after):
-{"identity_confidence":"high"|"medium"|"low","summary":"3-4 sentence overview","years_in_business":number|null,"licensed_since":"YYYY or null","homes_sold":"e.g. '47 sales on Zillow' or null","active_listings":"e.g. '5 active' or null","brokerages":{"current":string|null,"past":[strings]},"client_focus":"investors / first-time buyers / mixed / unknown","online_presence":"2-3 sentences on what they post and themes","talking_points":[3-4 short strings for the call],"sources":[{"title":string,"url":string}]}`
+{"identity_confidence":"high"|"medium"|"low","summary":"3-4 sentence overview","years_in_business":number|null,"licensed_since":"YYYY or null","homes_sold":"e.g. '47 sales on Zillow' or null","active_listings":"e.g. '5 active' or null","brokerages":{"current":string|null,"past":[strings]},"client_focus":"investors / first-time buyers / mixed / unknown","online_presence":"2-3 sentences on what they post and themes","buyer_listing_mix":"buyer-side / listing-side / both / unknown","partnership_opener":"ONE natural opening line a loan officer could say to this specific agent to start a referral-partnership conversation — reference something real from the research","talking_points":[3-4 short strings for the call],"sources":[{"title":string,"url":string}]}`
         }]
       });
 
@@ -105,8 +105,15 @@ After your research, output ONLY this JSON object (no prose before or after):
       brief.researched_at = new Date().toISOString();
 
       if (contact?.id) {
+        const upd = { research: brief, researched_at: brief.researched_at };
+        if (brief.brokerages?.current) upd.brokerage = brief.brokerages.current;
+        const mix = String(brief.buyer_listing_mix || '').toLowerCase();
+        if (mix.includes('both')) upd.agent_type = 'Both';
+        else if (mix.includes('buyer')) upd.agent_type = 'Buyer-side';
+        else if (mix.includes('listing')) upd.agent_type = 'Listing-side';
+        if (brief.homes_sold) upd.annual_transaction_volume = String(brief.homes_sold);
         await supabase.from('contacts')
-          .update({ research: brief, researched_at: brief.researched_at })
+          .update(upd)
           .eq('id', contact.id).eq('user_id', user.id);
       }
       return res.status(200).json({ cached: false, contact_id: contact?.id || null, ...brief });
