@@ -98,12 +98,26 @@ export default async function handler(req, res) {
         const lastMonth = new Date();
         lastMonth.setUTCDate(1); lastMonth.setUTCMonth(lastMonth.getUTCMonth() - 1);
         const periodStart = lastMonth.toISOString().slice(0, 8) + '01';
-        const BUNDLES = { solo: 1500, pro: 4000, team: 4000 };
+        const BUNDLES = { solo: 1500, pro: 4000 };
         const { data: rows } = await supabase.from('usage_minutes')
           .select('user_id, minutes_used').eq('period_start', periodStart).eq('reported', false);
+        // Team plans pool: aggregate each team's members and bill the owner once.
+        const teamAgg = {}; // rootId -> { mins, memberRows }
         for (const row of rows || []) {
           const { data: prof } = await supabase.from('profiles')
-            .select('plan, stripe_customer_id').eq('id', row.user_id).single();
+            .select('plan, stripe_customer_id, team_owner_id').eq('id', row.user_id).single();
+          const rootId = prof?.team_owner_id || row.user_id;
+          let rootPlan = prof?.plan, rootCustomer = prof?.stripe_customer_id;
+          if (rootId !== row.user_id) {
+            const { data: root } = await supabase.from('profiles').select('plan, stripe_customer_id').eq('id', rootId).single();
+            rootPlan = root?.plan; rootCustomer = root?.stripe_customer_id;
+          }
+          if (rootPlan === 'team') {
+            teamAgg[rootId] = teamAgg[rootId] || { mins: 0, customer: rootCustomer, rows: [] };
+            teamAgg[rootId].mins += Number(row.minutes_used);
+            teamAgg[rootId].rows.push(row.user_id);
+            continue;
+          }
           const bundle = BUNDLES[prof?.plan];
           const over = bundle ? Math.max(0, Number(row.minutes_used) - bundle) : 0;
           if (over > 0 && prof?.stripe_customer_id) {
@@ -122,6 +136,31 @@ export default async function handler(req, res) {
           }
           await supabase.from('usage_minutes').update({ reported: true })
             .eq('user_id', row.user_id).eq('period_start', periodStart);
+        }
+        // Bill pooled team overage to each team owner
+        for (const [rootId, agg] of Object.entries(teamAgg)) {
+          const { count } = await supabase.from('profiles')
+            .select('id', { count: 'exact', head: true })
+            .or(`id.eq.${rootId},team_owner_id.eq.${rootId}`);
+          const bundle = 4000 * (count || 1);
+          const over = Math.max(0, agg.mins - bundle);
+          if (over > 0 && agg.customer) {
+            const body = new URLSearchParams({
+              customer: agg.customer, amount: String(Math.round(over * 3)), currency: 'usd',
+              description: `Team dialer overage: ${Math.round(over)} min beyond the pooled ${bundle.toLocaleString()}-min bundle (${periodStart.slice(0, 7)})`
+            });
+            const r = await fetch('https://api.stripe.com/v1/invoiceitems', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+              body
+            });
+            if (!r.ok) { console.error('Team overage invoice failed for', rootId, await r.text()); continue; }
+            overageBilled++;
+          }
+          for (const uid of agg.rows) {
+            await supabase.from('usage_minutes').update({ reported: true })
+              .eq('user_id', uid).eq('period_start', periodStart);
+          }
         }
       } catch (e) { console.error('Overage billing error:', e); }
     }

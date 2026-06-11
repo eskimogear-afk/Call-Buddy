@@ -115,25 +115,49 @@ export default async function handler(req, res) {
 
     // ── Do Not Call list (folded into this endpoint to stay within Vercel's
     //    12-function limit). Triggered by resource=dnc on query or body. ──
-    // ── Dialer minute metering (plan bundles + overage detection) ──────────
+    // ── Dialer minute metering (plan bundles, team pooling, overage) ────────
     if (req.query.resource === 'usage') {
       const period = new Date().toISOString().slice(0, 8) + '01';
-      if (req.method === 'GET') {
+
+      // Resolve the caller's billing scope: solo plans meter individually;
+      // members of a 'team'-plan owner share one pooled bundle (4,000 × seats).
+      async function usageScope() {
+        const { data: me } = await supabase.from('profiles').select('plan, team_owner_id').eq('id', user.id).single();
+        const rootId = me?.team_owner_id || user.id;
+        let rootPlan = me?.plan;
+        if (rootId !== user.id) {
+          const { data: root } = await supabase.from('profiles').select('plan').eq('id', rootId).single();
+          rootPlan = root?.plan;
+        }
+        if (rootPlan === 'team') {
+          const { data: members } = await supabase.from('profiles').select('id')
+            .or(`id.eq.${rootId},team_owner_id.eq.${rootId}`);
+          const ids = [...new Set((members || []).map(m => m.id))];
+          const { data: rows } = await supabase.from('usage_minutes').select('minutes_used')
+            .in('user_id', ids).eq('period_start', period);
+          const used = (rows || []).reduce((s, r) => s + Number(r.minutes_used || 0), 0);
+          return { pooled: true, plan: 'team', included: 4000 * ids.length, used: Math.round(used * 10) / 10, seats: ids.length };
+        }
+        const BUNDLES = { free: 0, solo: 1500, pro: 4000, pro_legacy: null };
+        const included = BUNDLES[me?.plan] !== undefined ? BUNDLES[me?.plan] : 0;
         const { data: row } = await supabase.from('usage_minutes').select('minutes_used')
           .eq('user_id', user.id).eq('period_start', period).maybeSingle();
-        return res.status(200).json({ minutes_used: Number(row?.minutes_used || 0), period_start: period });
+        return { pooled: false, plan: me?.plan, included, used: Number(row?.minutes_used || 0) };
+      }
+
+      if (req.method === 'GET') {
+        const sc = await usageScope();
+        return res.status(200).json({ minutes_used: sc.used, included: sc.included, pooled: sc.pooled, seats: sc.seats || 1, period_start: period });
       }
       if (req.method === 'POST') {
         const add = Math.max(0, Math.min(120, Number(req.body?.minutes) || 0));
-        const { data: prof } = await supabase.from('profiles').select('plan').eq('id', user.id).single();
-        const BUNDLES = { free: 0, solo: 1500, pro: 4000, team: 4000, pro_legacy: null };
-        const included = BUNDLES[prof?.plan] !== undefined ? BUNDLES[prof?.plan] : 0;
         const { data: row } = await supabase.from('usage_minutes').select('minutes_used')
           .eq('user_id', user.id).eq('period_start', period).maybeSingle();
-        const total = Math.round((Number(row?.minutes_used || 0) + add) * 10) / 10;
-        await supabase.from('usage_minutes').upsert({ user_id: user.id, period_start: period, minutes_used: total });
-        const overage = included !== null && total > included;
-        return res.status(200).json({ minutes_used: total, included, overage });
+        const mine = Math.round((Number(row?.minutes_used || 0) + add) * 10) / 10;
+        await supabase.from('usage_minutes').upsert({ user_id: user.id, period_start: period, minutes_used: mine });
+        const sc = await usageScope();
+        const overage = sc.included !== null && sc.used > sc.included;
+        return res.status(200).json({ minutes_used: sc.used, included: sc.included, pooled: sc.pooled, overage });
       }
     }
 

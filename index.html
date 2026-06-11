@@ -733,6 +733,8 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         <a href="#" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'});return false">Features</a>
         <a href="#" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'});return false">Pricing</a>
         <a href="#" onclick="document.getElementById('faq').scrollIntoView({behavior:'smooth'});return false">FAQ</a>
+        <a href="/scripts.html">Realtor cold-call scripts</a>
+        <a href="/co-marketing.html">RESPA-safe co-marketing</a>
         <a href="#" onclick="showAuthModal('signup');return false">Get started free</a>
       </div>
       <div class="footer-col">
@@ -1072,12 +1074,18 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <input type="file" id="pd-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="pdHandleFile(event)">
             <button class="btn btn-outline" onclick="document.getElementById('pd-file').click()">📄 Upload Excel / CSV</button>
             <span id="pd-file-info" style="font-size:13px;color:var(--text2)">Columns needed: <strong>phone</strong> (name &amp; company optional)</span>
+            <span style="display:inline-flex;gap:8px;align-items:center;margin-left:auto">
+              <select id="pd-team-lists" style="padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-xs);font-size:12.5px;background:var(--bg);color:var(--text)" onchange="applyTeamList(this.value)">
+                <option value="">Shared lists…</option>
+              </select>
+              <button class="btn btn-ghost" style="font-size:12.5px" onclick="shareCurrentList()">📤 Share list</button>
+            </span>
           </div>
           <div id="pd-controls" style="display:none;margin-top:16px;align-items:center;gap:10px;flex-wrap:wrap">
             <button class="btn btn-primary" id="pd-start" onclick="pdStart()">▶ Start dialing</button>
             <button class="btn btn-outline" id="pd-pause" onclick="pdPause()" style="display:none">⏸ Pause</button>
             <button class="btn btn-outline" onclick="pdSkip()">⏭ Skip current</button>
-            <select id="pd-delay" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-xs);font-size:13px;background:#fff">
+            <select id="pd-delay" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-xs);font-size:13px;background:var(--bg);color:var(--text)">
               <option value="3000">3s between calls</option>
               <option value="5000" selected>5s between calls</option>
               <option value="10000">10s between calls</option>
@@ -1271,6 +1279,13 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button class="btn btn-outline" style="font-size:13px" onclick="prAddScenario(this)">➕ Add scenario</button>
                 <button class="btn btn-primary" style="font-size:13px" id="pr-pdf-btn" onclick="prGeneratePdf()" disabled>🧾 Download PDF quote</button>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center">
+                <button class="btn btn-ghost" style="font-size:12.5px" id="pr-save-btn" onclick="saveQuote()">💾 Save quote</button>
+                <select id="pr-saved-select" style="flex:1;min-width:150px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-xs);font-size:12.5px;background:var(--bg);color:var(--text)" onchange="applySavedQuote(this.value)">
+                  <option value="">Saved quotes…</option>
+                </select>
+                <button class="btn btn-ghost" style="font-size:12.5px;color:var(--danger)" onclick="deleteSavedQuote()" title="Delete the selected saved quote">🗑</button>
               </div>
             </div>
           </div>
@@ -1690,11 +1705,11 @@ function switchPanel(p) {
   if (p === 'log') renderLog();
   if (p === 'contacts') loadContacts();
   if (p === 'followups') loadFollowUps();
-  if (p === 'power') pdRender();
+  if (p === 'power') { pdRender(); loadTeamLists(); }
   if (p === 'inbox') loadInbox();
   if (p === 'settings') { loadDNC().then(renderDNC); renderScrubStatus(); const dt = document.getElementById('disclosure-toggle'); if (dt) dt.checked = !!userProfile?.record_disclosure; const cs = document.getElementById('cell-safety-toggle'); if (cs) cs.checked = cellSafetyOn(); }
   if (p === 'calendar') renderCalendar();
-  if (p === 'pricing') prInit();
+  if (p === 'pricing') { prInit(); loadSavedQuotes(); }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -2155,12 +2170,13 @@ function renderUsageMeter() {
   const wrap = document.getElementById('usage-meter');
   if (!wrap) return;
   const p = userProfile?.plan || 'free';
-  const bundle = PLANS[p]?.minutes;
+  const u = window.__usageThisPeriod;
+  const bundle = (u && u.included != null) ? u.included : PLANS[p]?.minutes;
   if (!isPaidPlan(p) || !bundle) { wrap.classList.add('hidden'); return; }
-  const used = Math.round(window.__usageThisPeriod?.minutes_used || 0);
+  const used = Math.round(u?.minutes_used || 0);
   const pct = Math.min(100, used / bundle * 100);
   wrap.classList.remove('hidden');
-  document.getElementById('usage-meter-label').textContent = `Dialer minutes this period: ${used.toLocaleString()} / ${bundle.toLocaleString()} included`;
+  document.getElementById('usage-meter-label').textContent = `Dialer minutes this period: ${used.toLocaleString()} / ${bundle.toLocaleString()} included` + (u?.pooled ? ` (team pool · ${u.seats || ''} seats)` : '');
   const fill = document.getElementById('usage-meter-fill');
   fill.style.width = pct + '%';
   fill.style.background = used > bundle ? 'var(--warm)' : 'var(--brand)';
@@ -2192,6 +2208,84 @@ function maybeShowWelcome() {
   if ((records?.length || 0) > 0 || lsGet(plwKey('welcome'))) return;
   document.getElementById('welcome-modal').classList.remove('hidden');
 }
+/* — Saved quotes — */
+let savedQuotesCache = [];
+async function loadSavedQuotes() {
+  if (!currentUser) return;
+  try {
+    const { data } = await db.from('saved_quotes').select('id, name, payload, created_at').order('created_at', { ascending: false }).limit(50);
+    savedQuotesCache = data || [];
+    const sel = document.getElementById('pr-saved-select');
+    if (sel) sel.innerHTML = '<option value="">Saved quotes…</option>' + savedQuotesCache.map(q => `<option value="${q.id}">${esc(q.name)}</option>`).join('');
+  } catch (e) { console.warn('saved quotes load failed', e); }
+}
+async function saveQuote() {
+  if (!prScenarios.length) { alert('Add at least one scenario first.'); return; }
+  const client = document.getElementById('pr-prepared-for')?.value?.trim() || '';
+  const def = (client || 'Quote') + ' · ' + new Date().toLocaleDateString();
+  const name = prompt('Name this quote:', def);
+  if (!name) return;
+  try {
+    const { error } = await db.from('saved_quotes').insert({
+      user_id: currentUser.id, name,
+      payload: { scenarios: prScenarios, prepared_for: client }
+    });
+    if (error) throw error;
+    loadSavedQuotes();
+  } catch (e) { alert('Could not save: ' + (e.message || e)); }
+}
+function applySavedQuote(id) {
+  const q = savedQuotesCache.find(x => x.id === id);
+  if (!q) return;
+  prScenarios = JSON.parse(JSON.stringify(q.payload?.scenarios || []));
+  const pf = document.getElementById('pr-prepared-for');
+  if (pf) pf.value = q.payload?.prepared_for || '';
+  prRenderScenarioChips();
+}
+async function deleteSavedQuote() {
+  const sel = document.getElementById('pr-saved-select');
+  const id = sel?.value;
+  if (!id) { alert('Pick a saved quote first.'); return; }
+  const q = savedQuotesCache.find(x => x.id === id);
+  if (!confirm('Delete "' + (q?.name || 'this quote') + '"?')) return;
+  await db.from('saved_quotes').delete().eq('id', id);
+  loadSavedQuotes();
+}
+
+/* — Shared team lead lists — */
+let teamListsCache = [];
+function teamRoot() { return userProfile?.team_owner_id || currentUser?.id; }
+async function loadTeamLists() {
+  if (!currentUser) return;
+  try {
+    const { data } = await db.from('team_lists').select('id, name, leads, created_at').order('created_at', { ascending: false }).limit(30);
+    teamListsCache = data || [];
+    const sel = document.getElementById('pd-team-lists');
+    if (sel) sel.innerHTML = '<option value="">Shared lists…</option>' + teamListsCache.map(l => `<option value="${l.id}">${esc(l.name)} (${(l.leads || []).length})</option>`).join('');
+  } catch (e) { console.warn('team lists load failed', e); }
+}
+async function shareCurrentList() {
+  if (!pdQueue.length) { alert('Load a list first, then share it.'); return; }
+  const name = prompt('Name this shared list:', 'Leads · ' + new Date().toLocaleDateString());
+  if (!name) return;
+  const leads = pdQueue.map(l => ({ phone: l.phone, name: l.name || '', company: l.company || '', status: 'pending' }));
+  try {
+    const { error } = await db.from('team_lists').insert({ team_root: teamRoot(), created_by: currentUser.id, name, leads });
+    if (error) throw error;
+    loadTeamLists();
+    alert('Shared. Anyone on your team can now load "' + name + '" from the Power Dialer.');
+  } catch (e) { alert('Could not share: ' + (e.message || e)); }
+}
+function applyTeamList(id) {
+  const l = teamListsCache.find(x => x.id === id);
+  if (!l) return;
+  if (pdQueue.length && !confirm('Replace your current dialing list with "' + l.name + '"?')) return;
+  pdQueue = (l.leads || []).map(x => ({ ...x, status: 'pending' }));
+  pdCurrentIdx = -1; pdActive = false;
+  pdSave(); pdRender();
+  pdRegistryScrub();
+}
+
 /* — Referral ROI (Pro / Team / founding) — */
 function roiEligible() { return ['pro', 'team', 'pro_legacy'].includes(userProfile?.plan); }
 

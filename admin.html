@@ -102,6 +102,7 @@ tbody tr:hover{background:var(--bg2)}
       <div class="kpi"><div class="lbl">🔥 Hot leads</div><div class="val num" id="k-hot" style="color:var(--hot)">—</div></div>
       <div class="kpi"><div class="lbl">Warm leads</div><div class="val num" id="k-warm" style="color:var(--warm)">—</div></div>
       <div class="kpi"><div class="lbl">Pending follow-ups</div><div class="val num" id="k-fu">—</div></div>
+      <div class="kpi"><div class="lbl">Dialer minutes (pool)</div><div class="val num" id="k-min" style="font-size:20px">—</div></div>
     </div>
 
     <div class="card">
@@ -215,6 +216,10 @@ function render(data){
   document.getElementById('k-hot').textContent = data.team.hot;
   document.getElementById('k-warm').textContent = data.team.warm;
   document.getElementById('k-fu').textContent = data.team.pending_followups;
+  const km = document.getElementById('k-min');
+  if (km) km.textContent = data.team.pool_included
+    ? `${Math.round(data.team.pool_used || 0).toLocaleString()} / ${data.team.pool_included.toLocaleString()}`
+    : `${Math.round(data.team.pool_used || 0).toLocaleString()}`;
 
   document.getElementById('reps').innerHTML = data.reps.map(r => `
     <tr onclick="openRep('${r.id}','${esc(r.name)}')">
