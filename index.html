@@ -480,6 +480,7 @@ footer{background:var(--navy);border-top:1px solid var(--border);padding:0}
 </style>
 </head>
 <body>
+<script>try{if(localStorage.getItem('plw_theme')!=='dark')document.body.classList.add('light')}catch(e){}</script>
 
 <!-- ══ SUPABASE CONFIG ══════════════════════════════════════════════════════ -->
 <script>
@@ -1553,10 +1554,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 </div>
 
 <script>
-/* Theme: apply persisted choice before first paint */
-(function(){
-  try { if (localStorage.getItem('plw_theme') === 'light') document.body.classList.add('light'); } catch(e){}
-})();
+/* Theme default = light; the body-open inline script applies it pre-paint */
 function applyThemeIcon(){
   const b = document.getElementById('theme-toggle');
   if (b) b.textContent = document.body.classList.contains('light') ? '☀️' : '🌙';
