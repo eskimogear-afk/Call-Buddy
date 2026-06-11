@@ -251,6 +251,29 @@ ${transcript}`;
         contact: req._naContact ? { id: req._naContact.id, name: req._naContact.name, phone: req._naContact.phone, company: req._naContact.company } : null,
         call_id: req._naCallId
       });
+    } else if (type === 'quote_params') {
+      let qp;
+      try {
+        qp = JSON.parse(text.replace(/```json|```/g, '').trim());
+      } catch {
+        return res.status(500).json({ error: 'Could not parse the numbers from this call — try again' });
+      }
+      const num = v => (typeof v === 'number' && isFinite(v) && v >= 0) ? v : null;
+      const clean = {
+        purpose: ['purchase', 'refi', 'cashout'].includes(qp.purpose) ? qp.purpose : null,
+        program: ['conventional', 'fha', 'va', 'jumbo', 'bank_stmt', 'dscr', 'hard_money'].includes(qp.program) ? qp.program : null,
+        price: num(qp.price), down_pct: num(qp.down_pct), down_amount: num(qp.down_amount),
+        loan_amount: num(qp.loan_amount), current_balance: num(qp.current_balance), cash_out: num(qp.cash_out),
+        rate: (num(qp.rate) && qp.rate > 0 && qp.rate < 20) ? qp.rate : null,
+        term_years: num(qp.term_years), hoa_mo: num(qp.hoa_mo),
+        confidence: ['high', 'medium', 'low'].includes(qp.confidence) ? qp.confidence : 'low',
+        mentions: Array.isArray(qp.mentions) ? qp.mentions.slice(0, 4).map(String) : [],
+        extracted_at: new Date().toISOString()
+      };
+      if (req._qpCallId) {
+        await supabase.from('calls').update({ quote_params: clean }).eq('id', req._qpCallId).eq('user_id', user.id);
+      }
+      return res.status(200).json({ cached: false, ...clean });
     } else if (type === 'email') {
       let subject = '', body = text;
       try {

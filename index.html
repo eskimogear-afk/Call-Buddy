@@ -1031,11 +1031,12 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <select id="contact-stage-filter" onchange="renderContacts()"
             style="padding:9px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:#fff">
             <option value="">All stages</option>
-            <option value="new">New lead</option>
+            <option value="new">Researching</option>
             <option value="contacted">Contacted</option>
-            <option value="qualified">Qualified</option>
-            <option value="appointment">Appointment set</option>
-            <option value="closed">Closed</option>
+            <option value="meeting">Meeting set</option>
+            <option value="comarketing">Co-marketing live</option>
+            <option value="referral">First referral</option>
+            <option value="partner">Repeat partner</option>
           </select>
           <div class="view-toggle">
             <button id="cv-list" class="active" onclick="setContactView('list')">List</button>
@@ -1202,6 +1203,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <p style="font-size:14px;color:var(--text2);margin-top:4px">Scenario pricing across every program — purchase and refinance. <strong>Estimates only with your configured rates; not a rate quote or Loan Estimate.</strong></p>
         </div>
 
+        <div id="quote-fill-banner" class="hidden" style="margin-bottom:14px;padding:11px 15px;border-radius:var(--radius-sm);font-size:13px;line-height:1.55;border:1px solid var(--border);background:var(--bg2)"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px" id="pr-purpose-row">
           <button class="btn btn-primary" data-purpose="purchase" onclick="prSetPurpose('purchase',this)">Purchase</button>
           <button class="btn btn-outline" data-purpose="refi" onclick="prSetPurpose('refi',this)">Rate/Term Refi</button>
@@ -1997,7 +1999,7 @@ function buildTable(recs) {
           ${phone ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="followUpFromCall('${r.contact_id || ''}','${esc(display)}','${esc(phone)}')">⏰ Schedule follow-up</button>` : ''}
           ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftEmail('${r.id}','${esc(display)}')">✉️ Draft email</button>` : ''}
           ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftNextAction('${r.id}','${esc(display)}')">📅 Schedule next</button>` : ''}
-          <button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="priceFromCall('${hasRealName ? esc(display) : ''}')">💲 Quote</button>
+          <button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="priceFromCall('${r.id}','${hasRealName ? esc(display) : ''}')">💲 Quote</button>
           ${phone && !isDNC(phone) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="markDoNotCall('${esc(phone)}')">🚫 Do Not Call</button>` : ''}
           ${phone && isDNC(phone) ? `<span style="font-size:12px;font-weight:600;color:var(--danger);align-self:center">🚫 On Do Not Call list</span>` : ''}
           <button class="btn btn-danger" style="font-size:12px;padding:6px 14px;margin-left:auto" onclick="deleteRecord('${r.id}')">Delete</button>
@@ -2040,12 +2042,79 @@ function callAgain(phone) {
 }
 
 // Jump to the Pricing tool from a call card, pre-filling who the quote is for
-function priceFromCall(name) {
+function quoteFillBanner(html, tone) {
+  const el = document.getElementById('quote-fill-banner');
+  if (!el) return;
+  el.classList.remove('hidden');
+  el.innerHTML = html;
+  el.style.borderColor = tone === 'ok' ? 'var(--green)' : tone === 'warn' ? 'var(--warm)' : 'var(--border)';
+  el.style.background = tone === 'ok' ? 'var(--green-bg)' : tone === 'warn' ? 'var(--warm-bg)' : 'var(--bg2)';
+}
+
+async function priceFromCall(callId, name) {
   switchPanel('pricing');
-  setTimeout(() => {
-    const pf = document.getElementById('pr-prepared-for');
-    if (pf && name) pf.value = name;
-  }, 300);
+  await new Promise(r => setTimeout(r, 250));
+  const pf = document.getElementById('pr-prepared-for');
+  if (pf && name) pf.value = name;
+  if (!callId) return;
+  quoteFillBanner('<span class="spinner spinner-dark" style="vertical-align:-3px;margin-right:8px"></span>🤖 Reading the call for numbers…');
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const r = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ type: 'quote_params', call_id: callId })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Could not read the call');
+    applyQuoteParams(d);
+  } catch (e) {
+    quoteFillBanner('⚠️ ' + esc(e.message) + ' — fill the numbers in manually below.', 'warn');
+  }
+}
+
+function applyQuoteParams(p) {
+  const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+  const filled = [];
+
+  // purpose first (it toggles which fields are visible)
+  let purpose = p.purpose;
+  if (!purpose && (p.current_balance || p.cash_out)) purpose = p.cash_out ? 'cashout' : 'refi';
+  if (purpose) {
+    const btn = document.querySelector('#pr-purpose-row .btn[data-purpose="' + purpose + '"]');
+    if (btn) { prSetPurpose(purpose, btn); filled.push(purpose === 'purchase' ? 'purchase' : purpose === 'cashout' ? 'cash-out refi' : 'refinance'); }
+  }
+  // program next (sets default rate; extracted rate overrides after)
+  if (p.program && PR_PROGRAMS[p.program]) { prSetProgram(p.program); filled.push(PR_PROGRAMS[p.program].label); }
+
+  let price = p.price;
+  if (!price && p.loan_amount && p.down_pct) price = Math.round(p.loan_amount / (1 - p.down_pct / 100));
+  if (price) { set('pr-price', Math.round(price)); filled.push('$' + Math.round(price).toLocaleString() + ((purpose || 'purchase') === 'purchase' ? ' price' : ' value')); }
+
+  let down = p.down_pct;
+  if (!down && p.down_amount && price) down = Math.round(p.down_amount / price * 1000) / 10;
+  if (down) { set('pr-down', down); filled.push(down + '% down'); }
+
+  const bal = p.current_balance || (purpose && purpose !== 'purchase' ? p.loan_amount : null);
+  if (bal) { set('pr-balance', Math.round(bal)); filled.push('$' + Math.round(bal).toLocaleString() + ' balance'); }
+  if (p.cash_out) { set('pr-cashout', Math.round(p.cash_out)); filled.push('$' + Math.round(p.cash_out).toLocaleString() + ' cash out'); }
+  if (p.rate) { set('pr-rate', p.rate); filled.push(p.rate + '% rate'); }
+  if (p.term_years) {
+    const months = String(p.term_years * 12);
+    const term = document.getElementById('pr-term');
+    if (term && [...term.options].some(o => o.value === months)) { term.value = months; filled.push(p.term_years + '-yr term'); }
+  }
+  if (p.hoa_mo) set('pr-hoa', Math.round(p.hoa_mo));
+
+  prCalc();
+
+  if (!filled.length) {
+    quoteFillBanner('🤷 No usable numbers were discussed on that call — fill in the scenario manually.', 'warn');
+    return;
+  }
+  const conf = p.confidence === 'low' ? ' <strong style="color:var(--warm)">Low confidence — double-check everything.</strong>' : '';
+  const quotes = (p.mentions || []).length ? '<div style="margin-top:5px;font-size:12px;color:var(--text3)">Heard: ' + p.mentions.map(m => '&ldquo;' + esc(m) + '&rdquo;').join(' · ') + '</div>' : '';
+  quoteFillBanner('✓ <strong>Pre-filled from the call:</strong> ' + filled.map(esc).join(' · ') + '. Review before quoting.' + conf + quotes, p.confidence === 'low' ? 'warn' : 'ok');
 }
 
 function followUpFromCall(contactId, name, phone) {
