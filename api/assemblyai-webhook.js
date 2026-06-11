@@ -41,6 +41,12 @@ async function lookupCallerName(phone) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  // Shared-secret auth: only AssemblyAI (which echoes the header we set when
+  // submitting the transcript) can post. Inert until AAI_WEBHOOK_SECRET is set.
+  if (process.env.AAI_WEBHOOK_SECRET && req.headers['x-aai-secret'] !== process.env.AAI_WEBHOOK_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY)
     return res.status(500).json({ error: 'Supabase not configured' });
   if (!process.env.ASSEMBLYAI_API_KEY)

@@ -89,7 +89,13 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         audio_url: uploadData.upload_url,
         speaker_labels: true,
-        webhook_url: webhookCallbackUrl
+        webhook_url: webhookCallbackUrl,
+        // Authenticate the callback so only AssemblyAI can post results
+        // (inert until AAI_WEBHOOK_SECRET is set in the environment).
+        ...(process.env.AAI_WEBHOOK_SECRET ? {
+          webhook_auth_header_name: 'x-aai-secret',
+          webhook_auth_header_value: process.env.AAI_WEBHOOK_SECRET
+        } : {})
       })
     });
     const submitData = await submitRes.json();
