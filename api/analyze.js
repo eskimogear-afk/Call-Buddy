@@ -90,7 +90,7 @@ export default async function handler(req, res) {
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
       const msg = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 2200,
+        max_tokens: 3200,
         tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
         system: [{ type: 'text', text: 'You are a meticulous sales-intelligence researcher for a mortgage loan officer. You only state facts your sources support and clearly mark unknowns. You always end with a single valid JSON object.', cache_control: { type: 'ephemeral' } }],
         messages: [{
@@ -115,10 +115,20 @@ After your research, output ONLY this JSON object (no prose before or after):
       });
 
       const fullText = msg.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
-      const jsonMatch = fullText.match(/\{[\s\S]*\}\s*$/);
-      if (!jsonMatch) return res.status(500).json({ error: 'Research completed but could not be summarized — try again' });
-      let brief;
-      try { brief = JSON.parse(jsonMatch[0]); } catch { return res.status(500).json({ error: 'Research summary parse failed — try again' }); }
+      // Robust extraction: strip code fences, take the outermost {...} object.
+      // The model may wrap JSON in ```json fences or add a trailing sentence,
+      // so we can't require the brace to be the last character.
+      const stripped = fullText.replace(/```json/gi, '').replace(/```/g, '');
+      const first = stripped.indexOf('{'), last = stripped.lastIndexOf('}');
+      let brief = null;
+      if (first !== -1 && last > first) {
+        const candidate = stripped.slice(first, last + 1);
+        try { brief = JSON.parse(candidate); } catch (e) { console.error('research JSON parse failed:', e.message, '| head:', candidate.slice(0, 120)); }
+      }
+      if (!brief) {
+        console.error('research: no parseable JSON. text head:', fullText.slice(0, 200));
+        return res.status(500).json({ error: 'Research finished but the summary came back malformed — tap Refresh to retry.' });
+      }
       brief.researched_name = personName;
       brief.researched_at = new Date().toISOString();
 
