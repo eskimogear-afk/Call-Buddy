@@ -1,0 +1,4 @@
+Contact: mailto:damon@vistomortgage.com
+Expires: 2027-06-11T03:23:12Z
+Preferred-Languages: en
+Canonical: https://call-buddy-omega.vercel.app/.well-known/security.txt
