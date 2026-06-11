@@ -42,7 +42,7 @@ export default async function handler(req, res) {
   }
 
   // ── AI receptionist: conversational lead intake on missed inbound calls ──
-  if (req.query.agent === '1') {
+  if (req.query.agent) {
     return handleAgentTurn(req, res);
   }
 
@@ -89,9 +89,11 @@ export default async function handler(req, res) {
         return res.status(200).send('<Response><Hangup/></Response>');
       }
 
-      // Missed-call text-back: fire an SMS to the caller (real numbers only)
+      // Missed-call text-back: fire an SMS to the caller (real numbers only).
+      // Skipped when the AI receptionist will answer — it gets the info live,
+      // and the blocking Twilio API roundtrip would delay the greeting.
       const missedUserId = req.query.user_id || ownerId;
-      if (missedUserId && From && /^\+\d{10,15}$/.test(From) && To &&
+      if (!ownerAgent && missedUserId && From && /^\+\d{10,15}$/.test(From) && To &&
           process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
         try {
           // Don't double-text the same caller within 24h
@@ -150,13 +152,15 @@ export default async function handler(req, res) {
       return res.status(200).send('<Response><Say>This number is not configured. Goodbye.</Say><Hangup/></Response>');
     }
 
-    // Ring the owner's browser dialer; fall through to voicemail via action URL
+    // Ring the owner's browser dialer; fall through to voicemail via action URL.
+    // With the AI receptionist on, ring shorter so callers aren't left hanging.
     const fallbackParams = new URLSearchParams({ fallback: '1', user_id: ownerId, to: From || '', from: To || '' });
     const actionUrl = xmlEscape(`${baseUrl}/api/twilio-voice?${fallbackParams.toString()}`);
+    const ringSecs = ownerAgent ? 13 : 20;
 
     return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial timeout="20" record="record-from-answer-dual"
+  <Dial timeout="${ringSecs}" record="record-from-answer-dual"
         recordingStatusCallback="${recordingCallback}"
         recordingStatusCallbackMethod="POST"
         action="${actionUrl}" method="POST">
@@ -217,20 +221,24 @@ export default async function handler(req, res) {
 
 /* ════════════════ AI receptionist (missed-call lead intake) ════════════════ */
 
-function agentActionUrl(baseUrl, userId, caller, owner) {
-  const qs = new URLSearchParams({ agent: '1', user_id: userId || '', caller: caller || '', owner: owner || '' });
+const AGENT_VOICE = 'Polly.Joanna-Neural';
+
+function agentActionUrl(baseUrl, hop, userId, caller, owner) {
+  const qs = new URLSearchParams({ agent: hop, user_id: userId || '', caller: caller || '', owner: owner || '' });
   return `${baseUrl}/api/twilio-voice?${qs.toString()}`;
 }
 
 function agentSay(text) {
-  return `<Say voice="Polly.Joanna">${xmlEscape(text)}</Say>`;
+  return `<Say voice="${AGENT_VOICE}">${xmlEscape(text)}</Say>`;
 }
 
+// speechTimeout=1 ends capture after 1s of silence (vs sluggish 'auto');
+// experimental_conversations is Twilio's STT tuned for fast conversational turns
 function agentGatherTwiML(baseUrl, userId, caller, owner, text) {
-  const action = xmlEscape(agentActionUrl(baseUrl, userId, caller, owner));
+  const action = xmlEscape(agentActionUrl(baseUrl, '1', userId, caller, owner));
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US">
+  <Gather input="speech" action="${action}" method="POST" speechTimeout="1" speechModel="experimental_conversations" language="en-US">
     ${agentSay(text)}
   </Gather>
   ${agentSay("Sorry, I didn't catch anything. I'll let him know you called — he'll ring you back at this number. Thanks!")}
@@ -238,15 +246,17 @@ function agentGatherTwiML(baseUrl, userId, caller, owner, text) {
 </Response>`;
 }
 
+const AGENT_FILLERS = ['Okay.', 'Got it.', 'Mm-hmm.', 'One sec.'];
+
 async function handleAgentTurn(req, res) {
   const baseUrl = process.env.TWILIO_WEBHOOK_BASE_URL
     ? process.env.TWILIO_WEBHOOK_BASE_URL.replace(/\/$/, '')
     : `https://${req.headers.host}`;
+  const hop = String(req.query.agent || '1');
   const userId = req.query.user_id || '';
   const caller = req.query.caller || req.body.From || '';
   const owner = req.query.owner || '';
   const callSid = req.body.CallSid || '';
-  const speech = String(req.body.SpeechResult || '').trim();
 
   const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY)
     ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
@@ -255,18 +265,30 @@ async function handleAgentTurn(req, res) {
   if (!supabase || !callSid || !userId) return bail("I'll let him know you called. He'll call you back at this number. Thanks!");
 
   try {
-    let { data: sess } = await supabase.from('agent_sessions').select('history').eq('call_sid', callSid).maybeSingle();
-    if (!sess) {
-      await supabase.from('agent_sessions').upsert({ call_sid: callSid, user_id: userId, caller, history: [] });
-      sess = { history: [] };
+    /* ── hop 1: speech just arrived — store it, speak a beat, think on the redirect ── */
+    if (hop === '1') {
+      const speech = String(req.body.SpeechResult || '').trim();
+      let { data: sess } = await supabase.from('agent_sessions').select('history').eq('call_sid', callSid).maybeSingle();
+      const history = Array.isArray(sess?.history) ? sess.history : [];
+      history.push({ role: 'user', content: speech || '(silence)' });
+      await supabase.from('agent_sessions').upsert({ call_sid: callSid, user_id: userId, caller, history });
+      const filler = AGENT_FILLERS[history.filter(m => m.role === 'user').length % AGENT_FILLERS.length];
+      const next = xmlEscape(agentActionUrl(baseUrl, '2', userId, caller, owner));
+      // Filler audio plays WHILE Twilio fetches hop 2 — the think-time hides behind it
+      return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>${agentSay(filler)}<Redirect method="POST">${next}</Redirect></Response>`);
     }
-    const history = Array.isArray(sess.history) ? sess.history : [];
-    history.push({ role: 'user', content: speech || '(silence)' });
 
-    const userTurns = history.filter(m => m.role === 'user').length;
-    const mustWrap = userTurns >= 6;
+    /* ── hop 2: run the model turn, ask the next question (or say goodbye) ── */
+    if (hop === '2') {
+      const { data: sess } = await supabase.from('agent_sessions').select('history').eq('call_sid', callSid).maybeSingle();
+      const history = Array.isArray(sess?.history) ? sess.history : [];
+      if (!history.length) return bail("I'll let him know you called. Thanks!");
 
-    const system = `You are the friendly phone assistant for ${owner || 'a mortgage loan officer'}. He missed this call; your ONLY job is to collect callback info in a short, natural conversation, one question at a time.
+      const userTurns = history.filter(m => m.role === 'user').length;
+      const mustWrap = userTurns >= 6;
+
+      const system = `You are the friendly phone assistant for ${owner || 'a mortgage loan officer'}. He missed this call; your ONLY job is to collect callback info in a short, natural conversation, one question at a time.
 
 Collect, in roughly this order (skip anything already given):
 1. Their name
@@ -283,32 +305,51 @@ Respond with ONLY valid JSON:
 {"say":"what you say next (or the goodbye if done)","done":true|false,"lead":{"name":string|null,"caller_type":"agent"|"borrower"|"client"|"other"|null,"reason":string|null,"callback_number":string|null,"callback_time":string|null}}
 "lead" reflects everything learned so far. The goodbye should confirm the callback plan in one sentence.`;
 
-    let turn = null;
-    try {
-      const ar = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 300, system, messages: history })
-      });
-      const ad = await ar.json();
-      const txt = (ad.content || []).map(b => b.text || '').join('').trim();
-      turn = JSON.parse(txt.replace(/```json|```/g, '').trim());
-    } catch (e) {
-      console.error('agent turn AI error:', e);
-    }
-    if (!turn || typeof turn.say !== 'string') {
-      turn = { say: "Got it. I'll have him call you back at this number as soon as he's free. Thanks for calling!", done: true, lead: {} };
+      let turn = null;
+      try {
+        const ar = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 160,
+            system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+            messages: history
+          })
+        });
+        const ad = await ar.json();
+        const txt = (ad.content || []).map(b => b.text || '').join('').trim();
+        turn = JSON.parse(txt.replace(/```json|```/g, '').trim());
+      } catch (e) {
+        console.error('agent turn AI error:', e);
+      }
+      if (!turn || typeof turn.say !== 'string') {
+        turn = { say: "Got it. I'll have him call you back at this number as soon as he's free. Thanks for calling!", done: true, lead: {} };
+      }
+
+      history.push({ role: 'assistant', content: JSON.stringify(turn) });
+      await supabase.from('agent_sessions').update({ history }).eq('call_sid', callSid);
+
+      if (!turn.done && !mustWrap) {
+        return res.status(200).send(agentGatherTwiML(baseUrl, userId, caller, owner, turn.say));
+      }
+      // Done: speak the goodbye NOW; the lead writes happen on the hop-3 redirect
+      const fin = xmlEscape(agentActionUrl(baseUrl, '3', userId, caller, owner));
+      return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>${agentSay(turn.say)}<Redirect method="POST">${fin}</Redirect></Response>`);
     }
 
-    history.push({ role: 'assistant', content: JSON.stringify(turn) });
-    await supabase.from('agent_sessions').update({ history }).eq('call_sid', callSid);
-
-    if (!turn.done && !mustWrap) {
-      return res.status(200).send(agentGatherTwiML(baseUrl, userId, caller, owner, turn.say));
+    /* ── hop 3: caller already heard goodbye — persist the lead, hang up ── */
+    const { data: sess } = await supabase.from('agent_sessions').select('history').eq('call_sid', callSid).maybeSingle();
+    const history = Array.isArray(sess?.history) ? sess.history : [];
+    let lead = {};
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === 'assistant') {
+        try { lead = JSON.parse(history[i].content).lead || {}; } catch {}
+        break;
+      }
     }
 
-    // ── Finalize: contact + logged call + suggested follow-up ──
-    const lead = turn.lead || {};
     const digits = String(caller || '').replace(/\D/g, '');
     const ten = digits.length === 11 && digits[0] === '1' ? digits.slice(1) : digits;
     const variants = [caller, '+1' + ten, ten, '1' + ten].filter(Boolean);
@@ -367,8 +408,7 @@ Respond with ONLY valid JSON:
     } catch (e) {
       console.error('agent finalize error:', e);
     }
-
-    return res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>\n<Response>${agentSay(turn.say)}<Hangup/></Response>`);
+    return res.status(200).send('<?xml version="1.0" encoding="UTF-8"?>\n<Response><Hangup/></Response>');
   } catch (err) {
     console.error('handleAgentTurn error:', err);
     return bail("I'll make sure he knows you called. Thanks!");
