@@ -881,6 +881,9 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               Put your phone on <strong>speaker</strong> near your computer. PitchLog will hear both sides of the conversation.
             </div>
+            <div id="consent-chip" class="hidden" style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;padding:10px 14px;border:1px solid var(--warm);background:var(--warm-bg);border-radius:var(--radius-sm);font-size:12.5px;color:var(--warm);line-height:1.5">
+              <span>🎙️</span><span><strong>Recording.</strong> If they haven't heard it yet, open with: &ldquo;Just a heads-up — I'm on a recorded line.&rdquo;</span>
+            </div>
             <div class="rec-center">
               <button class="rec-btn idle" id="rec-btn" onclick="toggleRec()">
                 <svg id="rec-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
@@ -950,6 +953,15 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <div class="settings-row"><div><strong>Email</strong><br><span id="set-email">-</span></div></div>
           <div class="settings-row"><div><strong>Plan</strong><br><span id="set-plan">Free - 25 calls/month</span></div><button class="btn btn-primary" style="font-size:13px;padding:7px 16px;flex-shrink:0" onclick="showUpgradeModal()">Upgrade to Pro</button></div>
           <div class="settings-row"><div><strong>Calls this month</strong><br><span id="set-calls">-</span></div></div>
+        </div>
+        <div class="settings-section">
+          <h3>Recording &amp; consent</h3>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Call-recording laws vary by state — many need only your consent, but some (including <strong>Florida</strong> and California) require everyone on the call to consent. The professional fix is a one-line disclosure up front.</p>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13.5px;line-height:1.55">
+            <input type="checkbox" id="disclosure-toggle" onchange="saveDisclosure(this.checked)" style="margin-top:3px;accent-color:var(--brand)">
+            <span><strong>Auto-announce on dialer calls</strong> — when the other party answers, they hear a brief &ldquo;This call may be recorded&rdquo; before being connected. Covers consent without you having to remember it.</span>
+          </label>
+          <div style="margin-top:12px;padding:10px 14px;border:1px solid var(--border);background:var(--bg2);border-radius:var(--radius-sm);font-size:12.5px;color:var(--text2)">📼 Recording with the mic recorder instead? Open with: <em style="color:var(--text)">&ldquo;Just a heads-up — I'm on a recorded line.&rdquo;</em> A reminder appears whenever you're recording.</div>
         </div>
         <div class="settings-section">
           <h3>Do Not Call list <span id="dnc-count" style="font-weight:400;color:var(--text3);font-size:13px">0</span></h3>
@@ -1557,7 +1569,7 @@ function switchPanel(p) {
   if (p === 'followups') loadFollowUps();
   if (p === 'power') pdRender();
   if (p === 'inbox') loadInbox();
-  if (p === 'settings') { loadDNC().then(renderDNC); renderScrubStatus(); }
+  if (p === 'settings') { loadDNC().then(renderDNC); renderScrubStatus(); const dt = document.getElementById('disclosure-toggle'); if (dt) dt.checked = !!userProfile?.record_disclosure; }
   if (p === 'calendar') renderCalendar();
   if (p === 'pricing') prInit();
 }
@@ -1606,6 +1618,7 @@ function startRec() {
     document.getElementById('rec-timer').style.display = 'block';
     document.getElementById('rec-wave').style.display = 'flex';
     document.getElementById('live-tx-wrap').classList.remove('hidden');
+    document.getElementById('consent-chip')?.classList.remove('hidden');
     timerInterval = setInterval(() => {
       seconds++;
       const m = Math.floor(seconds / 60), s = seconds % 60;
@@ -1627,6 +1640,7 @@ function stopRec() {
   document.getElementById('rec-status').textContent = 'Processing...';
   document.getElementById('rec-sub').textContent = 'AI is analyzing your call.';
   document.getElementById('rec-wave').style.display = 'none';
+  document.getElementById('consent-chip')?.classList.add('hidden');
   setTimeout(() => processCall(), 700);
 }
 
@@ -2010,10 +2024,26 @@ function maybeShowWelcome() {
   if ((records?.length || 0) > 0 || lsGet(plwKey('welcome'))) return;
   document.getElementById('welcome-modal').classList.remove('hidden');
 }
+async function saveDisclosure(on) {
+  if (!currentUser) return;
+  try {
+    const { error } = await db.from('profiles').update({ record_disclosure: on }).eq('id', currentUser.id);
+    if (error) throw error;
+    if (userProfile) userProfile.record_disclosure = on;
+  } catch (e) {
+    alert('Could not save the setting: ' + (e.message || e));
+    const t = document.getElementById('disclosure-toggle');
+    if (t) t.checked = !on;
+  }
+}
+
 function plwSkipWelcome() {
   lsSet(plwKey('welcome'), '1');
   document.getElementById('welcome-modal').classList.add('hidden');
 }
+function plwShowDemo() { document.getElementById('demo-call-modal').classList.remove('hidden'); }
+function plwCloseDemo() { document.getElementById('demo-call-modal').classList.add('hidden'); }
+
 function plwStartFirstCall() {
   plwSkipWelcome();
   switchPanel('recorder');
@@ -3815,7 +3845,38 @@ setInterval(() => {
       <div style="display:flex;gap:12px;align-items:flex-start"><span style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:var(--brand-light);color:var(--brand);font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">3</span><div style="font-size:13.5px;line-height:1.6"><strong>Hang up — it's logged</strong><br><span style="color:var(--text2)">Name, details, outcome and follow-up fill themselves in.</span></div></div>
     </div>
     <button class="btn btn-primary btn-full" onclick="plwStartFirstCall()">Make my first call</button>
+    <button class="btn btn-outline btn-full" style="margin-top:8px" onclick="plwShowDemo()">Show me a sample logged call first</button>
     <button class="btn btn-ghost btn-full" style="margin-top:8px" onclick="plwSkipWelcome()">I'll explore on my own</button>
+  </div>
+</div>
+
+<div id="demo-call-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:720px">
+    <button class="modal-close" onclick="plwCloseDemo()">×</button>
+    <h2 style="margin-bottom:4px">This is what a logged call looks like</h2>
+    <p style="font-size:13.5px;color:var(--text2);margin-bottom:18px">You talk on the left. PitchLog builds the prospect card on the right. Nothing here was typed.</p>
+    <div class="mockup-wrap" style="box-shadow:none;border:1px solid var(--border)">
+      <div class="mockup-app">
+        <div class="mockup-left">
+          <div class="mockup-rec-pill"><span class="mockup-pulse"></span> Sample call &nbsp;·&nbsp; <span style="font-weight:400">0:47</span></div>
+          <div class="mockup-transcript-box">
+            <div class="mtr-line"><span class="mtr-speaker">You:</span>Are you looking to purchase or refinance?</div>
+            <div class="mtr-line"><span class="mtr-speaker">Prospect:</span>Refinance — rates are finally making it worth it. We owe about $340k. <span class="mtr-ai-tag">AI detected ✓</span></div>
+            <div class="mtr-line"><span class="mtr-speaker">You:</span>Got it. And you're hoping to drop the payment or pull cash out?</div>
+            <div class="mtr-line"><span class="mtr-speaker">Prospect:</span>Mostly the payment. Call me Thursday after 2 — I'll have my statement.</div>
+          </div>
+        </div>
+        <div class="mockup-right">
+          <div class="mf-row"><span class="mf-label">Prospect name</span><span class="mf-val">David Martinez</span></div>
+          <div class="mf-row"><span class="mf-label">Loan type</span><span class="mf-val"><span class="mf-tag mf-tag-blue">Refinance</span></span></div>
+          <div class="mf-row"><span class="mf-label">Loan amount</span><span class="mf-val">~$340,000</span></div>
+          <div class="mf-row"><span class="mf-label">Outcome</span><span class="mf-val"><span class="mf-tag mf-tag-green">Interested ✓</span></span></div>
+          <div class="mf-row"><span class="mf-label">Follow-up</span><span class="mf-val" style="color:var(--brand);font-weight:600">Thursday 2:00 PM — call back</span></div>
+          <div class="mf-row"><span class="mf-label">Lead score</span><span class="mf-val"><span class="mf-tag" style="background:var(--hot-bg);color:var(--hot)">🔥 Hot</span></span></div>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-full" style="margin-top:18px" onclick="plwCloseDemo();plwStartFirstCall()">Ready — make my first call</button>
   </div>
 </div>
 

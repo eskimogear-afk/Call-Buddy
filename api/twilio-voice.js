@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   res.setHeader('Content-Type', 'text/xml');
 
   if (req.method === 'GET') {
-    return res.status(200).send('<Response><Say>Aevaa is connected.</Say></Response>');
+    return res.status(200).send('<Response><Say>PitchLog is connected.</Say></Response>');
   }
 
   if (req.method !== 'POST') {
@@ -34,6 +34,11 @@ export default async function handler(req, res) {
       console.error('Sig validation failed. Expected URL:', webhookUrl, 'Sig:', twilioSignature);
       return res.status(403).send('<Response><Say>Forbidden</Say></Response>');
     }
+  }
+
+  // Disclosure whisper for the called party (child leg of an outbound dial)
+  if (req.query.disclosure === '1') {
+    return res.status(200).send('<?xml version="1.0" encoding="UTF-8"?>\n<Response><Say voice="Polly.Joanna">This call may be recorded.</Say></Response>');
   }
 
   const { To, From, DialCallStatus } = req.body;
@@ -149,15 +154,17 @@ export default async function handler(req, res) {
 
   const userId = (From || '').replace(/^client:/, '');
   let callerId = process.env.TWILIO_PHONE_NUMBER || null;
+  let disclose = false;
 
   if (userId && userId.length === 36 && supabase) {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('twilio_phone_number')
+        .select('twilio_phone_number, record_disclosure')
         .eq('id', userId)
         .single();
       if (profile?.twilio_phone_number) callerId = profile.twilio_phone_number;
+      disclose = profile?.record_disclosure === true;
     } catch (e) {
       console.error('Profile lookup error:', e);
     }
@@ -175,13 +182,14 @@ export default async function handler(req, res) {
   // strip everything but digits/+ from To (it's user input going into XML)
   const callerIdAttr = callerId ? ` callerId="${xmlEscape(callerId)}"` : '';
   const safeTo = To.replace(/[^\d+]/g, '');
+  const whisperAttr = disclose ? ` url="${xmlEscape(`${baseUrl}/api/twilio-voice?disclosure=1`)}" method="POST"` : '';
 
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial record="record-from-answer-dual"
         recordingStatusCallback="${recordingCallbackXml}"
         recordingStatusCallbackMethod="POST"${callerIdAttr}>
-    <Number>${safeTo}</Number>
+    <Number${whisperAttr}>${safeTo}</Number>
   </Dial>
 </Response>`;
 
