@@ -84,7 +84,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:16px 4
 .step-num{width:40px;height:40px;border-radius:50%;background:var(--brand);color:#fff;font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
 .step h3{font-size:14px;font-weight:600;margin-bottom:6px}
 .step p{font-size:13px;color:var(--text2)}
-.pricing-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;max-width:960px;margin:0 auto}
+.pricing-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;max-width:1180px;margin:0 auto}
 .price-card{border:1.5px solid var(--border);border-radius:var(--radius);padding:32px 28px}
 .price-card.featured{border-color:var(--brand)}
 .price-popular{display:inline-block;background:var(--brand);color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;margin-bottom:14px}
@@ -235,6 +235,7 @@ tr:hover td{background:var(--bg2)}
 @media print{
   body > *:not(#quote-sheet){display:none !important}
   #quote-sheet{display:block !important;background:#fff;color:#0F172A}
+  body.free-plan #quote-sheet::after{content:'Made with PitchLog — the cold-call CRM for loan officers';display:block;text-align:center;font-size:9px;color:#94A3B8;padding:14px 0 4px;border-top:1px solid #E2E8F0;margin-top:18px}
   @page{margin:14mm}
 }
 
@@ -583,7 +584,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <div class="testi" style="padding:34px 36px">
         <p style="font-size:15px;color:var(--text2);line-height:1.85;margin-bottom:16px">I'm a working loan officer. I built PitchLog because I was making 40+ calls a day and losing deals in the gaps — a follow-up I forgot, a detail I didn't write down, a hot lead buried in a notes app at 7:30pm while I tried to reconstruct my day from memory.</p>
         <p style="font-size:15px;color:var(--text2);line-height:1.85;margin-bottom:16px">I'm not going to show you fake logos or invented reviews. PitchLog is new, and you'd see through that anyway — you get cold-called all day too.</p>
-        <p style="font-size:15px;color:var(--text2);line-height:1.85;margin-bottom:0">Here's what I'll offer instead: <strong style="color:var(--text)">use it free, on real calls, this week.</strong> If it doesn't pay for itself in saved deals, close the tab. And if you join now, you're a founding member — your price never goes up, and feature requests come straight to me.</p>
+        <p style="font-size:15px;color:var(--text2);line-height:1.85;margin-bottom:0">Here's what I'll offer instead: <strong style="color:var(--text)">use it free, on real calls, this week.</strong> If it doesn't pay for itself in saved deals, close the tab. And if you join now, you're a founding member — Solo at $39/mo on annual, locked for 12 months, and feature requests come straight to me.</p>
         <div class="testi-meta" style="margin-top:22px">
           <div class="testi-avatar" style="background:linear-gradient(135deg,var(--brand),#3B82E0)">D</div>
           <div class="testi-info">
@@ -597,51 +598,60 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   <div class="section" id="pricing">
     <div class="section-label">Pricing</div>
-    <div class="section-title">Simple math: one saved deal pays for a decade</div>
-    <p class="section-sub">Every feature is included on every plan. You only pay for volume — 25 free calls a month, unlimited on Pro.</p>
+    <div class="section-title">Less than one funded loan pays for years</div>
+    <p class="section-sub">Every plan gets the full product. Paid plans include a generous dialer-minute bundle — go past it and minutes are just $0.03 each, never blocked.</p>
     <div class="pricing-grid">
       <div class="price-card">
         <div class="price-name">Free</div>
         <div class="price-amount">$0<sub>/month</sub></div>
-        <div class="price-desc">The full product. Every feature. No card.</div>
+        <div class="price-desc">Try it on real calls. No card.</div>
         <ul class="price-features">
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg><strong>25 calls/month</strong> — resets monthly</li>
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>AI notes, auto-fill &amp; lead scoring</li>
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Dialer, power dialer &amp; follow-up calendar</li>
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Pricing engine &amp; branded PDF quotes</li>
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>DNC list, compliance mode, Excel export</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg><strong>25 calls/month</strong></li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>All features included</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>AI notes, follow-ups, pricing engine</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>PDF quotes (small PitchLog watermark)</li>
         </ul>
-        <button class="btn btn-outline btn-full" onclick="showAuthModal('signup')">Get started free</button>
+        <button class="btn btn-outline btn-full" onclick="showAuthModal('signup')">Start free</button>
+      </div>
+      <div class="price-card">
+        <div class="price-name">Solo</div>
+        <div class="price-amount">$49<sub>/month</sub></div>
+        <div class="price-desc">$39/mo billed annually. For steady prospecting.</div>
+        <ul class="price-features">
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg><strong>1,500 dialer min/mo</strong> included</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Unlimited recorded calls</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>No watermark on quotes</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Overage just $0.03/min — never blocked</li>
+        </ul>
+        <button class="btn btn-outline btn-full" onclick="showAuthModal('signup')">Start free, pick Solo in-app</button>
       </div>
       <div class="price-card featured">
         <div class="price-popular">MOST POPULAR</div>
         <div class="price-name">Pro</div>
-        <div class="price-amount">$29<sub>/month</sub></div>
-        <div class="price-desc">For LOs who dial every day. Less than one lunch.</div>
+        <div class="price-amount">$89<sub>/month</sub></div>
+        <div class="price-desc">$79/mo billed annually. For daily dialers.</div>
         <ul class="price-features">
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg><strong>Unlimited calls</strong> — no monthly cap</li>
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Everything in Free, no feature gates</li>
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Founding-member price — locked for life</li>
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Direct line to the founder for requests</li>
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Cancel anytime, keep your data</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg><strong>4,000 dialer min/mo</strong> included</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Referral ROI dashboard</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Agent intel &amp; enrichment</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Priority support</li>
         </ul>
-        <button class="btn btn-primary btn-full" onclick="showAuthModal('signup')">Start free, upgrade in-app</button>
+        <button class="btn btn-primary btn-full" onclick="showAuthModal('signup')">Start free, pick Pro in-app</button>
       </div>
       <div class="price-card" style="border:1.5px solid var(--border)">
         <div class="price-name">Team</div>
-        <div class="price-amount" style="font-size:36px">Custom</div>
-        <div class="price-desc">For sales teams and organizations.</div>
+        <div class="price-amount">$79<sub>/seat/mo</sub></div>
+        <div class="price-desc">2+ seats. Built for branch managers.</div>
         <ul class="price-features">
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Everything in Pro</li>
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Shared team dashboard</li>
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Manager reporting</li>
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Volume discounts</li>
-          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Dedicated support</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Pooled minutes (4,000 × seats)</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Manager dashboard</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Shared lead lists</li>
+          <li><svg class="check" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Everything in Pro, every seat</li>
         </ul>
-        <a href="mailto:damon@vistomortgage.com" class="btn btn-outline btn-full">Contact us</a>
+        <a href="mailto:damon@vistomortgage.com?subject=PitchLog%20Team%20plan" class="btn btn-outline btn-full">Talk to the founder</a>
       </div>
     </div>
-    <p style="text-align:center;font-size:14px;color:var(--text2);max-width:560px;margin:26px auto 0">The average funded loan pays a loan officer a few thousand dollars. Pro costs $29. <strong style="color:var(--text)">If PitchLog rescues one deal from a forgotten follow-up, it has paid for itself for years.</strong></p>
+    <p style="text-align:center;font-size:14px;color:var(--text2);max-width:600px;margin:26px auto 0">The average funded loan pays a loan officer a few thousand dollars. <strong style="color:var(--text)">If PitchLog rescues one deal from a forgotten follow-up, it has paid for itself for years.</strong> Founding members: Solo at $39/mo annual, price locked for 12 months.</p>
     <div class="trust-badges">
       <div class="trust-badge"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Encrypted in transit &amp; at rest</div>
       <div class="trust-badge"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>Your data is never shared</div>
@@ -665,7 +675,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       </details>
       <details style="border-bottom:1px solid var(--border)">
         <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">What about Do-Not-Call rules when I'm cold calling?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
-        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">PitchLog ships with three layers: a personal Do-Not-Call list that blocks numbers across the dialer and power dialer, a Compliance Mode that enforces legal calling hours (8am–9pm) in each prospect's local time zone, and optional registry scrubbing that flags federal/state DNC numbers and known TCPA litigators on imported lists before you ever dial. Calling agents and brokers business-to-business is generally outside DNC rules — the protection matters most for consumer lists.</p>
+        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">PitchLog ships with four layers: a personal Do-Not-Call list that blocks numbers everywhere, Compliance Mode enforcing legal calling hours (8am–9pm) in each prospect's time zone, optional registry scrubbing (federal/state DNC + known TCPA litigators) on imported lists, and Cell-Phone Safety Mode that keeps every Power Dialer call human-initiated. The nuance most tools skip: calling an agent's published <strong>business landline</strong> about business is generally DNC-exempt, but <strong>autodialing or AI-voice calls to cell phones</strong> can carry TCPA liability of $500–$1,500 per call — which is why PitchLog keeps dialing manually initiated instead of marketing itself as an autodialer.</p>
       </details>
       <details style="border-bottom:1px solid var(--border)">
         <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">How accurate are the AI notes?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
@@ -677,7 +687,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       </details>
       <details style="border-bottom:1px solid var(--border)">
         <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">What happens when I hit 25 calls on the free plan?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
-        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">You get a prompt to upgrade, and that's it. Nothing is deleted — you can still view, search, and export every previous call. The counter resets on the 1st of each month, or Pro removes it entirely for $29.</p>
+        <p style="font-size:14px;color:var(--text2);line-height:1.75;padding-bottom:18px">You get a prompt to upgrade, and that's it. Nothing is deleted — you can still view, search, and export every previous call. The counter resets on the 1st of each month — or any paid plan (Solo from $39/mo annual) removes the cap entirely.</p>
       </details>
       <details style="border-bottom:1px solid var(--border)">
         <summary style="padding:18px 0;font-size:15px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">I'm not a mortgage LO — can I still use it?<span style="color:var(--brand);font-size:20px;font-weight:300">+</span></summary>
@@ -852,6 +862,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <label style="font-size:11.5px;color:var(--text2);display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="compliance-toggle" style="width:auto" onchange="setComplianceMode(this.checked)"> Compliance mode</label>
             <button id="btn-dialer-retry" onclick="retryDialer()" style="display:none;font-size:12px;padding:5px 12px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit">Retry</button>
           </div>
+          <div id="consent-state-banner" class="hidden" style="margin-top:10px;padding:9px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12.5px;line-height:1.5"></div>
           <div id="research-panel" class="hidden" style="margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg2);padding:16px 18px"></div>
         </div>
         <div class="table-card">
@@ -953,6 +964,11 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <div class="settings-row"><div><strong>Email</strong><br><span id="set-email">-</span></div></div>
           <div class="settings-row"><div><strong>Plan</strong><br><span id="set-plan">Free - 25 calls/month</span></div><button class="btn btn-primary" style="font-size:13px;padding:7px 16px;flex-shrink:0" onclick="showUpgradeModal()">Upgrade to Pro</button></div>
           <div class="settings-row"><div><strong>Calls this month</strong><br><span id="set-calls">-</span></div></div>
+          <div id="usage-meter" class="hidden" style="padding:14px 0 4px">
+            <div id="usage-meter-label" style="font-size:13px;font-weight:600;margin-bottom:8px"></div>
+            <div style="height:8px;border-radius:99px;background:var(--bg3);overflow:hidden"><div id="usage-meter-fill" style="height:100%;width:0%;background:var(--brand);border-radius:99px;transition:width .3s"></div></div>
+            <div id="usage-meter-over" style="font-size:12px;color:var(--warm);margin-top:6px"></div>
+          </div>
         </div>
         <div class="settings-section">
           <h3>Recording &amp; consent</h3>
@@ -962,6 +978,10 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <span><strong>Auto-announce on dialer calls</strong> — when the other party answers, they hear a brief &ldquo;This call may be recorded&rdquo; before being connected. Covers consent without you having to remember it.</span>
           </label>
           <div style="margin-top:12px;padding:10px 14px;border:1px solid var(--border);background:var(--bg2);border-radius:var(--radius-sm);font-size:12.5px;color:var(--text2)">📼 Recording with the mic recorder instead? Open with: <em style="color:var(--text)">&ldquo;Just a heads-up — I'm on a recorded line.&rdquo;</em> A reminder appears whenever you're recording.</div>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13.5px;line-height:1.55;margin-top:16px">
+            <input type="checkbox" id="cell-safety-toggle" onchange="saveCellSafety(this.checked)" style="margin-top:3px;accent-color:var(--brand)">
+            <span><strong>Cell-phone safety mode (recommended)</strong> — the Power Dialer waits for you to tap <em>Dial next</em> after each call instead of auto-advancing. Keeps every call human-initiated, which is your strongest protection against TCPA autodialer claims when lists contain cell numbers ($500–$1,500 statutory damages per call).</span>
+          </label>
         </div>
         <div class="settings-section">
           <h3>Do Not Call list <span id="dnc-count" style="font-weight:400;color:var(--text3);font-size:13px">0</span></h3>
@@ -1352,19 +1372,31 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 <!-- ══ UPGRADE MODAL ══════════════════════════════════════════════════════ -->
 <div id="upgrade-modal" class="modal-overlay hidden" onclick="bgClose(event,'upgrade-modal')">
-  <div class="modal" style="max-width:500px">
+  <div class="modal" style="max-width:560px">
     <button class="modal-close" onclick="closeModal('upgrade-modal')">×</button>
-    <h2>Upgrade to Pro</h2>
-    <p class="modal-sub">Unlock unlimited calls for $29/month.</p>
-    <div class="upgrade-grid">
-      <div class="upgrade-card"><div style="font-size:13px;font-weight:600;color:var(--text2)">Free</div><div class="upgrade-price">$0<sub>/mo</sub></div><div style="font-size:13px;color:var(--text2)">25 calls/month</div></div>
-      <div class="upgrade-card featured"><div style="font-size:13px;font-weight:600;color:var(--brand-dark)">Pro</div><div class="upgrade-price">$29<sub>/mo</sub></div><div style="font-size:13px;color:var(--brand-dark)">Unlimited calls + priority support</div></div>
+    <h2>Pick your plan</h2>
+    <p class="modal-sub">Every feature on every plan — you only pay for dialing volume. Past your bundle, minutes are $0.03 each. Never blocked mid-month.</p>
+    <div style="display:flex;flex-direction:column;gap:12px;margin:18px 0">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 18px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2)">
+        <div><strong style="font-size:15px">Solo</strong><div style="font-size:12.5px;color:var(--text2)">1,500 dialer min/mo · unlimited recorded calls · no watermark</div></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline" style="font-size:12.5px;padding:7px 12px" onclick="handleStripe('solo_monthly')">$49/mo</button>
+          <button class="btn btn-primary" style="font-size:12.5px;padding:7px 12px" onclick="handleStripe('solo_annual')">$39/mo annual</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 18px;border:1.5px solid var(--brand);border-radius:var(--radius);background:var(--brand-light)">
+        <div><strong style="font-size:15px">Pro</strong> <span style="font-size:10px;font-weight:700;color:var(--brand);background:var(--bg);padding:2px 8px;border-radius:99px;margin-left:4px">MOST POPULAR</span><div style="font-size:12.5px;color:var(--text2)">4,000 min/mo · referral ROI dashboard · agent intel · priority support</div></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline" style="font-size:12.5px;padding:7px 12px" onclick="handleStripe('pro_monthly')">$89/mo</button>
+          <button class="btn btn-primary" style="font-size:12.5px;padding:7px 12px" onclick="handleStripe('pro_annual')">$79/mo annual</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 18px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2)">
+        <div><strong style="font-size:15px">Team</strong><div style="font-size:12.5px;color:var(--text2)">$79/seat/mo · 2+ seats · pooled minutes · manager dashboard</div></div>
+        <button class="btn btn-outline" style="font-size:12.5px;padding:7px 12px" onclick="handleStripe('team_monthly')">Set up Team</button>
+      </div>
     </div>
-    <button class="btn btn-primary btn-full" onclick="handleStripe()">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-      Upgrade to Pro — $29/mo
-    </button>
-    <p style="font-size:12px;color:var(--text3);text-align:center;margin-top:12px">Cancel anytime. Founding-member price — locked in for life.</p>
+    <p style="font-size:12px;color:var(--text3);text-align:center;margin-top:4px">Cancel anytime. Founding members: annual Solo price locked for 12 months. Existing $29 founding accounts keep their price for life.</p>
   </div>
 </div>
 
@@ -1383,7 +1415,23 @@ let seconds = 0;
 let fullTranscript = '';
 
 const STRIPE_KEY = 'pk_test_51TdiCs2RgYWz496ckaoC48If1Jfq5sbU8PS8yciSzcEaLYjQB0HCtbYj7zcccIx9UFC12ExbzvC9gFIn6QJfnbBO00TpE7MDuG';
-const STRIPE_PRICE = 'price_1TeRFh2RgYWz496cuMTZVogj';
+const STRIPE_PRICE = 'price_1TeRFh2RgYWz496cuMTZVogj'; // legacy $29 (grandfathered cohort only)
+const STRIPE_PRICES = {
+  solo_monthly: 'PRICE_ID_SOLO_MONTHLY',
+  solo_annual:  'PRICE_ID_SOLO_ANNUAL',
+  pro_monthly:  'PRICE_ID_PRO_MONTHLY',
+  pro_annual:   'PRICE_ID_PRO_ANNUAL',
+  team_monthly: 'PRICE_ID_TEAM_MONTHLY'
+};
+const PLANS = {
+  free:       { label: 'Free',           minutes: 0,    calls: 25 },
+  solo:       { label: 'Solo',           minutes: 1500 },
+  pro:        { label: 'Pro',            minutes: 4000 },
+  team:       { label: 'Team',           minutes: 4000 },
+  pro_legacy: { label: 'Pro · Founding', minutes: null }
+};
+function isPaidPlan(p) { const x = p || userProfile?.plan || 'free'; return x !== 'free'; }
+window.FREE_LIMIT = 25;
 
 /* ═══════════════════════════════════════════════════════
    INIT - check if already logged in
@@ -1521,7 +1569,7 @@ async function enterApp() {
   document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   document.getElementById('set-name').textContent = userProfile?.full_name || name;
   document.getElementById('set-email').textContent = currentUser.email;
-  document.getElementById('set-plan').textContent = userProfile?.plan === 'pro' ? 'Pro — unlimited calls · Founding member' : 'Free - 25 calls/month';
+  document.getElementById('set-plan').textContent = planLabelLong();
   const callerIdEl = document.getElementById('dialer-caller-id');
   const warningEl = document.getElementById('dialer-setup-warning');
   if (userProfile?.twilio_phone_number) {
@@ -1535,6 +1583,7 @@ async function enterApp() {
   loadDNC();
   refreshDashboard();
   updatePlanBadge();
+  loadUsage();
   maybeShowWelcome();
   // Surface any AI-suggested follow-ups awaiting review (e.g. from calls
   // that finished analyzing while the app was closed)
@@ -1569,7 +1618,7 @@ function switchPanel(p) {
   if (p === 'followups') loadFollowUps();
   if (p === 'power') pdRender();
   if (p === 'inbox') loadInbox();
-  if (p === 'settings') { loadDNC().then(renderDNC); renderScrubStatus(); const dt = document.getElementById('disclosure-toggle'); if (dt) dt.checked = !!userProfile?.record_disclosure; }
+  if (p === 'settings') { loadDNC().then(renderDNC); renderScrubStatus(); const dt = document.getElementById('disclosure-toggle'); if (dt) dt.checked = !!userProfile?.record_disclosure; const cs = document.getElementById('cell-safety-toggle'); if (cs) cs.checked = cellSafetyOn(); }
   if (p === 'calendar') renderCalendar();
   if (p === 'pricing') prInit();
 }
@@ -1602,8 +1651,7 @@ function toggleRec() {
 }
 
 function startRec() {
-  const isPro = userProfile?.plan === 'pro';
-  if (!isPro && (userProfile?.calls_this_month || 0) >= FREE_LIMIT) { showUpgradeModal(); return; }
+  if (!isPaidPlan() && (userProfile?.calls_this_month || 0) >= FREE_LIMIT) { showUpgradeModal(); return; }
   fullTranscript = '';
   navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
     isRecording = true; seconds = 0;
@@ -1733,7 +1781,7 @@ async function saveRecord() {
     resetRecorder();
     updatePlanBadge();
     refreshDashboard();
-    document.getElementById('set-calls').textContent = (userProfile?.calls_this_month || records.length) + (userProfile?.plan === 'pro' ? ' (unlimited)' : ' / 25');
+    document.getElementById('set-calls').textContent = (userProfile?.calls_this_month || records.length) + (isPaidPlan() ? ' (uncapped)' : ' / 25');
   } catch(e) {
     alert('Error saving record: ' + e.message);
   }
@@ -1989,14 +2037,60 @@ function renderLog() {
   document.getElementById('log-table').innerHTML = buildTable(records);
 }
 
+function planLabelLong() {
+  const p = userProfile?.plan || 'free';
+  if (p === 'pro_legacy') return 'Pro — unlimited · Founding member ($29 locked)';
+  if (p === 'free') return 'Free - 25 calls/month';
+  const b = PLANS[p]?.minutes;
+  return `${PLANS[p]?.label || p} — ${b ? b.toLocaleString() + ' dialer min/mo included' : ''}`;
+}
+
 function updatePlanBadge() {
-  const isPro = userProfile?.plan === 'pro';
+  const p = userProfile?.plan || 'free';
   const used = userProfile?.calls_this_month || records.length;
-  document.getElementById('plan-name').innerHTML = isPro ? 'Pro plan <span class="founder-chip">★ FOUNDING MEMBER</span>' : 'Free plan';
-  document.getElementById('plan-usage').textContent = isPro ? 'Unlimited calls' : `${used} / ${FREE_LIMIT} calls used`;
+  const nameEl = document.getElementById('plan-name');
+  nameEl.innerHTML = (PLANS[p]?.label || 'Free') + ' plan' + (p === 'pro_legacy' ? ' <span class="founder-chip">★ FOUNDING MEMBER</span>' : '');
+  const usageEl = document.getElementById('plan-usage');
+  if (p === 'free') {
+    usageEl.textContent = `${used} / ${FREE_LIMIT} calls used`;
+  } else if (p === 'pro_legacy') {
+    usageEl.textContent = 'Unlimited calls';
+  } else {
+    const u = window.__usageThisPeriod;
+    usageEl.textContent = u ? `${Math.round(u.minutes_used).toLocaleString()} / ${PLANS[p].minutes.toLocaleString()} min` : `${PLANS[p].minutes.toLocaleString()} dialer min/mo`;
+  }
   const upBtn = document.getElementById('sidebar-upgrade-btn');
-  if (upBtn) upBtn.classList.toggle('hidden', isPro);
-  maybeShowUpgradeNudge(isPro, used);
+  if (upBtn) upBtn.classList.toggle('hidden', isPaidPlan(p));
+  document.body.classList.toggle('free-plan', p === 'free');
+  maybeShowUpgradeNudge(p, used);
+  renderUsageMeter();
+}
+
+async function loadUsage() {
+  if (!currentUser || !isPaidPlan()) return;
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const r = await fetch('/api/contacts?resource=usage', { headers: { Authorization: 'Bearer ' + session.access_token } });
+    window.__usageThisPeriod = await r.json();
+    renderUsageMeter();
+    updatePlanBadge();
+  } catch (e) { console.warn('usage load failed', e); }
+}
+
+function renderUsageMeter() {
+  const wrap = document.getElementById('usage-meter');
+  if (!wrap) return;
+  const p = userProfile?.plan || 'free';
+  const bundle = PLANS[p]?.minutes;
+  if (!isPaidPlan(p) || !bundle) { wrap.classList.add('hidden'); return; }
+  const used = Math.round(window.__usageThisPeriod?.minutes_used || 0);
+  const pct = Math.min(100, used / bundle * 100);
+  wrap.classList.remove('hidden');
+  document.getElementById('usage-meter-label').textContent = `Dialer minutes this period: ${used.toLocaleString()} / ${bundle.toLocaleString()} included`;
+  const fill = document.getElementById('usage-meter-fill');
+  fill.style.width = pct + '%';
+  fill.style.background = used > bundle ? 'var(--warm)' : 'var(--brand)';
+  document.getElementById('usage-meter-over').textContent = used > bundle ? `${(used - bundle).toLocaleString()} min in overage at $0.03/min` : '';
 }
 
 /* — Activation & upgrade moments — */
@@ -2004,11 +2098,11 @@ function plwKey(sfx) { return 'plw_' + sfx + '_' + (currentUser?.id || 'anon'); 
 function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 
-function maybeShowUpgradeNudge(isPro, used) {
+function maybeShowUpgradeNudge(plan, used) {
   const el = document.getElementById('upgrade-nudge');
   if (!el) return;
   const ym = new Date().toISOString().slice(0, 7);
-  if (isPro || used < 20 || lsGet(plwKey('nudge')) === ym) { el.classList.add('hidden'); return; }
+  if (plan !== 'free' || used < 20 || lsGet(plwKey('nudge')) === ym) { el.classList.add('hidden'); return; }
   const left = FREE_LIMIT - used;
   document.getElementById('nudge-text').textContent = left <= 0
     ? `You've used all ${FREE_LIMIT} free calls this month.`
@@ -2024,6 +2118,20 @@ function maybeShowWelcome() {
   if ((records?.length || 0) > 0 || lsGet(plwKey('welcome'))) return;
   document.getElementById('welcome-modal').classList.remove('hidden');
 }
+async function saveCellSafety(on) {
+  if (!currentUser) return;
+  try {
+    const { error } = await db.from('profiles').update({ cell_safety_mode: on }).eq('id', currentUser.id);
+    if (error) throw error;
+    if (userProfile) userProfile.cell_safety_mode = on;
+  } catch (e) {
+    alert('Could not save the setting: ' + (e.message || e));
+    const t = document.getElementById('cell-safety-toggle');
+    if (t) t.checked = !on;
+  }
+}
+function cellSafetyOn() { return userProfile?.cell_safety_mode !== false; } // default ON
+
 async function saveDisclosure(on) {
   if (!currentUser) return;
   try {
@@ -2101,16 +2209,28 @@ function exportOne() {
 /* ═══════════════════════════════════════════════════════
    STRIPE
 ═══════════════════════════════════════════════════════ */
-async function handleStripe() {
-  if (STRIPE_KEY === 'pk_test_51TdiCs2RgYWz496ckaoC48If1Jfq5sbU8PS8yciSzcEaLYjQB0HCtbYj7zcccIx9UFC12ExbzvC9gFIn6QJfnbBO00TpE7MDuG') {
-    const em = encodeURIComponent(currentUser?.email || '');
-    window.location.href = 'mailto:damon@vistomortgage.com?subject=Upgrade%20my%20PitchLog%20account%20to%20Pro&body=Please%20upgrade%20my%20account%20(' + em + ')%20to%20Pro%20%E2%80%94%20%2429%2Fmo.';
+const TIER_DESC = {
+  solo_monthly: 'Solo — $49/mo', solo_annual: 'Solo annual — $39/mo ($468/yr)',
+  pro_monthly: 'Pro — $89/mo', pro_annual: 'Pro annual — $79/mo ($948/yr)',
+  team_monthly: 'Team — $79/seat/mo'
+};
+async function handleStripe(tier) {
+  tier = tier || 'solo_monthly';
+  const price = STRIPE_PRICES[tier];
+  if (!price || price.startsWith('PRICE_ID')) {
+    const em = currentUser?.email || '';
+    window.location.href = 'mailto:damon@vistomortgage.com?subject=' + encodeURIComponent('Upgrade my PitchLog account — ' + (TIER_DESC[tier] || tier)) + '&body=' + encodeURIComponent('Please upgrade my account (' + em + ') to ' + (TIER_DESC[tier] || tier) + '.');
     return;
+  }
+  let qty = 1;
+  if (tier === 'team_monthly') {
+    qty = parseInt(prompt('How many seats? (minimum 2)', '2') || '0', 10);
+    if (!qty || qty < 2) return;
   }
   try {
     const stripe = Stripe(STRIPE_KEY);
     await stripe.redirectToCheckout({
-      lineItems: [{ price: STRIPE_PRICE, quantity: 1 }],
+      lineItems: [{ price, quantity: qty }],
       mode: 'subscription',
       clientReferenceId: currentUser?.id,
       customerEmail: currentUser?.email,
@@ -2132,9 +2252,9 @@ function showAlert(id, msg) { const el = document.getElementById(id); el.textCon
 /* Handle Stripe success redirect */
 if (window.location.search.includes('upgraded=true')) {
   setTimeout(() => {
-    if (userProfile) { userProfile.plan = 'pro'; updatePlanBadge(); }
-    alert('🎉 Welcome to PitchLog Pro! Unlimited calls are now unlocked.');
+    alert('🎉 Payment received — your plan is being activated now.');
     window.history.replaceState({}, '', window.location.pathname);
+    setTimeout(() => window.location.reload(), 1500);
   }, 1000);
 }
 
@@ -2457,7 +2577,45 @@ function setComplianceMode(on) {
   updateDialerLocalTime();
 }
 // Live "prospect local time" + calling-hours state under the dialer input
+// Area codes in all-party ("two-party") recording-consent states — guidance by area code.
+const TWO_PARTY = (() => {
+  const m = {};
+  const add = (st, codes) => codes.forEach(c => m[c] = st);
+  add('California', [209,213,279,310,323,341,350,369,408,415,424,442,510,530,559,562,619,626,628,650,657,661,669,707,714,747,760,805,818,820,831,840,858,909,916,925,949,951]);
+  add('Florida', [239,305,321,352,386,407,448,561,645,656,689,727,754,772,786,813,850,863,904,941,954]);
+  add('Washington', [206,253,360,425,509,564]);
+  add('Pennsylvania', [215,223,267,272,412,445,484,570,582,610,717,724,814,835,878]);
+  add('Illinois', [217,224,309,312,331,447,464,618,630,708,730,773,779,815,847,861,872]);
+  add('Massachusetts', [339,351,413,508,617,774,781,857,978]);
+  add('Maryland', [240,301,410,443,667]);
+  add('Connecticut', [203,475,860,959]);
+  add('Montana', [406]);
+  add('Nevada', [702,725,775]);
+  add('Delaware', [302]);
+  add('New Hampshire', [603]);
+  return m;
+})();
+
+function renderConsentBanner() {
+  const el = document.getElementById('consent-state-banner');
+  if (!el) return;
+  const raw = document.getElementById('dialer-number')?.value || '';
+  const d = raw.replace(/\D/g, '');
+  const ten = d.length === 11 && d[0] === '1' ? d.slice(1) : d;
+  if (ten.length < 3) { el.classList.add('hidden'); return; }
+  const st = TWO_PARTY[parseInt(ten.slice(0, 3), 10)];
+  el.classList.remove('hidden');
+  if (st) {
+    el.style.borderColor = 'var(--warm)'; el.style.background = 'var(--warm-bg)'; el.style.color = 'var(--warm)';
+    el.innerHTML = '⚠️ <strong>' + st + ' requires all-party consent</strong> — open with: &ldquo;Just so you know, I\'m on a recorded line.&rdquo;';
+  } else if (ten.length === 10) {
+    el.style.borderColor = 'var(--green)'; el.style.background = 'var(--green-bg)'; el.style.color = 'var(--green)';
+    el.textContent = '✓ Recording OK — one-party consent state (based on area code)';
+  } else { el.classList.add('hidden'); }
+}
+
 function updateDialerLocalTime() {
+  renderConsentBanner();
   const el = document.getElementById('dialer-localtime');
   if (!el) return;
   const num = document.getElementById('dialer-number')?.value?.trim();
@@ -3560,6 +3718,16 @@ function pdRender() {
   document.getElementById('pd-bar-fill').style.width = (done / pdQueue.length * 100) + '%';
   document.getElementById('pd-start').style.display = pdActive ? 'none' : 'inline-flex';
   document.getElementById('pd-pause').style.display = pdActive ? 'inline-flex' : 'none';
+  let nextBtn = document.getElementById('pd-next');
+  if (!nextBtn) {
+    nextBtn = document.createElement('button');
+    nextBtn.id = 'pd-next'; nextBtn.className = 'btn btn-primary';
+    nextBtn.innerHTML = '▶ Dial next';
+    nextBtn.onclick = () => { pdAwaitNext = false; pdDialNext(); };
+    document.getElementById('pd-pause')?.parentElement?.insertBefore(nextBtn, document.getElementById('pd-pause'));
+  }
+  const pendingLeft = pdQueue.some(l => l.status === 'pending');
+  nextBtn.style.display = (pdActive && pdAwaitNext && pendingLeft) ? 'inline-flex' : 'none';
 
   const statusIcon = { pending: '⚪', calling: '📞', done: '✅', skipped: '⏭', dnc: '🚫', hours: '⛔', scrub: '🛡️' };
   queueEl.innerHTML = `<div class="table-card">${pdQueue.map((l, i) => `
@@ -3576,6 +3744,8 @@ function pdRender() {
     </div>`).join('')}</div>`;
 }
 
+let pdAwaitNext = false;
+
 function pdStart() {
   if (!twilioDevice) { alert('Dialer is not ready yet — wait for the green "Ready to call" status on the Dashboard.'); return; }
   if (!pdQueue.some(l => l.status === 'pending')) { alert('No pending leads left. Upload a new list or clear this one.'); return; }
@@ -3586,6 +3756,7 @@ function pdStart() {
 
 function pdPause() {
   pdActive = false;
+  pdAwaitNext = false;
   if (pdAdvanceTimer) { clearTimeout(pdAdvanceTimer); pdAdvanceTimer = null; }
   pdRender();
 }
@@ -3679,6 +3850,12 @@ window.addEventListener('cb:call-ended', () => {
   if (pdCurrentIdx >= 0 && pdQueue[pdCurrentIdx]?.status === 'calling') {
     pdQueue[pdCurrentIdx].status = 'done';
     pdSave();
+  }
+  if (pdActive && cellSafetyOn()) {
+    // Cell-phone safety mode: every dial is human-initiated — wait for the tap
+    pdAwaitNext = true;
+    pdRender();
+    return;
   }
   pdRender();
   if (pdActive) {

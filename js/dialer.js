@@ -117,6 +117,12 @@ async function makeCall() {
       return;
     }
   }
+  // Free-plan call cap applies to the dialer too, not just the recorder
+  const _plan = window.userProfile?.plan || 'free';
+  if (_plan === 'free' && (window.userProfile?.calls_this_month || 0) >= (window.FREE_LIMIT || 25)) {
+    if (typeof showUpgradeModal === 'function') showUpgradeModal();
+    return;
+  }
   if (!twilioDevice) { alert('Dialer not ready — please wait'); return; }
   if (twilioDevice.isBusy) { alert('Already on a call'); return; }
 
@@ -126,6 +132,7 @@ async function makeCall() {
   try {
     setStatus('Calling...');
     currentCall = await twilioDevice.connect({ params: { To: number } });
+    window.__callStartedAt = Date.now();
 
     if (h) h.style.display = 'inline-block';
     if (c) c.style.display = 'none';
@@ -163,6 +170,7 @@ function endCallUI() {
   if (c) c.style.display = 'inline-block';
   currentCall = null;
   setStatus('✅ Call ended — AI logging...');
+  trackCallMinutes();
   window.dispatchEvent(new CustomEvent('cb:call-ended'));
   pollForCallRecord(Date.now(), 0);
 }
@@ -209,4 +217,35 @@ async function pollForAnalysis(callId, attempt) {
 function hangUp() {
   if (currentCall) currentCall.disconnect();
   else if (twilioDevice) twilioDevice.disconnectAll();
+}
+
+// ── Minute metering: report call duration, surface bundle overage ──────────
+async function trackCallMinutes() {
+  const started = window.__callStartedAt;
+  window.__callStartedAt = null;
+  if (!started) return;
+  const mins = Math.max(0.1, Math.ceil((Date.now() - started) / 6000) / 10); // round up to 0.1 min
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const r = await fetch('/api/contacts?resource=usage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ minutes: mins })
+    });
+    const u = await r.json();
+    window.__usageThisPeriod = u;
+    if (typeof renderUsageMeter === 'function') renderUsageMeter();
+    if (u.overage && !window.__overageToastShown) {
+      window.__overageToastShown = true;
+      showOverageToast(u);
+    }
+  } catch (e) { console.warn('usage tracking failed', e); }
+}
+
+function showOverageToast(u) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;max-width:340px;padding:14px 18px;border-radius:10px;border:1px solid var(--warm);background:var(--bg2);color:var(--text);font-size:13px;line-height:1.5;box-shadow:0 8px 28px rgba(0,0,0,.5)';
+  t.innerHTML = '⚠️ <strong>You\'ve used your included ' + (u.included || 0).toLocaleString() + ' dialer minutes this month.</strong><br><span style="color:var(--text2)">Calls keep working — additional minutes bill at $0.03/min on your next invoice.</span>';
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 9000);
 }

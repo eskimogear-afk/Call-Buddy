@@ -89,7 +89,44 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({ ok: true, processed: dueFollowUps?.length || 0, monthlyReset, ...results });
+    // ── Overage billing: invoice last month's metered minutes beyond the bundle.
+    // Runs on the daily cron; idempotent via usage_minutes.reported. Inert until
+    // STRIPE_SECRET_KEY is configured.
+    let overageBilled = 0;
+    if (process.env.STRIPE_SECRET_KEY) {
+      try {
+        const lastMonth = new Date();
+        lastMonth.setUTCDate(1); lastMonth.setUTCMonth(lastMonth.getUTCMonth() - 1);
+        const periodStart = lastMonth.toISOString().slice(0, 8) + '01';
+        const BUNDLES = { solo: 1500, pro: 4000, team: 4000 };
+        const { data: rows } = await supabase.from('usage_minutes')
+          .select('user_id, minutes_used').eq('period_start', periodStart).eq('reported', false);
+        for (const row of rows || []) {
+          const { data: prof } = await supabase.from('profiles')
+            .select('plan, stripe_customer_id').eq('id', row.user_id).single();
+          const bundle = BUNDLES[prof?.plan];
+          const over = bundle ? Math.max(0, Number(row.minutes_used) - bundle) : 0;
+          if (over > 0 && prof?.stripe_customer_id) {
+            const cents = Math.round(over * 3); // $0.03/min
+            const body = new URLSearchParams({
+              customer: prof.stripe_customer_id, amount: String(cents), currency: 'usd',
+              description: `Dialer overage: ${Math.round(over)} min beyond the ${bundle.toLocaleString()}-min bundle (${periodStart.slice(0,7)})`
+            });
+            const r = await fetch('https://api.stripe.com/v1/invoiceitems', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+              body
+            });
+            if (!r.ok) { console.error('Overage invoice failed for', row.user_id, await r.text()); continue; }
+            overageBilled++;
+          }
+          await supabase.from('usage_minutes').update({ reported: true })
+            .eq('user_id', row.user_id).eq('period_start', periodStart);
+        }
+      } catch (e) { console.error('Overage billing error:', e); }
+    }
+
+    return res.status(200).json({ ok: true, processed: dueFollowUps?.length || 0, monthlyReset, overageBilled, ...results });
   } catch (err) {
     console.error('Process follow-ups error:', err);
     return res.status(500).json({ error: String(err) });

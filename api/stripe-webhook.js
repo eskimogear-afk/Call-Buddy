@@ -12,6 +12,20 @@ async function getRawBody(req) {
   });
 }
 
+// Map a Stripe price ID to a PitchLog plan via env vars (set after creating
+// the products in the Stripe Dashboard). Unknown prices return null.
+function priceToPlan(priceId) {
+  if (!priceId) return null;
+  const map = {
+    [process.env.STRIPE_PRICE_SOLO_MONTHLY]: 'solo',
+    [process.env.STRIPE_PRICE_SOLO_ANNUAL]: 'solo',
+    [process.env.STRIPE_PRICE_PRO_MONTHLY]: 'pro',
+    [process.env.STRIPE_PRICE_PRO_ANNUAL]: 'pro',
+    [process.env.STRIPE_PRICE_TEAM_MONTHLY]: 'team'
+  };
+  return map[priceId] || null;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -36,8 +50,13 @@ export default async function handler(req, res) {
         const session = event.data.object;
         const userId = session.client_reference_id;
         if (!userId) break;
+        let plan = 'solo';
+        try {
+          const items = await stripe.checkout.sessions.listLineItems(session.id, { limit: 5 });
+          plan = priceToPlan(items?.data?.[0]?.price?.id) || 'solo';
+        } catch (e) { console.error('line-item lookup failed', e); }
         await supabase.from('profiles').update({
-          plan: 'pro',
+          plan,
           stripe_customer_id: session.customer,
           stripe_subscription_id: session.subscription,
           calls_this_month: 0,
@@ -57,7 +76,12 @@ export default async function handler(req, res) {
       }
       case 'customer.subscription.updated': {
         const sub = event.data.object;
-        const plan = sub.status === 'active' ? 'pro' : 'free';
+        // Never clobber grandfathered founders on routine sub updates
+        const { data: prof } = await supabase.from('profiles').select('plan')
+          .eq('stripe_subscription_id', sub.id).maybeSingle();
+        if (prof?.plan === 'pro_legacy') break;
+        const mapped = priceToPlan(sub.items?.data?.[0]?.price?.id);
+        const plan = sub.status === 'active' ? (mapped || prof?.plan || 'solo') : 'free';
         await supabase.from('profiles').update({
           plan,
           updated_at: new Date().toISOString()

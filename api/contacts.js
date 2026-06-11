@@ -115,6 +115,28 @@ export default async function handler(req, res) {
 
     // ── Do Not Call list (folded into this endpoint to stay within Vercel's
     //    12-function limit). Triggered by resource=dnc on query or body. ──
+    // ── Dialer minute metering (plan bundles + overage detection) ──────────
+    if (req.query.resource === 'usage') {
+      const period = new Date().toISOString().slice(0, 8) + '01';
+      if (req.method === 'GET') {
+        const { data: row } = await supabase.from('usage_minutes').select('minutes_used')
+          .eq('user_id', user.id).eq('period_start', period).maybeSingle();
+        return res.status(200).json({ minutes_used: Number(row?.minutes_used || 0), period_start: period });
+      }
+      if (req.method === 'POST') {
+        const add = Math.max(0, Math.min(120, Number(req.body?.minutes) || 0));
+        const { data: prof } = await supabase.from('profiles').select('plan').eq('id', user.id).single();
+        const BUNDLES = { free: 0, solo: 1500, pro: 4000, team: 4000, pro_legacy: null };
+        const included = BUNDLES[prof?.plan] !== undefined ? BUNDLES[prof?.plan] : 0;
+        const { data: row } = await supabase.from('usage_minutes').select('minutes_used')
+          .eq('user_id', user.id).eq('period_start', period).maybeSingle();
+        const total = Math.round((Number(row?.minutes_used || 0) + add) * 10) / 10;
+        await supabase.from('usage_minutes').upsert({ user_id: user.id, period_start: period, minutes_used: total });
+        const overage = included !== null && total > included;
+        return res.status(200).json({ minutes_used: total, included, overage });
+      }
+    }
+
     if (req.query.resource === 'dnc' || req.body?.resource === 'dnc') {
       if (req.method === 'GET') {
         const { data, error } = await supabase
