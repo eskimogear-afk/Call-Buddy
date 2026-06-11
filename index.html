@@ -30,6 +30,29 @@
 }
 body{font-family:'Inter',sans-serif;font-size:14px;color:var(--text);background:var(--bg);line-height:1.6;min-height:100vh;-webkit-font-smoothing:antialiased}
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(900px 500px at 50% -8%,rgba(91,163,247,.10),transparent 70%)}
+
+/* ── Light theme (toggle: 🌙/☀️ in the nav; persisted) ───────────────────── */
+body.light{
+  --brand:#2F7FE8;--brand-light:rgba(47,127,232,.10);--brand-dark:#1853A8;--brand-mid:#1B66C9;
+  --text:#0B1220;--text2:#46536B;--text3:#8A94A8;
+  --bg:#FFFFFF;--bg2:#F7F9FC;--bg3:#EEF2F8;
+  --border:#E3E8F0;--danger:#DC2626;--danger-light:rgba(220,38,38,.08);
+  --hot:#DC2626;--hot-bg:rgba(220,38,38,.08);--warm:#B45309;--warm-bg:rgba(217,119,6,.12);--cold:#1D4ED8;--cold-bg:rgba(59,130,246,.08);
+  --green:#047857;--green-bg:rgba(16,185,129,.12);
+  --shadow-sm:0 1px 2px rgba(16,24,40,.06);
+  --shadow:0 1px 3px rgba(16,24,40,.07),0 8px 24px rgba(16,24,40,.08);
+}
+body.light::before{background:radial-gradient(900px 500px at 50% -8%,rgba(47,127,232,.07),transparent 70%)}
+body.light nav{background:rgba(255,255,255,.82)}
+body.light .hero h1{background:linear-gradient(180deg,#0B1220 35%,rgba(11,18,32,.62) 100%);-webkit-background-clip:text;background-clip:text}
+body.light .hero-badge{background:rgba(47,127,232,.08);box-shadow:0 0 18px rgba(47,127,232,.08)}
+body.light .mockup-titlebar{background:#EEF2F8;border-bottom:1px solid var(--border)}
+body.light .mockup-wrap{box-shadow:0 28px 64px rgba(16,24,40,.16),0 4px 16px rgba(47,127,232,.10),0 0 0 1px rgba(16,24,40,.06)}
+body.light .hero-glow{opacity:.55}
+body.light .btn-primary{color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.15)}
+body.light .step-num{color:#fff}
+body.light .feat-card:hover{box-shadow:0 16px 34px rgba(16,24,40,.12)}
+body.light .price-card.featured{box-shadow:0 16px 40px rgba(47,127,232,.16)}
 #view-landing .section>*,#view-landing .social-bar-inner{opacity:0;transform:translateY(16px);transition:opacity .55s cubic-bezier(.2,.7,.3,1),transform .55s cubic-bezier(.2,.7,.3,1)}
 #view-landing .rev-in>*,#view-landing .rev-in .social-bar-inner{opacity:1;transform:none}
 #view-landing .rev-in>*:nth-child(2){transition-delay:.06s}
@@ -483,9 +506,12 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     <a style="font-size:14px;color:var(--text2);cursor:pointer" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">Pricing</a>
     <a style="font-size:14px;color:var(--text2);cursor:pointer" onclick="document.getElementById('faq').scrollIntoView({behavior:'smooth'})">FAQ</a>
   </div>
+  <div style="display:flex;align-items:center;gap:10px">
+  <button id="theme-toggle" onclick="toggleTheme()" title="Switch light / dark" style="width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);cursor:pointer;font-size:15px;line-height:1;flex-shrink:0">🌙</button>
   <div class="nav-right" id="nav-right">
     <button class="btn btn-ghost" onclick="showAuthModal('login')">Log in</button>
     <button class="btn btn-primary" onclick="showAuthModal('signup')">Start free</button>
+  </div>
   </div>
 </nav>
 
@@ -1527,6 +1553,22 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 </div>
 
 <script>
+/* Theme: apply persisted choice before first paint */
+(function(){
+  try { if (localStorage.getItem('plw_theme') === 'light') document.body.classList.add('light'); } catch(e){}
+})();
+function applyThemeIcon(){
+  const b = document.getElementById('theme-toggle');
+  if (b) b.textContent = document.body.classList.contains('light') ? '☀️' : '🌙';
+}
+function toggleTheme(){
+  const light = !document.body.classList.contains('light');
+  document.body.classList.toggle('light', light);
+  try { localStorage.setItem('plw_theme', light ? 'light' : 'dark'); } catch(e){}
+  applyThemeIcon();
+}
+document.addEventListener('DOMContentLoaded', applyThemeIcon);
+
 /* ═══════════════════════════════════════════════════════
    STATE
 ═══════════════════════════════════════════════════════ */
