@@ -202,6 +202,36 @@ Transcript:
 ${emailTranscript || '(no transcript available — write a brief, generic but warm follow-up based on the summary and next step above)'}`;
     // stash recipient email to return after the model call
     req._recipientEmail = recipientEmail;
+  } else if (type === 'quote_params') {
+    // Pull mortgage pricing inputs out of what was actually said on a call
+    if (!call_id) return res.status(400).json({ error: 'call_id required' });
+    const { data: call } = await supabase
+      .from('calls')
+      .select('id, transcript, notes, quote_params')
+      .eq('id', call_id).eq('user_id', user.id).single();
+    if (!call) return res.status(404).json({ error: 'Call not found' });
+    if (call.quote_params && !force) return res.status(200).json({ cached: true, ...call.quote_params });
+    const t = String(call.transcript || '');
+    if (t.startsWith('PENDING:')) return res.status(400).json({ error: 'Transcript still processing — try again in a minute' });
+    if (!t.trim() && !call.notes) return res.status(400).json({ error: 'No transcript on this call to read numbers from' });
+    req._qpCallId = call.id;
+    prompt = `You are extracting mortgage pricing inputs from a phone call between a loan officer and a prospect. Extract ONLY figures that were actually said or directly implied in conversation (e.g. "we owe about three forty" = 340000, "putting twenty percent down" = 20). NEVER invent, assume, or fill in typical values.
+
+Transcript:
+"""${(t.trim() || call.notes).slice(0, 30000)}"""
+
+Return ONLY valid JSON (null for anything not discussed):
+{"purpose":"purchase"|"refi"|"cashout"|null,
+ "program":"conventional"|"fha"|"va"|"jumbo"|"bank_stmt"|"dscr"|"hard_money"|null,
+ "price":number|null,
+ "down_pct":number|null,"down_amount":number|null,
+ "loan_amount":number|null,"current_balance":number|null,"cash_out":number|null,
+ "rate":number|null,
+ "term_years":number|null,"hoa_mo":number|null,
+ "confidence":"high"|"medium"|"low",
+ "mentions":["up to 4 short verbatim fragments where the numbers were said"]}
+
+Notes: "purpose" is refi for a rate/term refinance, cashout only if pulling cash out was discussed. "price" is the purchase price, or the home's value on a refi. "rate" only if a specific interest rate was discussed. Confidence is low when figures are vague or contradictory.`;
   } else {
     if (!transcript) return res.status(400).json({ error: 'No transcript provided' });
     prompt = `You are an AI assistant for a sales professional. Analyze this cold call transcript and return ONLY valid JSON with these exact keys:

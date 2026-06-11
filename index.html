@@ -1817,29 +1817,14 @@ async function processCall() {
   document.getElementById('ai-summary').textContent = 'Analyzing...';
   document.getElementById('ai-thinking').classList.remove('hidden');
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const { data: { session } } = await db.auth.getSession();
+    const resp = await fetch('/api/analyze', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514', max_tokens: 1000,
-        messages: [{ role: 'user', content: `You are a sales assistant for a mortgage/loan officer. Analyze this cold call transcript and return ONLY valid JSON with these keys:
-"summary": 2-3 sentence plain-English summary,
-"name": prospect full name or "",
-"company": company/employer or "",
-"phone": phone number or "",
-"email": email or "",
-"address": property address or "",
-"outcome": one of exactly: Interested, Not interested, Callback, Voicemail, No answer,
-"followUpDate": YYYY-MM-DD or "",
-"painPoints": 1-2 sentences on prospect concerns,
-"nextSteps": 1-2 sentences on agreed next actions.
-Return ONLY JSON. No markdown, no preamble.
-Transcript:\n${transcript}` }]
-      })
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ type: 'call_analysis', transcript })
     });
-    const data = await resp.json();
-    let text = data.content.map(b => b.text || '').join('').trim().replace(/```json|```/g, '').trim();
-    const p = JSON.parse(text);
+    const p = await resp.json();
+    if (!resp.ok) throw new Error(p.error || 'analysis failed');
     document.getElementById('ai-thinking').classList.add('hidden');
     document.getElementById('ai-summary').textContent = p.summary || '-';
     const map = { name:'f-name', company:'f-company', phone:'f-phone', email:'f-email', address:'f-address', outcome:'f-outcome', followUpDate:'f-followup', painPoints:'f-pain', nextSteps:'f-nextsteps' };
