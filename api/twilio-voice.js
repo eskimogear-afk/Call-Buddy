@@ -59,16 +59,18 @@ export default async function handler(req, res) {
     let ownerId = null;
     let ownerName = '';
     let ownerAgent = false;
+    let ownerMissedText = false;
     if (supabase && To) {
       try {
         const { data: owner } = await supabase
           .from('profiles')
-          .select('id, full_name, ai_receptionist')
+          .select('id, full_name, ai_receptionist, missed_call_text')
           .eq('twilio_phone_number', To)
           .single();
         ownerId = owner?.id || null;
         ownerName = owner?.full_name || '';
         ownerAgent = owner?.ai_receptionist === true;
+        ownerMissedText = owner?.missed_call_text === true;
       } catch (e) {
         console.error('Inbound owner lookup error:', e);
       }
@@ -89,11 +91,11 @@ export default async function handler(req, res) {
         return res.status(200).send('<Response><Hangup/></Response>');
       }
 
-      // Missed-call text-back: fire an SMS to the caller (real numbers only).
-      // Skipped when the AI receptionist will answer — it gets the info live,
-      // and the blocking Twilio API roundtrip would delay the greeting.
+      // Missed-call text-back: OFF by default. Only fires when the owner has
+      // explicitly opted in (profiles.missed_call_text = true). Also skipped
+      // when the AI receptionist will answer.
       const missedUserId = req.query.user_id || ownerId;
-      if (!ownerAgent && missedUserId && From && /^\+\d{10,15}$/.test(From) && To &&
+      if (ownerMissedText && !ownerAgent && missedUserId && From && /^\+\d{10,15}$/.test(From) && To &&
           process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
         try {
           // Don't double-text the same caller within 24h
