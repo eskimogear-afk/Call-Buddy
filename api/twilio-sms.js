@@ -168,6 +168,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
     console.error('Messages API error:', err);
-    return res.status(500).json({ error: String(err) });
+    return res.status(500).json({ error: 'Server error' });
   }
 }

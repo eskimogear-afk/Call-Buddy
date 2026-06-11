@@ -22,6 +22,24 @@ export default async function handler(req, res) {
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
 
+  // Rate limit: cap paid-model calls per user (cost-abuse backstop).
+  // Rolling 60s window; prune old rows opportunistically.
+  try {
+    const RPM = 25;
+    const cutoff = new Date(Date.now() - 60000).toISOString();
+    const { count } = await supabase.from('ai_calls')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).gte('created_at', cutoff);
+    if ((count || 0) >= RPM) {
+      res.setHeader('Retry-After', '30');
+      return res.status(429).json({ error: 'Too many requests — give it a moment and try again.' });
+    }
+    await supabase.from('ai_calls').insert({ user_id: user.id });
+    if (Math.floor((Date.now() / 1000) % 10) === 0) {
+      await supabase.from('ai_calls').delete().lt('created_at', new Date(Date.now() - 600000).toISOString());
+    }
+  } catch (e) { console.error('rate-limit check failed (allowing):', e.message); }
+
   const { transcript, type, name, summary, painPoints, nextSteps, call_id, phone, force } = req.body || {};
 
   /* ── Prospect research: AI web-search brief on the realtor behind a number ── */
@@ -119,7 +137,7 @@ After your research, output ONLY this JSON object (no prose before or after):
       return res.status(200).json({ cached: false, contact_id: contact?.id || null, ...brief });
     } catch (err) {
       console.error('Research error:', err);
-      return res.status(500).json({ error: err.message || 'Research failed' });
+      console.error('research err:', err); return res.status(500).json({ error: 'Research failed' });
     }
   }
 
@@ -322,6 +340,6 @@ ${transcript}`;
     }
   } catch (err) {
     console.error('Analyze error:', err);
-    return res.status(500).json({ error: err.message || 'Analysis failed' });
+    console.error('analyze err:', err); return res.status(500).json({ error: 'Analysis failed' });
   }
 }
