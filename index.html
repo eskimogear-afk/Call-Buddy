@@ -185,13 +185,29 @@ footer{background:var(--navy);padding:48px;display:flex;align-items:center;justi
 .sidebar-plan strong{display:block;color:var(--text);font-size:12.5px;margin-bottom:4px;font-weight:600}
 .main-content{flex:1;padding:28px 32px;overflow-y:auto;background:var(--bg2);min-width:0}
 
-.stats-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:24px;box-shadow:var(--shadow-sm)}
+.stats-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:10px;margin-bottom:24px}
 @media(max-width:1280px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
-.sb-item{background:var(--bg2);padding:12px 14px 11px;min-width:0}
-.sb-lbl{display:flex;align-items:center;gap:6px;font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text3);margin-bottom:5px;white-space:nowrap;overflow:hidden}
-.sb-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.sb-val{font-family:'Plus Jakarta Sans',sans-serif;font-size:21px;font-weight:700;line-height:1.15;letter-spacing:-.3px;white-space:nowrap}
-.sb-sub{font-size:10px;color:var(--text3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-item{border-radius:10px;padding:11px 13px 10px;min-width:0;border:1px solid transparent}
+.sb-lbl{font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:5px;white-space:nowrap;overflow:hidden;opacity:.85}
+.sb-val{font-family:'Plus Jakarta Sans',sans-serif;font-size:21px;font-weight:800;line-height:1.15;letter-spacing:-.3px;white-space:nowrap}
+.sb-sub{font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.75}
+/* color-coded tiles: dark theme = tinted bg + bright number, light theme = tinted bg + DARK shade number */
+.sb-blue{background:rgba(91,163,247,.13);border-color:rgba(91,163,247,.3)}.sb-blue .sb-lbl,.sb-blue .sb-sub{color:#8FBDF7}.sb-blue .sb-val{color:#A9CFFF}
+.sb-red{background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.3)}.sb-red .sb-lbl,.sb-red .sb-sub{color:#F8A0A0}.sb-red .sb-val{color:#FCA5A5}
+.sb-amber{background:rgba(251,191,36,.11);border-color:rgba(251,191,36,.3)}.sb-amber .sb-lbl,.sb-amber .sb-sub{color:#E8C271}.sb-amber .sb-val{color:#FCD34D}
+.sb-violet{background:rgba(167,139,250,.12);border-color:rgba(167,139,250,.3)}.sb-violet .sb-lbl,.sb-violet .sb-sub{color:#C0AAF8}.sb-violet .sb-val{color:#C4B5FD}
+.sb-green{background:rgba(52,211,153,.11);border-color:rgba(52,211,153,.3)}.sb-green .sb-lbl,.sb-green .sb-sub{color:#7FDBB6}.sb-green .sb-val{color:#6EE7B7}
+.sb-teal{background:rgba(45,212,191,.11);border-color:rgba(45,212,191,.3)}.sb-teal .sb-lbl,.sb-teal .sb-sub{color:#7DD8CC}.sb-teal .sb-val{color:#5EEAD4}
+.sb-sky{background:rgba(96,165,250,.12);border-color:rgba(96,165,250,.3)}.sb-sky .sb-lbl,.sb-sky .sb-sub{color:#93C2F8}.sb-sky .sb-val{color:#93C5FD}
+.sb-emerald{background:rgba(16,185,129,.11);border-color:rgba(16,185,129,.3)}.sb-emerald .sb-lbl,.sb-emerald .sb-sub{color:#6BD3A8}.sb-emerald .sb-val{color:#34D399}
+body.light .sb-blue{background:rgba(47,127,232,.09);border-color:rgba(47,127,232,.22)}body.light .sb-blue .sb-lbl,body.light .sb-blue .sb-sub{color:#1B66C9}body.light .sb-blue .sb-val{color:#173E8C}
+body.light .sb-red{background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.2)}body.light .sb-red .sb-lbl,body.light .sb-red .sb-sub{color:#B91C1C}body.light .sb-red .sb-val{color:#7F1D1D}
+body.light .sb-amber{background:rgba(217,119,6,.09);border-color:rgba(217,119,6,.22)}body.light .sb-amber .sb-lbl,body.light .sb-amber .sb-sub{color:#B45309}body.light .sb-amber .sb-val{color:#78350F}
+body.light .sb-violet{background:rgba(124,92,252,.08);border-color:rgba(124,92,252,.2)}body.light .sb-violet .sb-lbl,body.light .sb-violet .sb-sub{color:#6D28D9}body.light .sb-violet .sb-val{color:#4C1D95}
+body.light .sb-green{background:rgba(5,150,105,.08);border-color:rgba(5,150,105,.2)}body.light .sb-green .sb-lbl,body.light .sb-green .sb-sub{color:#047857}body.light .sb-green .sb-val{color:#064E3B}
+body.light .sb-teal{background:rgba(13,148,136,.08);border-color:rgba(13,148,136,.2)}body.light .sb-teal .sb-lbl,body.light .sb-teal .sb-sub{color:#0F766E}body.light .sb-teal .sb-val{color:#134E4A}
+body.light .sb-sky{background:rgba(2,132,199,.08);border-color:rgba(2,132,199,.2)}body.light .sb-sky .sb-lbl,body.light .sb-sky .sb-sub{color:#0369A1}body.light .sb-sky .sb-val{color:#0C4A6E}
+body.light .sb-emerald{background:rgba(16,185,129,.09);border-color:rgba(16,185,129,.22)}body.light .sb-emerald .sb-lbl,body.light .sb-emerald .sb-sub{color:#047857}body.light .sb-emerald .sb-val{color:#065F46}
 .stat-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow-sm);transition:box-shadow .15s}
 .stat-card:hover{box-shadow:var(--shadow)}
 .stat-val{font-family:'Plus Jakarta Sans',sans-serif;font-size:26px;font-weight:700;letter-spacing:-.5px;color:var(--text);font-variant-numeric:tabular-nums}
@@ -880,14 +896,14 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         </div>
         <div id="roi-panel" class="hidden" style="margin-bottom:20px"></div>
         <div class="stats-grid">
-          <div class="sb-item"><div class="sb-lbl"><span class="sb-dot" style="background:var(--brand)"></span>Calls</div><div class="sb-val num" id="st-total">-</div></div>
-          <div class="sb-item"><div class="sb-lbl"><span class="sb-dot" style="background:var(--hot)"></span>Hot</div><div class="sb-val num" id="st-int" style="color:var(--hot)">-</div></div>
-          <div class="sb-item"><div class="sb-lbl"><span class="sb-dot" style="background:var(--warm)"></span>Warm</div><div class="sb-val num" id="st-cb" style="color:var(--warm)">-</div></div>
-          <div class="sb-item"><div class="sb-lbl"><span class="sb-dot" style="background:var(--cold)"></span>Follow-ups due</div><div class="sb-val num" id="st-fu">-</div></div>
-          <div class="sb-item"><div class="sb-lbl"><span class="sb-dot" style="background:var(--green)"></span>Talk today</div><div class="sb-val num" id="st-talk-day">-</div></div>
-          <div class="sb-item"><div class="sb-lbl"><span class="sb-dot" style="background:var(--brand-mid)"></span>Talk 7d</div><div class="sb-val num" id="st-talk-week">-</div></div>
-          <div class="sb-item"><div class="sb-lbl"><span class="sb-dot" style="background:var(--cold)"></span>Pickup 7d</div><div class="sb-val num" id="st-pickup">-</div><div class="sb-sub" id="st-pickup-sub"></div></div>
-          <div class="sb-item"><div class="sb-lbl"><span class="sb-dot" style="background:var(--green)"></span>Quality &gt;30s</div><div class="sb-val num" id="st-quality">-</div><div id="st-quality-bar" style="display:flex;height:4px;border-radius:99px;overflow:hidden;margin-top:5px;background:var(--bg3)"></div><div class="sb-sub" id="st-quality-sub"></div></div>
+          <div class="sb-item sb-blue"><div class="sb-lbl">Calls</div><div class="sb-val num" id="st-total">-</div></div>
+          <div class="sb-item sb-red"><div class="sb-lbl">Hot</div><div class="sb-val num" id="st-int">-</div></div>
+          <div class="sb-item sb-amber"><div class="sb-lbl">Warm</div><div class="sb-val num" id="st-cb">-</div></div>
+          <div class="sb-item sb-violet"><div class="sb-lbl">Follow-ups due</div><div class="sb-val num" id="st-fu">-</div></div>
+          <div class="sb-item sb-green"><div class="sb-lbl">Talk today</div><div class="sb-val num" id="st-talk-day">-</div></div>
+          <div class="sb-item sb-teal"><div class="sb-lbl">Talk 7d</div><div class="sb-val num" id="st-talk-week">-</div></div>
+          <div class="sb-item sb-sky"><div class="sb-lbl">Pickup 7d</div><div class="sb-val num" id="st-pickup">-</div><div class="sb-sub" id="st-pickup-sub"></div></div>
+          <div class="sb-item sb-emerald"><div class="sb-lbl">Quality &gt;30s</div><div class="sb-val num" id="st-quality">-</div><div id="st-quality-bar" style="display:flex;height:4px;border-radius:99px;overflow:hidden;margin-top:5px;background:rgba(127,127,127,.18)"></div><div class="sb-sub" id="st-quality-sub"></div></div>
         </div>
 
         <div class="table-card" style="padding:18px;margin-bottom:20px">
@@ -2257,7 +2273,6 @@ function refreshDashboard() {
       const n = s => judged.filter(r => String(r.sentiment).toLowerCase() === s).length;
       const pos = n('positive'), neu = n('neutral'), neg = n('negative');
       qEl.textContent = Math.round(pos / judged.length * 100) + '%';
-      qEl.style.color = 'var(--green)';
       document.getElementById('st-quality-bar').innerHTML =
         `<div style="width:${pos / judged.length * 100}%;background:var(--green)"></div>` +
         `<div style="width:${neu / judged.length * 100}%;background:var(--text3)"></div>` +
