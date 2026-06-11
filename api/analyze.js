@@ -245,7 +245,8 @@ Notes: "purpose" is refi for a rate/term refinance, cashout only if pulling cash
 "followUpDate": YYYY-MM-DD if a specific date was agreed else "",
 "painPoints": 1-2 sentences on the prospect concerns or situation,
 "nextSteps": 1-2 sentences on what was agreed as the next action,
-"heatScore": one of exactly: Hot, Warm, Cold based on prospect engagement and interest.
+"heatScore": one of exactly: Hot, Warm, Cold based on prospect engagement and interest,
+"sentiment": one of exactly: positive, neutral, negative — the overall tone of the conversation.
 Return ONLY the JSON object. No markdown. No explanation.
 Transcript:
 ${transcript}`;

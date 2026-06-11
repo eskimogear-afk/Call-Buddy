@@ -185,8 +185,8 @@ footer{background:var(--navy);padding:48px;display:flex;align-items:center;justi
 .sidebar-plan strong{display:block;color:var(--text);font-size:12.5px;margin-bottom:4px;font-weight:600}
 .main-content{flex:1;padding:28px 32px;overflow-y:auto;background:var(--bg2);min-width:0}
 
-.stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:24px}
-@media(max-width:1280px){.stats-grid{grid-template-columns:repeat(3,1fr)}}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+@media(max-width:1280px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
 .stat-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow-sm);transition:box-shadow .15s}
 .stat-card:hover{box-shadow:var(--shadow)}
 .stat-val{font-family:'Plus Jakarta Sans',sans-serif;font-size:26px;font-weight:700;letter-spacing:-.5px;color:var(--text);font-variant-numeric:tabular-nums}
@@ -898,6 +898,17 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           <div class="stat-card">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="stat-lbl" style="margin:0">Talk time (7 days)</span><div style="width:30px;height:30px;border-radius:8px;background:var(--brand-light);color:var(--brand);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 1 .5 4"/><polyline points="3 5 3 11 9 11"/></svg></div></div>
             <div class="stat-val num" id="st-talk-week">-</div>
+          </div>
+          <div class="stat-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="stat-lbl" style="margin:0">Pickup rate (7 days)</span><div style="width:30px;height:30px;border-radius:8px;background:var(--cold-bg);color:var(--cold);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15.05 5A5 5 0 0 1 19 8.95M15.05 1A9 9 0 0 1 23 8.94"/><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.79 19.79 19.79 0 01.12 1.18 2 2 0 012.11 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></div></div>
+            <div class="stat-val num" id="st-pickup">-</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px" id="st-pickup-sub"></div>
+          </div>
+          <div class="stat-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="stat-lbl" style="margin:0">Call quality (&gt;30s)</span><div style="width:30px;height:30px;border-radius:8px;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg></div></div>
+            <div class="stat-val num" id="st-quality">-</div>
+            <div id="st-quality-bar" style="display:flex;height:6px;border-radius:99px;overflow:hidden;margin-top:8px;background:var(--bg3)"></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px" id="st-quality-sub"></div>
           </div>
         </div>
         <div class="table-card" style="padding:18px;margin-bottom:20px">
@@ -1874,6 +1885,7 @@ async function processCall() {
     });
     const p = await resp.json();
     if (!resp.ok) throw new Error(p.error || 'analysis failed');
+    window.__lastSentiment = ['positive', 'neutral', 'negative'].includes(String(p.sentiment || '').toLowerCase()) ? p.sentiment.toLowerCase() : null;
     document.getElementById('ai-thinking').classList.add('hidden');
     document.getElementById('ai-summary').textContent = p.summary || '-';
     const map = { name:'f-name', company:'f-company', phone:'f-phone', email:'f-email', address:'f-address', outcome:'f-outcome', followUpDate:'f-followup', painPoints:'f-pain', nextSteps:'f-nextsteps' };
@@ -1915,7 +1927,8 @@ async function saveRecord() {
     next_steps: document.getElementById('f-nextsteps').value.trim(),
     transcript: document.getElementById('final-tx').textContent,
     ai_summary: document.getElementById('ai-summary').textContent,
-    duration_seconds: seconds
+    duration_seconds: seconds,
+    sentiment: window.__lastSentiment || null
   };
   try {
     if (SUPABASE_URL !== 'YOUR_SUPABASE_PROJECT_URL') {
@@ -2252,6 +2265,45 @@ function refreshDashboard() {
   const td = document.getElementById('st-talk-day'), tw = document.getElementById('st-talk-week');
   if (td) td.textContent = fmtTalk(talkDay);
   if (tw) tw.textContent = fmtTalk(talkWeek);
+
+  // Call quality: sentiment split across calls that ran longer than 30s
+  const judged = records.filter(r => secsOf(r) > 30 && ['positive', 'neutral', 'negative'].includes(String(r.sentiment || '').toLowerCase()));
+  const qEl = document.getElementById('st-quality');
+  if (qEl) {
+    if (!judged.length) {
+      qEl.textContent = '—';
+      document.getElementById('st-quality-sub').textContent = 'No analyzed calls over 30s yet';
+      document.getElementById('st-quality-bar').innerHTML = '';
+    } else {
+      const n = s => judged.filter(r => String(r.sentiment).toLowerCase() === s).length;
+      const pos = n('positive'), neu = n('neutral'), neg = n('negative');
+      qEl.textContent = Math.round(pos / judged.length * 100) + '% positive';
+      qEl.style.fontSize = '20px';
+      document.getElementById('st-quality-bar').innerHTML =
+        `<div style="width:${pos / judged.length * 100}%;background:var(--green)"></div>` +
+        `<div style="width:${neu / judged.length * 100}%;background:var(--text3)"></div>` +
+        `<div style="width:${neg / judged.length * 100}%;background:var(--hot)"></div>`;
+      document.getElementById('st-quality-sub').textContent = `${pos} positive · ${neu} neutral · ${neg} negative`;
+    }
+  }
+
+  // Pickup rate: answered dials / total dials, rolling 7 days
+  (async () => {
+    const pEl = document.getElementById('st-pickup');
+    if (!pEl || !currentUser) return;
+    try {
+      const since = new Date(now - 7 * 86400000).toISOString();
+      const { data: dialRows } = await db.from('dials').select('answered').gte('created_at', since).limit(2000);
+      if (!dialRows?.length) {
+        pEl.textContent = '—';
+        document.getElementById('st-pickup-sub').textContent = 'Tracks from your next dial';
+        return;
+      }
+      const picked = dialRows.filter(x => x.answered).length;
+      pEl.textContent = Math.round(picked / dialRows.length * 100) + '%';
+      document.getElementById('st-pickup-sub').textContent = `${picked} answered of ${dialRows.length} dials`;
+    } catch (e) { pEl.textContent = '—'; }
+  })();
   document.getElementById('st-int').textContent = records.filter(r => r.heat_score === 'Hot' || r.outcome === 'Interested').length;
   document.getElementById('st-cb').textContent = records.filter(r => r.heat_score === 'Warm' || r.outcome === 'Callback').length;
   document.getElementById('dash-table').innerHTML = buildTable(records.slice(0, 8));

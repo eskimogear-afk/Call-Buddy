@@ -133,6 +133,13 @@ async function makeCall() {
     setStatus('Calling...');
     currentCall = await twilioDevice.connect({ params: { To: number } });
     window.__callStartedAt = Date.now();
+    // Pickup-rate tracking: one row per dial attempt; marked answered when
+    // the recording-born call row appears (recordings only exist on answer)
+    try {
+      const { data: dialRow } = await db.from('dials')
+        .insert({ user_id: window.currentUser?.id, phone: number }).select('id').single();
+      window.__lastDialId = dialRow?.id || null;
+    } catch (e) { window.__lastDialId = null; }
 
     if (h) h.style.display = 'inline-block';
     if (c) c.style.display = 'none';
@@ -186,6 +193,10 @@ async function pollForCallRecord(startedAt, attempt) {
     const since = new Date(startedAt - 10000).toISOString();
     const { data } = await db.from('calls').select('id').gte('created_at', since).limit(1);
     if (data && data.length > 0) {
+      if (window.__lastDialId) {
+        db.from('dials').update({ answered: true }).eq('id', window.__lastDialId).then(() => {});
+        window.__lastDialId = null;
+      }
       setStatus('🟢 Ready to call');
       if (typeof renderLog === 'function') renderLog();
       if (typeof refreshDashboard === 'function') refreshDashboard();
