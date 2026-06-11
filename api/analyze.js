@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     }
   } catch (e) { console.error('rate-limit check failed (allowing):', e.message); }
 
-  const { transcript, type, name, summary, painPoints, nextSteps, call_id, phone, force } = req.body || {};
+  const { transcript, type, name, summary, painPoints, nextSteps, call_id, phone, force, question } = req.body || {};
 
   /* ── Prospect research: AI web-search brief on the realtor behind a number ── */
   if (type === 'research') {
@@ -220,6 +220,51 @@ Transcript:
 ${emailTranscript || '(no transcript available — write a brief, generic but warm follow-up based on the summary and next step above)'}`;
     // stash recipient email to return after the model call
     req._recipientEmail = recipientEmail;
+  } else if (type === 'coach' || type === 'ask') {
+    // In-call Claude coaching: auto-assessment of the call, or a free-form
+    // question answered grounded in the transcript.
+    if (!call_id) return res.status(400).json({ error: 'call_id required' });
+    const { data: call } = await supabase
+      .from('calls')
+      .select('id, transcript, notes, coaching, contacts(name, company, brokerage, agent_type, current_lender)')
+      .eq('id', call_id).eq('user_id', user.id).single();
+    if (!call) return res.status(404).json({ error: 'Call not found' });
+    const t = String(call.transcript || '');
+    const haveTranscript = t.trim() && !t.startsWith('PENDING:');
+    const ctx = haveTranscript ? t.trim() : (call.notes || '');
+    if (!ctx) return res.status(400).json({ error: 'No transcript or notes on this call yet' });
+    const c = call.contacts || {};
+    const who = [c.name && c.name !== 'Unknown' ? c.name : null, c.brokerage || c.company, c.agent_type ? c.agent_type + ' agent' : null, c.current_lender ? 'currently uses ' + c.current_lender : null].filter(Boolean).join(' · ');
+
+    if (type === 'ask') {
+      const q = String(question || '').trim().slice(0, 600);
+      if (!q) return res.status(400).json({ error: 'question required' });
+      req._coachMode = 'ask';
+      prompt = `You are an expert mortgage sales coach and loan-program advisor helping a loan officer right after a call. Answer their question using ONLY what the transcript supports plus general mortgage/sales expertise. Be specific, concise, and practical. If they ask about loan programs, recommend specific program types (Conventional, FHA, VA, jumbo, bank-statement, DSCR, hard money) and WHY, based on what the prospect said. If the transcript doesn't contain something, say so rather than inventing it.
+
+${who ? 'Who they called: ' + who + '\n' : ''}Call transcript/notes:
+"""${ctx.slice(0, 25000)}"""
+
+Loan officer's question: ${q}
+
+Answer in plain text (no markdown headers), 2-5 short paragraphs or a tight bulleted list. Talk directly to the LO ("you").`;
+    } else {
+      if (call.coaching && !force) return res.status(200).json({ cached: true, ...call.coaching });
+      req._coachMode = 'coach';
+      req._coachCallId = call.id;
+      prompt = `You are an expert mortgage sales coach reviewing a loan officer's call. Be honest, specific, and constructive — like a great manager doing a call review. Base everything on the transcript; do not invent facts.
+
+${who ? 'Who they called: ' + who + '\n' : ''}Call transcript/notes:
+"""${ctx.slice(0, 25000)}"""
+
+Return ONLY valid JSON:
+{"score": number 1-10 for how the call went,
+ "headline": "one-sentence read on the call",
+ "did_well": ["2-4 specific things the LO did well — quote/paraphrase real moments"],
+ "improve": ["2-4 specific, constructive things to do better next time — concrete, not generic"],
+ "loan_programs": ["1-3 loan program ideas that fit what the prospect described, each with a short why, or [] if not a borrower/unclear"],
+ "next_move": "the single highest-value next action"}`;
+    }
   } else if (type === 'quote_params') {
     // Pull mortgage pricing inputs out of what was actually said on a call
     if (!call_id) return res.status(400).json({ error: 'call_id required' });
@@ -300,6 +345,22 @@ ${transcript}`;
         contact: req._naContact ? { id: req._naContact.id, name: req._naContact.name, phone: req._naContact.phone, company: req._naContact.company } : null,
         call_id: req._naCallId
       });
+    } else if (type === 'ask') {
+      return res.status(200).json({ answer: text.replace(/```/g, '').trim() });
+    } else if (type === 'coach') {
+      let j;
+      try { j = JSON.parse(text.replace(/```json|```/g, '').trim()); }
+      catch { console.error('coach parse err'); return res.status(500).json({ error: 'Could not generate the coaching read — try again' }); }
+      const arr = v => Array.isArray(v) ? v.map(String).slice(0, 5) : [];
+      const clean = {
+        score: (typeof j.score === 'number' && j.score >= 0 && j.score <= 10) ? Math.round(j.score) : null,
+        headline: String(j.headline || '').slice(0, 300),
+        did_well: arr(j.did_well), improve: arr(j.improve),
+        loan_programs: arr(j.loan_programs), next_move: String(j.next_move || '').slice(0, 300),
+        generated_at: new Date().toISOString()
+      };
+      if (req._coachCallId) await supabase.from('calls').update({ coaching: clean }).eq('id', req._coachCallId).eq('user_id', user.id);
+      return res.status(200).json({ cached: false, ...clean });
     } else if (type === 'quote_params') {
       let qp;
       try {

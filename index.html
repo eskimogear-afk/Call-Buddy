@@ -1495,6 +1495,25 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 </div>
 
 <!-- ══ AI EMAIL DRAFT MODAL ════════════════════════════════════════════════ -->
+<div id="coach-modal" class="modal-overlay hidden" onclick="bgClose(event,'coach-modal')">
+  <div class="modal" style="max-width:600px">
+    <button class="modal-close" onclick="closeModal('coach-modal')">×</button>
+    <h2>🧠 Talk to Claude about this call</h2>
+    <p class="modal-sub" id="coach-sub">Claude's read on the call — and ask it anything.</p>
+    <div id="coach-loading" style="text-align:center;padding:26px 0;color:var(--text2)"><div class="spinner spinner-dark" style="margin:0 auto 12px"></div>Reading the transcript…</div>
+    <div id="coach-assessment" class="hidden"></div>
+    <div id="coach-error" class="hidden" style="font-size:13px;color:var(--warm);padding:10px 0"></div>
+    <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+      <div id="coach-thread" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <textarea id="coach-q" placeholder="Ask Claude about this call — e.g. 'best loan programs for them?' or 'what should I have said differently?'" style="flex:1;min-height:46px;max-height:120px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13.5px;font-family:inherit;resize:vertical;background:var(--bg);color:var(--text)" onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();askCoach();}"></textarea>
+        <button class="btn btn-primary" id="coach-ask-btn" style="flex-shrink:0" onclick="askCoach()">Ask</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">Grounded in this call's transcript. ⌘/Ctrl+Enter to send.</div>
+    </div>
+  </div>
+</div>
+
 <div id="email-modal" class="modal-overlay hidden" onclick="bgClose(event,'email-modal')">
   <div class="modal" style="max-width:560px">
     <button class="modal-close" onclick="closeModal('email-modal')">×</button>
@@ -2121,6 +2140,7 @@ function buildTable(recs) {
         <div class="cc-actions">
           ${phone && !isDNC(phone) ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="callAgain('${escAttr(phone)}')">📞 Call again</button>` : ''}
           ${phone ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="followUpFromCall('${r.contact_id || ''}','${escAttr(display)}','${escAttr(phone)}')">⏰ Schedule follow-up</button>` : ''}
+          ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="openCoach('${r.id}','${escAttr(display)}')">🧠 Ask Claude</button>` : ''}
           ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftEmail('${r.id}','${escAttr(display)}')">✉️ Draft email</button>` : ''}
           ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftNextAction('${r.id}','${escAttr(display)}')">📅 Schedule next</button>` : ''}
           <button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="priceFromCall('${r.id}','${hasRealName ? escAttr(display) : ''}')">💲 Quote</button>
@@ -2254,6 +2274,73 @@ function followUpFromCall(contactId, name, phone) {
    AI FOLLOW-UP EMAIL DRAFT
 ═══════════════════════════════════════════════════════ */
 let emailCurrentCallId = null, emailCurrentName = '';
+let coachCallId = null, coachName = '';
+function chip(label, color){ return `<span style="display:inline-block;font-size:11px;font-weight:700;color:${color};background:${color}1f;padding:2px 9px;border-radius:99px">${label}</span>`; }
+
+async function openCoach(callId, name) {
+  coachCallId = callId; coachName = name || '';
+  document.getElementById('coach-sub').textContent = name ? `Claude's read on your call with ${name} — and ask it anything.` : "Claude's read on the call — and ask it anything.";
+  document.getElementById('coach-assessment').classList.add('hidden');
+  document.getElementById('coach-assessment').innerHTML = '';
+  document.getElementById('coach-error').classList.add('hidden');
+  document.getElementById('coach-thread').innerHTML = '';
+  document.getElementById('coach-q').value = '';
+  document.getElementById('coach-loading').classList.remove('hidden');
+  document.getElementById('coach-modal').classList.remove('hidden');
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const r = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token}, body: JSON.stringify({ type:'coach', call_id: callId }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Could not read the call');
+    renderCoaching(d);
+  } catch(e) {
+    document.getElementById('coach-loading').classList.add('hidden');
+    const el = document.getElementById('coach-error'); el.textContent = '⚠️ ' + e.message; el.classList.remove('hidden');
+  }
+}
+
+function renderCoaching(d) {
+  document.getElementById('coach-loading').classList.add('hidden');
+  const scoreColor = d.score >= 7 ? 'var(--green)' : d.score >= 4 ? 'var(--warm)' : 'var(--hot)';
+  const list = (items, color) => (items && items.length) ? `<ul style="margin:6px 0 0 18px;padding:0">${items.map(x=>`<li style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:4px">${esc(x)}</li>`).join('')}</ul>` : '<div style="font-size:12.5px;color:var(--text3)">—</div>';
+  const el = document.getElementById('coach-assessment');
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      ${d.score!=null?`<div style="flex-shrink:0;width:42px;height:42px;border-radius:10px;background:${scoreColor}1f;color:${scoreColor};display:flex;align-items:center;justify-content:center;font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:18px">${d.score}</div>`:''}
+      <div style="font-size:13.5px;color:var(--text);font-weight:500;line-height:1.5">${esc(d.headline||'')}</div>
+    </div>
+    <div style="margin-bottom:12px">${chip('✓ WHAT WORKED','var(--green)')}${list(d.did_well,'var(--green)')}</div>
+    <div style="margin-bottom:12px">${chip('↑ TO IMPROVE','var(--warm)')}${list(d.improve,'var(--warm)')}</div>
+    ${(d.loan_programs&&d.loan_programs.length)?`<div style="margin-bottom:12px">${chip('💲 LOAN PROGRAMS THAT FIT','var(--brand)')}${list(d.loan_programs,'var(--brand)')}</div>`:''}
+    ${d.next_move?`<div style="background:var(--brand-light);border:1px solid var(--brand);border-radius:var(--radius-sm);padding:10px 13px;font-size:13px;color:var(--text)"><strong style="color:var(--brand-mid)">Next move:</strong> ${esc(d.next_move)}</div>`:''}
+    <div style="font-size:11px;color:var(--text3);margin-top:8px"><a onclick="openCoach(coachCallId,coachName)" style="cursor:pointer;color:var(--brand-mid)">↻ Re-assess</a></div>`;
+  el.classList.remove('hidden');
+}
+
+async function askCoach() {
+  const q = document.getElementById('coach-q').value.trim();
+  if (!q || !coachCallId) return;
+  const thread = document.getElementById('coach-thread');
+  const btn = document.getElementById('coach-ask-btn');
+  thread.insertAdjacentHTML('beforeend', `<div style="align-self:flex-end;max-width:85%;background:var(--brand);color:#0B1A33;font-size:13px;padding:8px 12px;border-radius:12px 12px 2px 12px">${esc(q)}</div>`);
+  document.getElementById('coach-q').value = '';
+  const aId = 'ca'+Date.now();
+  thread.insertAdjacentHTML('beforeend', `<div id="${aId}" style="align-self:flex-start;max-width:90%;background:var(--bg2);border:1px solid var(--border);font-size:13px;color:var(--text2);padding:8px 12px;border-radius:12px 12px 12px 2px"><span class="spinner spinner-dark" style="vertical-align:-2px"></span> thinking…</div>`);
+  thread.scrollIntoView({block:'end'});
+  btn.disabled = true;
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const r = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token}, body: JSON.stringify({ type:'ask', call_id: coachCallId, question: q }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Could not answer');
+    document.getElementById(aId).innerHTML = esc(d.answer || '').replace(/\n/g,'<br>');
+  } catch(e) {
+    document.getElementById(aId).innerHTML = '⚠️ ' + esc(e.message);
+  }
+  btn.disabled = false;
+  document.getElementById(aId).scrollIntoView({block:'end'});
+}
+
 async function draftEmail(callId, name) {
   emailCurrentCallId = callId; emailCurrentName = name || '';
   document.getElementById('email-sub').textContent = name ? `Drafted from your call with ${name}.` : 'Drafted from your call transcript.';
