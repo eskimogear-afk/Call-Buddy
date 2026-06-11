@@ -989,6 +989,10 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           </label>
           <div style="margin-top:12px;padding:10px 14px;border:1px solid var(--border);background:var(--bg2);border-radius:var(--radius-sm);font-size:12.5px;color:var(--text2)">📼 Recording with the mic recorder instead? Open with: <em style="color:var(--text)">&ldquo;Just a heads-up — I'm on a recorded line.&rdquo;</em> A reminder appears whenever you're recording.</div>
           <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13.5px;line-height:1.55;margin-top:16px">
+            <input type="checkbox" id="ai-receptionist-toggle" onchange="saveAiReceptionist(this.checked)" style="margin-top:3px;accent-color:var(--brand)">
+            <span><strong>🤖 AI receptionist for missed calls</strong> — when an inbound call rings and you don't pick up, an automated assistant answers, tells the caller it's an assistant, collects their name, what they need, and the best callback time — then logs the lead, the conversation, and a suggested follow-up automatically. Off = plain voicemail.</span>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13.5px;line-height:1.55;margin-top:16px">
             <input type="checkbox" id="cell-safety-toggle" onchange="saveCellSafety(this.checked)" style="margin-top:3px;accent-color:var(--brand)">
             <span><strong>Cell-phone safety mode (recommended)</strong> — the Power Dialer waits for you to tap <em>Dial next</em> after each call instead of auto-advancing. Keeps every call human-initiated, which is your strongest protection against TCPA autodialer claims when lists contain cell numbers ($500–$1,500 statutory damages per call).</span>
           </label>
@@ -1709,7 +1713,7 @@ function switchPanel(p) {
   if (p === 'followups') loadFollowUps();
   if (p === 'power') { pdRender(); loadTeamLists(); }
   if (p === 'inbox') loadInbox();
-  if (p === 'settings') { loadDNC().then(renderDNC); renderScrubStatus(); const dt = document.getElementById('disclosure-toggle'); if (dt) dt.checked = !!userProfile?.record_disclosure; const cs = document.getElementById('cell-safety-toggle'); if (cs) cs.checked = cellSafetyOn(); }
+  if (p === 'settings') { loadDNC().then(renderDNC); renderScrubStatus(); const dt = document.getElementById('disclosure-toggle'); if (dt) dt.checked = !!userProfile?.record_disclosure; const cs = document.getElementById('cell-safety-toggle'); if (cs) cs.checked = cellSafetyOn(); const ai = document.getElementById('ai-receptionist-toggle'); if (ai) ai.checked = !!userProfile?.ai_receptionist; }
   if (p === 'calendar') renderCalendar();
   if (p === 'pricing') { prInit(); loadSavedQuotes(); }
 }
@@ -2521,6 +2525,19 @@ function generateOnePager() {
     ${ptCoBrand(agent, brokerage, phone)}
     ${PT_DISCLAIMER}
   </div>`);
+}
+
+async function saveAiReceptionist(on) {
+  if (!currentUser) return;
+  try {
+    const { error } = await db.from('profiles').update({ ai_receptionist: on }).eq('id', currentUser.id);
+    if (error) throw error;
+    if (userProfile) userProfile.ai_receptionist = on;
+  } catch (e) {
+    alert('Could not save the setting: ' + (e.message || e));
+    const t = document.getElementById('ai-receptionist-toggle');
+    if (t) t.checked = !on;
+  }
 }
 
 async function saveCellSafety(on) {
