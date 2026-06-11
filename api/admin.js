@@ -69,7 +69,7 @@ export default async function handler(req, res) {
       const period = new Date().toISOString().slice(0, 8) + '01';
       const [usersQ, callsQ, contactsQ, fusQ, usageQ, ownerQ] = await Promise.all([
         supabase.auth.admin.listUsers({ perPage: 200 }),
-        supabase.from('calls').select('user_id, created_at, heat_score, duration').in('user_id', teamIds).order('created_at', { ascending: false }).limit(3000),
+        supabase.from('calls').select('user_id, created_at, heat_score, duration, from_number, to_number').in('user_id', teamIds).order('created_at', { ascending: false }).limit(3000),
         supabase.from('contacts').select('user_id, stage').in('user_id', teamIds).limit(5000),
         supabase.from('follow_ups').select('user_id, status').in('user_id', teamIds).eq('status', 'pending').limit(2000),
         supabase.from('usage_minutes').select('user_id, minutes_used').in('user_id', teamIds).eq('period_start', period),
@@ -82,7 +82,10 @@ export default async function handler(req, res) {
       const emails = {};
       (usersQ?.data?.users || []).forEach(u => { emails[u.id] = u.email; });
 
-      const calls = callsQ.data || [];
+      // Exclude the secondary verified number's calls from all portal stats
+      const EXCLUDED_LINE = '5174490792';
+      const onExcluded = (n) => String(n || '').replace(/\D/g, '').endsWith(EXCLUDED_LINE);
+      const calls = (callsQ.data || []).filter(c => !onExcluded(c.from_number) && !onExcluded(c.to_number));
       const contacts = contactsQ.data || [];
       const fus = fusQ.data || [];
 
@@ -182,6 +185,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
     console.error('Admin API error:', err);
-    return res.status(500).json({ error: String(err) });
+    return res.status(500).json({ error: 'Server error' });
   }
 }

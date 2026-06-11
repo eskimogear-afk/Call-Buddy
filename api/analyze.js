@@ -22,7 +22,25 @@ export default async function handler(req, res) {
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { transcript, type, name, summary, painPoints, nextSteps, call_id, phone, force } = req.body || {};
+  // Rate limit: cap paid-model calls per user (cost-abuse backstop).
+  // Rolling 60s window; prune old rows opportunistically.
+  try {
+    const RPM = 25;
+    const cutoff = new Date(Date.now() - 60000).toISOString();
+    const { count } = await supabase.from('ai_calls')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).gte('created_at', cutoff);
+    if ((count || 0) >= RPM) {
+      res.setHeader('Retry-After', '30');
+      return res.status(429).json({ error: 'Too many requests — give it a moment and try again.' });
+    }
+    await supabase.from('ai_calls').insert({ user_id: user.id });
+    if (Math.floor((Date.now() / 1000) % 10) === 0) {
+      await supabase.from('ai_calls').delete().lt('created_at', new Date(Date.now() - 600000).toISOString());
+    }
+  } catch (e) { console.error('rate-limit check failed (allowing):', e.message); }
+
+  const { transcript, type, name, summary, painPoints, nextSteps, call_id, phone, force, question } = req.body || {};
 
   /* ── Prospect research: AI web-search brief on the realtor behind a number ── */
   if (type === 'research') {
@@ -119,7 +137,7 @@ After your research, output ONLY this JSON object (no prose before or after):
       return res.status(200).json({ cached: false, contact_id: contact?.id || null, ...brief });
     } catch (err) {
       console.error('Research error:', err);
-      return res.status(500).json({ error: err.message || 'Research failed' });
+      console.error('research err:', err); return res.status(500).json({ error: 'Research failed' });
     }
   }
 
@@ -202,6 +220,81 @@ Transcript:
 ${emailTranscript || '(no transcript available — write a brief, generic but warm follow-up based on the summary and next step above)'}`;
     // stash recipient email to return after the model call
     req._recipientEmail = recipientEmail;
+  } else if (type === 'coach' || type === 'ask') {
+    // In-call Claude coaching: auto-assessment of the call, or a free-form
+    // question answered grounded in the transcript.
+    if (!call_id) return res.status(400).json({ error: 'call_id required' });
+    const { data: call } = await supabase
+      .from('calls')
+      .select('id, transcript, notes, coaching, contacts(name, company, brokerage, agent_type, current_lender)')
+      .eq('id', call_id).eq('user_id', user.id).single();
+    if (!call) return res.status(404).json({ error: 'Call not found' });
+    const t = String(call.transcript || '');
+    const haveTranscript = t.trim() && !t.startsWith('PENDING:');
+    const ctx = haveTranscript ? t.trim() : (call.notes || '');
+    if (!ctx) return res.status(400).json({ error: 'No transcript or notes on this call yet' });
+    const c = call.contacts || {};
+    const who = [c.name && c.name !== 'Unknown' ? c.name : null, c.brokerage || c.company, c.agent_type ? c.agent_type + ' agent' : null, c.current_lender ? 'currently uses ' + c.current_lender : null].filter(Boolean).join(' · ');
+
+    if (type === 'ask') {
+      const q = String(question || '').trim().slice(0, 600);
+      if (!q) return res.status(400).json({ error: 'question required' });
+      req._coachMode = 'ask';
+      prompt = `You are an expert mortgage sales coach and loan-program advisor helping a loan officer right after a call. Answer their question using ONLY what the transcript supports plus general mortgage/sales expertise. Be specific, concise, and practical. If they ask about loan programs, recommend specific program types (Conventional, FHA, VA, jumbo, bank-statement, DSCR, hard money) and WHY, based on what the prospect said. If the transcript doesn't contain something, say so rather than inventing it.
+
+${who ? 'Who they called: ' + who + '\n' : ''}Call transcript/notes:
+"""${ctx.slice(0, 25000)}"""
+
+Loan officer's question: ${q}
+
+Answer in plain text (no markdown headers), 2-5 short paragraphs or a tight bulleted list. Talk directly to the LO ("you").`;
+    } else {
+      if (call.coaching && !force) return res.status(200).json({ cached: true, ...call.coaching });
+      req._coachMode = 'coach';
+      req._coachCallId = call.id;
+      prompt = `You are an expert mortgage sales coach reviewing a loan officer's call. Be honest, specific, and constructive — like a great manager doing a call review. Base everything on the transcript; do not invent facts.
+
+${who ? 'Who they called: ' + who + '\n' : ''}Call transcript/notes:
+"""${ctx.slice(0, 25000)}"""
+
+Return ONLY valid JSON:
+{"score": number 1-10 for how the call went,
+ "headline": "one-sentence read on the call",
+ "did_well": ["2-4 specific things the LO did well — quote/paraphrase real moments"],
+ "improve": ["2-4 specific, constructive things to do better next time — concrete, not generic"],
+ "loan_programs": ["1-3 loan program ideas that fit what the prospect described, each with a short why, or [] if not a borrower/unclear"],
+ "next_move": "the single highest-value next action"}`;
+    }
+  } else if (type === 'quote_params') {
+    // Pull mortgage pricing inputs out of what was actually said on a call
+    if (!call_id) return res.status(400).json({ error: 'call_id required' });
+    const { data: call } = await supabase
+      .from('calls')
+      .select('id, transcript, notes, quote_params')
+      .eq('id', call_id).eq('user_id', user.id).single();
+    if (!call) return res.status(404).json({ error: 'Call not found' });
+    if (call.quote_params && !force) return res.status(200).json({ cached: true, ...call.quote_params });
+    const t = String(call.transcript || '');
+    if (t.startsWith('PENDING:')) return res.status(400).json({ error: 'Transcript still processing — try again in a minute' });
+    if (!t.trim() && !call.notes) return res.status(400).json({ error: 'No transcript on this call to read numbers from' });
+    req._qpCallId = call.id;
+    prompt = `You are extracting mortgage pricing inputs from a phone call between a loan officer and a prospect. Extract ONLY figures that were actually said or directly implied in conversation (e.g. "we owe about three forty" = 340000, "putting twenty percent down" = 20). NEVER invent, assume, or fill in typical values.
+
+Transcript:
+"""${(t.trim() || call.notes).slice(0, 30000)}"""
+
+Return ONLY valid JSON (null for anything not discussed):
+{"purpose":"purchase"|"refi"|"cashout"|null,
+ "program":"conventional"|"fha"|"va"|"jumbo"|"bank_stmt"|"dscr"|"hard_money"|null,
+ "price":number|null,
+ "down_pct":number|null,"down_amount":number|null,
+ "loan_amount":number|null,"current_balance":number|null,"cash_out":number|null,
+ "rate":number|null,
+ "term_years":number|null,"hoa_mo":number|null,
+ "confidence":"high"|"medium"|"low",
+ "mentions":["up to 4 short verbatim fragments where the numbers were said"]}
+
+Notes: "purpose" is refi for a rate/term refinance, cashout only if pulling cash out was discussed. "price" is the purchase price, or the home's value on a refi. "rate" only if a specific interest rate was discussed. Confidence is low when figures are vague or contradictory.`;
   } else {
     if (!transcript) return res.status(400).json({ error: 'No transcript provided' });
     prompt = `You are an AI assistant for a sales professional. Analyze this cold call transcript and return ONLY valid JSON with these exact keys:
@@ -215,7 +308,8 @@ ${emailTranscript || '(no transcript available — write a brief, generic but wa
 "followUpDate": YYYY-MM-DD if a specific date was agreed else "",
 "painPoints": 1-2 sentences on the prospect concerns or situation,
 "nextSteps": 1-2 sentences on what was agreed as the next action,
-"heatScore": one of exactly: Hot, Warm, Cold based on prospect engagement and interest.
+"heatScore": one of exactly: Hot, Warm, Cold based on prospect engagement and interest,
+"sentiment": one of exactly: positive, neutral, negative — the overall tone of the conversation.
 Return ONLY the JSON object. No markdown. No explanation.
 Transcript:
 ${transcript}`;
@@ -251,6 +345,22 @@ ${transcript}`;
         contact: req._naContact ? { id: req._naContact.id, name: req._naContact.name, phone: req._naContact.phone, company: req._naContact.company } : null,
         call_id: req._naCallId
       });
+    } else if (type === 'ask') {
+      return res.status(200).json({ answer: text.replace(/```/g, '').trim() });
+    } else if (type === 'coach') {
+      let j;
+      try { j = JSON.parse(text.replace(/```json|```/g, '').trim()); }
+      catch { console.error('coach parse err'); return res.status(500).json({ error: 'Could not generate the coaching read — try again' }); }
+      const arr = v => Array.isArray(v) ? v.map(String).slice(0, 5) : [];
+      const clean = {
+        score: (typeof j.score === 'number' && j.score >= 0 && j.score <= 10) ? Math.round(j.score) : null,
+        headline: String(j.headline || '').slice(0, 300),
+        did_well: arr(j.did_well), improve: arr(j.improve),
+        loan_programs: arr(j.loan_programs), next_move: String(j.next_move || '').slice(0, 300),
+        generated_at: new Date().toISOString()
+      };
+      if (req._coachCallId) await supabase.from('calls').update({ coaching: clean }).eq('id', req._coachCallId).eq('user_id', user.id);
+      return res.status(200).json({ cached: false, ...clean });
     } else if (type === 'quote_params') {
       let qp;
       try {
@@ -291,6 +401,6 @@ ${transcript}`;
     }
   } catch (err) {
     console.error('Analyze error:', err);
-    return res.status(500).json({ error: err.message || 'Analysis failed' });
+    console.error('analyze err:', err); return res.status(500).json({ error: 'Analysis failed' });
   }
 }

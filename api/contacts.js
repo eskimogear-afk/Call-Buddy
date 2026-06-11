@@ -230,8 +230,16 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PUT') {
-      const { id, ...updates } = req.body;
+      const { id, ...raw } = req.body;
       if (!id) return res.status(400).json({ error: 'Missing id' });
+      // Whitelist updatable columns — never trust the client to set user_id,
+      // call_count, timestamps, or any column not meant to be user-editable.
+      const ALLOWED = ['name', 'first_name', 'last_name', 'phone', 'company', 'email',
+        'stage', 'notes', 'heat_score', 'brokerage', 'agent_type',
+        'annual_transaction_volume', 'current_lender', 'last_closing_date'];
+      const updates = {};
+      for (const k of ALLOWED) if (k in raw) updates[k] = raw[k];
+      if (!Object.keys(updates).length) return res.status(400).json({ error: 'No updatable fields' });
       const { data, error } = await supabase
         .from('contacts')
         .update(updates)
@@ -253,6 +261,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
     console.error('Contacts error:', err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: 'Server error' });
   }
 }

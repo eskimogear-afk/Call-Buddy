@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PitchLog — Team Admin</title>
+<meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230369A1%22/><text y=%22.9em%22 font-size=%2280%22>&#128202;</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -18,6 +19,15 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter',sans-serif;font-size:14px;color:var(--text);background:var(--bg);line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh}
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(900px 500px at 50% -8%,rgba(91,163,247,.10),transparent 70%)}
+body.light{
+  --brand:#2F7FE8;--brand-light:rgba(47,127,232,.10);--brand-mid:#1B66C9;--navy:#0B0F1A;
+  --text:#0B1220;--text2:#46536B;--text3:#8A94A8;
+  --bg:#FFFFFF;--bg2:#F7F9FC;--border:#E3E8F0;
+  --hot:#DC2626;--hot-bg:rgba(220,38,38,.08);--warm:#B45309;--warm-bg:rgba(217,119,6,.12);--green:#047857;--green-bg:rgba(16,185,129,.12);
+  --shadow-sm:0 1px 2px rgba(16,24,40,.06);--shadow:0 1px 3px rgba(16,24,40,.07),0 8px 24px rgba(16,24,40,.08);
+}
+body.light::before{background:radial-gradient(900px 500px at 50% -8%,rgba(47,127,232,.07),transparent 70%)}
+body.light .btn-primary{color:#fff}
 input,textarea,select{background:var(--bg);color:var(--text);border-color:var(--border)}
 input::placeholder,textarea::placeholder{color:var(--text3)}
 input:-webkit-autofill{-webkit-text-fill-color:var(--text);-webkit-box-shadow:0 0 0 1000px var(--bg) inset}
@@ -71,6 +81,7 @@ tbody tr:hover{background:var(--bg2)}
 </style>
 </head>
 <body>
+<script>try{if(localStorage.getItem('plw_theme')!=='dark')document.body.classList.add('light')}catch(e){}</script>
 
 <div id="gate" class="gate">
   <h1>Team Admin</h1>
@@ -89,6 +100,7 @@ tbody tr:hover{background:var(--bg2)}
     <strong>PitchLog</strong>
     <span class="tag">TEAM ADMIN</span>
     <div class="right">
+      <button id="theme-toggle" onclick="toggleTheme()" title="Switch light / dark" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);cursor:pointer;font-size:14px;line-height:1">🌙</button>
       <span id="who"></span>
       <button class="btn btn-ghost" onclick="loadOverview()">↻ Refresh</button>
       <a class="btn btn-ghost" href="/" style="text-decoration:none">Open app</a>
@@ -273,6 +285,16 @@ async function playAdminRec(callId, btn){
 async function logout(){ await db.auth.signOut(); location.reload(); }
 
 init();
+</script>
+<script>
+function applyThemeIcon(){ const b=document.getElementById('theme-toggle'); if(b) b.textContent = document.body.classList.contains('light') ? '☀️' : '🌙'; }
+function toggleTheme(){
+  const light = !document.body.classList.contains('light');
+  document.body.classList.toggle('light', light);
+  try{ localStorage.setItem('plw_theme', light ? 'light' : 'dark'); }catch(e){}
+  applyThemeIcon();
+}
+document.addEventListener('DOMContentLoaded', applyThemeIcon);
 </script>
 </body>
 </html>

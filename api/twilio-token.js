@@ -70,6 +70,6 @@ export default async function handler(req, res) {
     res.status(200).json({ token: accessToken.toJwt(), identity: user.id });
   } catch (err) {
     console.error('Token error:', err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: 'Token error' });
   }
 }

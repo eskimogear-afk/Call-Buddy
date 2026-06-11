@@ -2,5 +2,7 @@ User-agent: *
 Allow: /
 Disallow: /app
 Disallow: /app/
+Disallow: /admin.html
+Disallow: /api/
 
 Sitemap: https://call-buddy-omega.vercel.app/sitemap.xml
