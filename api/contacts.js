@@ -67,9 +67,11 @@ export default async function handler(req, res) {
         const d = await r.json();
         const obs = (d.observations || []).filter(o => o.value !== '.');
         const cur = obs[0], prev = obs[1];
-        const val = cur ? parseFloat(cur.value) : null;
+        const rawVal = cur ? parseFloat(cur.value) : null;
         const pval = prev ? parseFloat(prev.value) : null;
-        return { ...base, value: val, date: cur?.date || null, change: (val != null && pval != null) ? Math.round((val - pval) * 100) / 100 : null };
+        // FRED YoY (pc1) series return long decimals (e.g. 4.16661) — round to 2dp for clean display
+        const val = rawVal != null ? Math.round(rawVal * 100) / 100 : null;
+        return { ...base, value: val, date: cur?.date || null, change: (rawVal != null && pval != null) ? Math.round((rawVal - pval) * 100) / 100 : null };
       } catch (e) {
         console.error('rate series', s.id, 'failed:', e.message);
         return base;
