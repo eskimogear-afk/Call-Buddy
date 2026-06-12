@@ -117,7 +117,7 @@ export default async function handler(req, res) {
     }
 
     // Analyse with Claude
-    let analysis = { name: 'Unknown', company: '', notes: '', heatScore: 'Cold', sentiment: 'neutral', nextStep: '' };
+    let analysis = { name: 'Unknown', company: '', notes: '', heatScore: 'Cold', sentiment: 'neutral', nextStep: '', outcome: '' };
 
     if (process.env.ANTHROPIC_API_KEY) {
       try {
@@ -130,6 +130,7 @@ export default async function handler(req, res) {
             role: 'user',
             content: `Analyze this cold call transcript. Return ONLY valid JSON with keys:
 "name" (prospect full name or "Unknown"), "company" (or ""), "notes" (2-3 sentence summary), "heatScore" (one of exactly: Hot, Warm, Cold), "sentiment" (one of: positive, neutral, negative), "nextStep" (brief next action or ""),
+"outcome" (one of exactly: Interested, Not interested, Callback, Voicemail, No answer. Use "Voicemail" when the recording is an answering-machine greeting or the rep leaving a message with no live prospect on the line; "Callback" when a live person asked to be reached again at a specific later time; "Interested" or "Not interested" for a real two-way conversation, judged by whether the prospect showed genuine buying interest),
 "followUp": an object describing the concrete follow-up activity implied by the call, or {"needed": false} if none is warranted. When needed, include:
   "needed": true,
   "type": one of exactly "call", "sms", "meeting", "task",
@@ -219,6 +220,7 @@ ${transcriptText}`
     }
 
     // Update the call record
+    const VALID_OUTCOMES = ['Interested', 'Not interested', 'Callback', 'Voicemail', 'No answer'];
     const { data: updatedRows, error: updateErr } = await supabase.from('calls')
       .update({
         transcript: transcriptText,
@@ -226,6 +228,7 @@ ${transcriptText}`
         heat_score: analysis.heatScore || 'Cold',
         sentiment: analysis.sentiment || 'neutral',
         next_step: analysis.nextStep || '',
+        outcome: VALID_OUTCOMES.includes(analysis.outcome) ? analysis.outcome : null,
         contact_id: contact?.id || null
       })
       .eq('id', callRecord.id)
