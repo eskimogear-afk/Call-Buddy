@@ -1944,6 +1944,7 @@ async function enterApp() {
   updatePlanBadge();
   loadUsage();
   loadROI();
+  startReminderPolling();
   maybeShowWelcome();
   // Surface any AI-suggested follow-ups awaiting review (e.g. from calls
   // that finished analyzing while the app was closed)
@@ -3962,6 +3963,42 @@ async function fcMarkDone() {
 }
 
 // Find AI suggestions awaiting review; prefer the one tied to callId
+/* ── In-app reminders: pop up on any screen when a reminder is due, require ack ── */
+let reminderPollTimer = null, reminderShowing = false;
+function startReminderPolling() {
+  checkReminders();
+  if (reminderPollTimer) clearInterval(reminderPollTimer);
+  reminderPollTimer = setInterval(checkReminders, 45000);
+}
+async function checkReminders() {
+  if (!currentUser || reminderShowing) return;
+  try {
+    const nowIso = new Date().toISOString();
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const { data } = await db.from('reminders')
+      .select('id, title, body, fire_at')
+      .eq('acknowledged', false).lte('fire_at', nowIso).gte('fire_at', since)
+      .order('fire_at', { ascending: true }).limit(1);
+    if (data && data.length) showReminderPopup(data[0]);
+  } catch (e) {}
+}
+function showReminderPopup(r) {
+  reminderShowing = true;
+  document.getElementById('reminder-title').textContent = r.title || '⏰ Reminder';
+  document.getElementById('reminder-body').textContent = r.body || '';
+  const m = document.getElementById('reminder-modal');
+  m.dataset.id = r.id;
+  m.classList.remove('hidden');
+}
+async function acknowledgeReminder() {
+  const m = document.getElementById('reminder-modal');
+  const id = m.dataset.id;
+  m.classList.add('hidden');
+  reminderShowing = false;
+  if (id) { try { await db.from('reminders').update({ acknowledged: true, acknowledged_at: new Date().toISOString() }).eq('id', id); } catch (e) {} }
+  setTimeout(checkReminders, 800); // surface the next due reminder, if any
+}
+
 async function checkSuggestedFollowUps(callId) {
   try {
     if (!document.getElementById('fc-modal').classList.contains('hidden')) return; // one at a time
@@ -4779,7 +4816,7 @@ function renderInboxThreads() {
     <div onclick="openThread('${escAttr(t.phone)}')" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
       <div class="cc-avatar" style="background:${t.unread ? 'var(--brand)' : '#9CA3AF'};width:38px;height:38px;font-size:13px">${esc((t.name && t.name.toLowerCase() !== 'unknown' ? t.name.split(/\s+/).map(w => w[0]).slice(0, 2).join('') : t.phone.replace(/\D/g, '').slice(-2)).toUpperCase())}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:${t.unread ? '700' : '600'}">${esc(displayName(t.name, t.phone))} ${t.company ? `<span style="font-weight:400;color:var(--text3);font-size:12px">· ${esc(t.company)}</span>` : ''}</div>
+        <div style="font-size:14px;font-weight:${t.unread ? '700' : '600'}">${esc(displayName(t.name, t.phone))}${(t.name && t.name.toLowerCase() !== 'unknown') ? `<span style="font-weight:400;color:var(--text3);font-size:12px"> · ${esc(fmtPhone(t.phone))}</span>` : ''}${t.company ? `<span style="font-weight:400;color:var(--text3);font-size:12px"> · ${esc(t.company)}</span>` : ''}</div>
         <div style="font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${t.unread ? 'font-weight:600;color:var(--text)' : ''}">${t.last.direction === 'outbound' ? 'You: ' : ''}${esc(t.last.body)}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
@@ -4795,7 +4832,7 @@ async function openThread(phone) {
   document.getElementById('inbox-thread-view').classList.remove('hidden');
   const t = groupThreads(inboxCache).find(x => x.phone === phone);
   document.getElementById('thread-name').textContent = displayName(t?.name, phone);
-  document.getElementById('thread-phone').textContent = (t?.name && t.name.toLowerCase() !== 'unknown') ? fmtPhone(phone) : '';
+  document.getElementById('thread-phone').textContent = fmtPhone(phone);
   renderThreadMessages();
   // mark read + clear badge
   inboxFetch('/api/twilio-sms', { method: 'PUT', body: JSON.stringify({ phone }) })
@@ -4936,6 +4973,15 @@ setInterval(() => {
     </div>
   </div>
 </div>
+<div id="reminder-modal" class="modal-overlay hidden" style="z-index:10000">
+  <div class="modal" style="max-width:430px;text-align:center">
+    <div style="font-size:42px;margin-bottom:6px">⏰</div>
+    <h2 id="reminder-title" style="margin-bottom:6px">Reminder</h2>
+    <p id="reminder-body" style="font-size:15px;color:var(--text);line-height:1.6;margin:10px 0 24px"></p>
+    <button class="btn btn-primary btn-full" onclick="acknowledgeReminder()">Got it 👍</button>
+  </div>
+</div>
+
 <div id="quote-sheet"></div>
 <div id="partner-sheet"></div>
 <script src="/js/analytics.js"></script>
