@@ -8,11 +8,13 @@
 ═══════════════════════════════════════════════════════ */
 const AN_CONNECTED = ['Interested', 'Not interested', 'Callback'];
 const AN_OPEN_STAGES = ['new', 'contacted', 'meeting'];
-const AN_MEETING_STAGES = ['meeting', 'comarketing', 'referral', 'partner'];
 const AN_PARTNER_STAGES = ['comarketing', 'referral', 'partner'];
 const AN_STALE_DAYS = 14;
 const AN_DAY = 86400000;
+const AN_MEETING_TYPES = ['meeting', 'in_person'];
 let anCharts = {};
+let anMeetingFus = null;   // confirmed meeting/in-person follow-ups — the calendar source
+let anEstimate = null;     // AI estimate {meetings_set, partnerships, note} from call notes
 
 function dialGoal() {
   const v = parseInt(localStorage.getItem('pitchlog_dial_goal'), 10);
@@ -94,24 +96,30 @@ async function renderAnalytics() {
   anRenderDaily(vol, now, fromDials);
   anRenderHour(vol, fromDials);
   anRenderOutcomes(d30);
-  anRenderFunnel(window.__anContacts || null);
+  anMeetingFus = null;        // refetched by anLoadFollowUps below
+  anRenderFunnels();          // draw with what's cached now; loaders refine as they return
 
   anLoadContacts();
   anLoadFollowUps();
   anLoadSms();
+  anLoadEstimate();
 }
 
 async function anLoadFollowUps() {
   try {
-    const items = await inboxFetch('/api/follow-ups?status=pending&limit=500');
+    const items = await inboxFetch('/api/follow-ups?status=all&limit=500');
     if (!Array.isArray(items)) throw new Error('bad response');
     const now = new Date();
     const endToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const due = items.filter(f => new Date(f.scheduled_at) < endToday);
-    const overdue = items.filter(f => new Date(f.scheduled_at) <= now);
+    const pending = items.filter(f => f.status === 'pending');
+    const due = pending.filter(f => new Date(f.scheduled_at) < endToday);
+    const overdue = pending.filter(f => new Date(f.scheduled_at) <= now);
     anSet('an-due', due.length);
     anSet('an-due-sub', overdue.length ? overdue.length + ' overdue' : 'nothing overdue');
-  } catch (e) { anSet('an-due', '—'); anSet('an-due-sub', ''); }
+    // Confirmed meetings on the calendar (exclude AI 'suggested' drafts) — the funnel's real meeting count
+    anMeetingFus = items.filter(f => AN_MEETING_TYPES.includes(f.type) && (f.status === 'pending' || f.status === 'sent'));
+    anRenderFunnels();
+  } catch (e) { anSet('an-due', '—'); anSet('an-due-sub', ''); anMeetingFus = []; anRenderFunnels(); }
 }
 
 function anHeatPill(label, count, fg, bg) {
@@ -136,7 +144,7 @@ async function anLoadContacts() {
       anHeatPill('Cold', heat.Cold, 'var(--cold)', 'var(--cold-bg)');
     const stale = open.filter(c => { const ref = c.last_called || c.created_at; return ref && now - new Date(ref) > AN_STALE_DAYS * AN_DAY; });
     anSet('an-stale', stale.length);
-    anRenderFunnel(list);
+    anRenderFunnels();
   } catch (e) {
     anSet('an-hotnonext', '—'); anSet('an-stale', '—');
     const heatEl = document.getElementById('an-heat');
@@ -155,6 +163,34 @@ async function anLoadSms() {
     anSet('an-sms', Math.round(replied.size / texted.size * 100) + '%');
     anSet('an-sms-sub', replied.size + ' of ' + texted.size + ' texted replied');
   } catch (e) { anSet('an-sms', '—'); anSet('an-sms-sub', 'no SMS data yet'); }
+}
+
+/* AI estimate of meetings/partnerships hiding in call notes that were never
+   logged as a calendar meeting or a stage change. Cached per user per day so
+   it costs at most one cheap model call per day (re-runs if call count moves). */
+async function anLoadEstimate() {
+  try {
+    const uid = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : 'anon';
+    const key = 'pitchlog_funnel_est_' + uid;
+    const today = new Date().toISOString().slice(0, 10);
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) {}
+    if (cached && cached.date === today && Math.abs((cached.recCount || 0) - records.length) <= 5) {
+      anEstimate = cached.data; anRenderFunnels(); return;
+    }
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) return;
+    const r = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ type: 'funnel_estimate' })
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    anEstimate = data;
+    try { localStorage.setItem(key, JSON.stringify({ date: today, recCount: records.length, data })); } catch (e) {}
+    anRenderFunnels();
+  } catch (e) { /* estimate is best-effort — funnel still shows real numbers */ }
 }
 
 /* ── Charts ── */
@@ -252,27 +288,75 @@ function anRenderOutcomes(d30) {
   });
 }
 
-function anRenderFunnel(contacts) {
+function anRenderFunnels() {
+  anRenderFunnel();
+  anRenderWindowFunnels();
+}
+
+function anFunnelCell(label, val, base, prevLabel, estLine) {
+  const display = val == null ? '…' : val;
+  const sub = (typeof val === 'number' && typeof base === 'number' && base > 0)
+    ? Math.round(val / base * 100) + '% of ' + prevLabel.toLowerCase() : '';
+  return `<div style="flex:1;min-width:84px;text-align:center">
+      <div class="num" style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:var(--text)">${display}</div>
+      <div style="font-size:10.5px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-top:2px">${label}</div>
+      <div style="font-size:10.5px;color:var(--text3);margin-top:2px;min-height:13px">${sub}</div>
+      <div style="font-size:10.5px;color:var(--brand);margin-top:1px;min-height:13px">${estLine || ''}</div>
+    </div>`;
+}
+
+// All-time funnel. Meetings = confirmed calendar meetings (not contact stages);
+// partnerships = contacts at partner stages; both annotated with the AI estimate.
+function anRenderFunnel() {
   const el = document.getElementById('an-funnel');
   if (!el) return;
+  const contacts = window.__anContacts || null;
   const logged = records.length;
   const convos = records.filter(anIsConvo).length;
   const interested = records.filter(r => r.outcome === 'Interested').length;
-  const meetings = contacts ? contacts.filter(c => AN_MEETING_STAGES.includes(c.stage)).length : null;
+  const meetings = anMeetingFus == null ? null : anMeetingFus.length;
   const partners = contacts ? contacts.filter(c => AN_PARTNER_STAGES.includes(c.stage)).length : null;
-  const steps = [
-    ['Calls logged', logged, null], ['Conversations', convos, logged], ['Interested', interested, convos],
-    ['Meetings set', meetings, interested], ['Partnerships', partners, meetings]
+  const estMeet = anEstimate && anEstimate.meetings_set > 0 ? anEstimate.meetings_set : 0;
+  const estPart = anEstimate && anEstimate.partnerships > 0 ? anEstimate.partnerships : 0;
+  const cells = [
+    anFunnelCell('Calls logged', logged, null, '', ''),
+    anFunnelCell('Conversations', convos, logged, 'Calls logged', ''),
+    anFunnelCell('Interested', interested, convos, 'Conversations', ''),
+    anFunnelCell('Meetings set', meetings, interested, 'Interested', estMeet ? '+~' + estMeet + ' in notes' : ''),
+    anFunnelCell('Partnerships', partners, meetings, 'Meetings set', estPart ? '+~' + estPart + ' in notes' : '')
   ];
-  el.innerHTML = steps.map((s, i) => {
-    const val = s[1] === null ? '…' : s[1];
-    const sub = (typeof s[1] === 'number' && typeof s[2] === 'number' && s[2] > 0)
-      ? Math.round(s[1] / s[2] * 100) + '% of ' + steps[i - 1][0].toLowerCase() : '';
-    return (i ? '<div style="color:var(--text3);font-size:17px;align-self:center">›</div>' : '') +
-      `<div style="flex:1;min-width:88px;text-align:center">
-        <div class="num" style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:var(--text)">${val}</div>
-        <div style="font-size:10.5px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-top:2px">${s[0]}</div>
-        <div style="font-size:10.5px;color:var(--text3);margin-top:2px;min-height:13px">${sub}</div>
-      </div>`;
+  el.innerHTML = cells.map((c, i) => (i ? '<div style="color:var(--text3);font-size:17px;align-self:center">›</div>' : '') + c).join('');
+  const note = document.getElementById('an-funnel-note');
+  if (note) {
+    let txt = 'Meetings set = confirmed meetings on your calendar; partnerships = contacts at co-marketing / referral / partner stage.';
+    if (anEstimate && (estMeet || estPart)) txt += ' “~ in notes” = ' + (anEstimate.note || 'AI estimate from your call notes of activity not logged yet') + '.';
+    note.textContent = txt;
+  }
+}
+
+// Compact per-period funnels beneath the all-time one. Only the time-windowable
+// steps (calls → conversations → interested → meetings); partnerships have no
+// per-event timestamp, so they stay on the all-time funnel.
+function anRenderWindowFunnels() {
+  const el = document.getElementById('an-window-funnels');
+  if (!el) return;
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startWeek = new Date(startToday); startWeek.setDate(startToday.getDate() - startToday.getDay());  // Sunday
+  const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const wins = [['Today', startToday], ['This week', startWeek], ['This month', startMonth]];
+  const meetingsSince = start => anMeetingFus == null ? null
+    : anMeetingFus.filter(f => new Date(f.created_at || f.scheduled_at) >= start).length;
+  el.innerHTML = wins.map(([label, start]) => {
+    const cs = records.filter(r => new Date(r.created_at) >= start);
+    const cells = [['Calls', cs.length], ['Convos', cs.filter(anIsConvo).length],
+      ['Interested', cs.filter(r => r.outcome === 'Interested').length], ['Meetings', meetingsSince(start)]];
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:0.5px solid var(--border)">
+      <div style="width:74px;flex-shrink:0;font-size:11.5px;font-weight:700;color:var(--text2)">${label}</div>
+      <div style="flex:1;display:flex;align-items:center;gap:4px">${cells.map((c, i) =>
+        (i ? '<span style="color:var(--text3);font-size:12px">›</span>' : '') +
+        `<div style="flex:1;text-align:center"><span class="num" style="font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:16px;color:var(--text)">${c[1] == null ? '…' : c[1]}</span> <span style="font-size:10px;color:var(--text3)">${c[0]}</span></div>`
+      ).join('')}</div>
+    </div>`;
   }).join('');
 }

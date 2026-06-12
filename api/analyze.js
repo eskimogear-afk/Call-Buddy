@@ -258,6 +258,52 @@ ${emailTranscript || '(no transcript available — write a brief, generic but wa
       console.error('live_assist error:', e.message);
       return res.status(200).json({ say_now: '', objection: null, tip: '' });
     }
+  } else if (type === 'funnel_estimate') {
+    // Estimate meetings set / partnerships formed that live in the call notes
+    // but were never logged as a calendar meeting or a stage change. Cheap model,
+    // conservative counting; supplements the real funnel counts in Analytics.
+    const { data: calls } = await supabase
+      .from('calls')
+      .select('outcome, notes, next_step')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    const rows = (calls || []).filter(c => (c.notes && c.notes.trim()) || (c.next_step && c.next_step.trim()));
+    if (!rows.length) return res.status(200).json({ meetings_set: 0, partnerships: 0, note: 'Not enough call notes yet to estimate.' });
+    const digest = rows.slice(0, 150).map((c, i) =>
+      `${i + 1}. [${c.outcome || 'n/a'}] ${(c.notes || '').replace(/\s+/g, ' ').slice(0, 160)}${c.next_step ? ' | next: ' + c.next_step.replace(/\s+/g, ' ').slice(0, 90) : ''}`
+    ).join('\n');
+    try {
+      const ar = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 220,
+          system: [{ type: 'text', text: 'You estimate sales-funnel outcomes for a mortgage loan officer from their cold-call notes. Be conservative — only count clear, explicit signals. Output ONLY compact JSON.' }],
+          messages: [{ role: 'user', content: `From these ${rows.length} call notes, estimate two things that often go unlogged:
+- "meetings_set": how many calls resulted in a concrete meeting or appointment being agreed (a set time to meet, or a scheduled follow-up call at a specific time). A vague "I'll call back sometime" does NOT count.
+- "partnerships": how many indicate a co-marketing, referral, or repeat-partner relationship forming with a real-estate agent.
+Return ONLY JSON: {"meetings_set": <integer>, "partnerships": <integer>, "note": "<one short sentence like '~4 meetings and 1 partnership inferred from your notes'>"}.
+
+Call notes:
+${digest}` }]
+        })
+      });
+      const ad = await ar.json();
+      const raw = (ad.content || []).map(b => b.text || '').join('').trim();
+      let j; try { j = JSON.parse(raw.replace(/```json|```/g, '').trim()); } catch { j = {}; }
+      const clampInt = v => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 0 ? Math.min(n, rows.length) : 0; };
+      return res.status(200).json({
+        meetings_set: clampInt(j.meetings_set),
+        partnerships: clampInt(j.partnerships),
+        note: String(j.note || '').slice(0, 140),
+        sampled: rows.length
+      });
+    } catch (e) {
+      console.error('funnel_estimate error:', e.message);
+      return res.status(200).json({ meetings_set: 0, partnerships: 0, note: 'Estimate unavailable right now.' });
+    }
   } else if (type === 'coach' || type === 'ask') {
     // In-call Claude coaching: auto-assessment of the call, or a free-form
     // question answered grounded in the transcript.
