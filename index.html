@@ -402,6 +402,7 @@ tr:hover td{background:var(--bg2)}
 .spinner-dark{border-color:rgba(0,0,0,.15);border-top-color:var(--text)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .hidden{display:none!important}
+@keyframes copilotFlash{0%{background:var(--brand-light)}100%{background:transparent}}
 .founder-chip{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:700;letter-spacing:.3px;color:var(--warm);background:var(--warm-bg);border:1px solid var(--warm);padding:1px 7px;border-radius:99px;vertical-align:1px;white-space:nowrap}
 .plw-pulse{animation:plwPulse 1.3s ease-in-out 4}
 @keyframes plwPulse{0%,100%{box-shadow:0 0 0 0 rgba(91,163,247,0)}50%{box-shadow:0 0 0 10px rgba(91,163,247,.3)}}
@@ -1106,6 +1107,17 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <div id="consent-chip" class="hidden" style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;padding:10px 14px;border:1px solid var(--warm);background:var(--warm-bg);border-radius:var(--radius-sm);font-size:12.5px;color:var(--warm);line-height:1.5">
               <span>🎙️</span><span><strong>Recording.</strong> If they haven't heard it yet, open with: &ldquo;Just a heads-up — I'm on a recorded line.&rdquo;</span>
             </div>
+            <div id="copilot-card" class="hidden" style="margin-top:12px;border:1.5px solid var(--brand);background:linear-gradient(180deg,var(--brand-light),transparent);border-radius:var(--radius);padding:14px 16px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:10px;font-weight:800;letter-spacing:1px;color:var(--brand-mid)">💡 SAY THIS NOW</span>
+                <span id="copilot-objection" class="hidden" style="font-size:10px;font-weight:700;color:var(--warm);background:var(--warm-bg);border:1px solid var(--warm);padding:1px 8px;border-radius:99px"></span>
+              </div>
+              <div id="copilot-say" style="font-size:15px;line-height:1.5;color:var(--text);font-weight:500">Listening…</div>
+              <div id="copilot-tip" class="hidden" style="font-size:11.5px;color:var(--text3);margin-top:7px"></div>
+            </div>
+            <label style="display:none;align-items:center;gap:7px;margin-top:10px;font-size:12.5px;color:var(--text2);cursor:pointer" id="copilot-toggle-row">
+              <input type="checkbox" id="copilot-toggle" checked style="accent-color:var(--brand)"> 💡 Live coaching (Claude tells you what to say as you talk)
+            </label>
             <div class="rec-center">
               <button class="rec-btn idle" id="rec-btn" onclick="toggleRec()">
                 <svg id="rec-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
@@ -1981,6 +1993,45 @@ function toggleRec() {
   if (!isRecording) startRec(); else stopRec();
 }
 
+let copilotTimer = null, copilotLastLen = 0, copilotBusy = false;
+function startLiveAssist() {
+  copilotLastLen = 0;
+  const card = document.getElementById('copilot-card');
+  if (document.getElementById('copilot-toggle')?.checked) { card.classList.remove('hidden'); document.getElementById('copilot-say').textContent = 'Listening…'; }
+  if (copilotTimer) clearInterval(copilotTimer);
+  copilotTimer = setInterval(runLiveAssist, 6000);
+}
+function stopLiveAssist() {
+  if (copilotTimer) { clearInterval(copilotTimer); copilotTimer = null; }
+  document.getElementById('copilot-card')?.classList.add('hidden');
+  document.getElementById('copilot-toggle-row') && (document.getElementById('copilot-toggle-row').style.display = 'none');
+}
+async function runLiveAssist() {
+  if (!isRecording || copilotBusy) return;
+  const card = document.getElementById('copilot-card');
+  if (!document.getElementById('copilot-toggle')?.checked) { card.classList.add('hidden'); return; }
+  const t = (fullTranscript || '').trim();
+  if (t.length < 25 || t.length - copilotLastLen < 35) return; // wait for meaningful new speech
+  copilotLastLen = t.length;
+  copilotBusy = true;
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const r = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token}, body: JSON.stringify({ type:'live_assist', transcript: t }) });
+    const d = await r.json();
+    if (r.ok && d.say_now) {
+      card.classList.remove('hidden');
+      const sayEl = document.getElementById('copilot-say');
+      sayEl.textContent = d.say_now;
+      sayEl.style.animation = 'none'; void sayEl.offsetWidth; sayEl.style.animation = 'copilotFlash .5s ease';
+      const objEl = document.getElementById('copilot-objection');
+      if (d.objection) { objEl.textContent = '⚠ ' + d.objection; objEl.classList.remove('hidden'); } else objEl.classList.add('hidden');
+      const tipEl = document.getElementById('copilot-tip');
+      if (d.tip) { tipEl.textContent = '→ ' + d.tip; tipEl.classList.remove('hidden'); } else tipEl.classList.add('hidden');
+    }
+  } catch(e) { /* silent — coaching is best-effort */ }
+  copilotBusy = false;
+}
+
 function startRec() {
   if (!isPaidPlan() && (userProfile?.calls_this_month || 0) >= FREE_LIMIT) { showUpgradeModal(); return; }
   fullTranscript = '';
@@ -1998,6 +2049,8 @@ function startRec() {
     document.getElementById('rec-wave').style.display = 'flex';
     document.getElementById('live-tx-wrap').classList.remove('hidden');
     document.getElementById('consent-chip')?.classList.remove('hidden');
+    document.getElementById('copilot-toggle-row').style.display = 'flex';
+    startLiveAssist();
     timerInterval = setInterval(() => {
       seconds++;
       const m = Math.floor(seconds / 60), s = seconds % 60;
@@ -2009,6 +2062,7 @@ function startRec() {
 
 function stopRec() {
   isRecording = false;
+  stopLiveAssist();
   clearInterval(timerInterval);
   if (recognition) try { recognition.stop(); } catch(e) {}
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {

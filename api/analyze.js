@@ -230,6 +230,34 @@ Transcript:
 ${emailTranscript || '(no transcript available — write a brief, generic but warm follow-up based on the summary and next step above)'}`;
     // stash recipient email to return after the model call
     req._recipientEmail = recipientEmail;
+  } else if (type === 'live_assist') {
+    // Real-time in-call co-pilot: reads the rolling LIVE transcript (both sides,
+    // captured by the speaker mic) and tells the LO what to say next. Fast model.
+    const t = String(transcript || '').trim();
+    if (t.length < 12) return res.status(200).json({ say_now: '', objection: null, tip: '' });
+    try {
+      const ar = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 220,
+          system: [{ type: 'text', text: 'You are a live cold-call co-pilot for a mortgage loan officer. You read a LIVE, in-progress call transcript (both sides, unlabeled, possibly mid-sentence) and tell the LO what to say NEXT, fast, specific, natural. Mortgage programs in play: conventional, FHA, VA, jumbo, bank-statement, DSCR, hard money. Output ONLY compact JSON.', cache_control: { type: 'ephemeral' } }],
+          messages: [{ role: 'user', content: 'Live call transcript so far (between angle brackets):\n<<<' + t.slice(-1800) + '>>>\n\nBased on the MOST RECENT thing the other person said, return ONLY JSON: {"objection":"the concern/objection they just raised, or null","say_now":"the exact 1-2 sentence line the LO should say next, natural and specific to what was said; if they are still talking or it is small talk, give a short nudge like Let them finish then ask what is prompting the move","tip":"a 3-6 word cue, e.g. slow down ask why"}' }]
+        })
+      });
+      const ad = await ar.json();
+      const raw = (ad.content || []).map(b => b.text || '').join('').trim();
+      let j; try { j = JSON.parse(raw.replace(/```json|```/g, '').trim()); } catch { j = { say_now: '', objection: null, tip: '' }; }
+      return res.status(200).json({
+        objection: (j.objection && String(j.objection).toLowerCase() !== 'null') ? String(j.objection).slice(0, 120) : null,
+        say_now: String(j.say_now || '').slice(0, 400),
+        tip: String(j.tip || '').slice(0, 60)
+      });
+    } catch (e) {
+      console.error('live_assist error:', e.message);
+      return res.status(200).json({ say_now: '', objection: null, tip: '' });
+    }
   } else if (type === 'coach' || type === 'ask') {
     // In-call Claude coaching: auto-assessment of the call, or a free-form
     // question answered grounded in the transcript.
