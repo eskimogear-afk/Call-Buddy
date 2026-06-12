@@ -46,71 +46,80 @@ export default async function handler(req, res) {
   let transcriptPlaceholder = 'PENDING:unknown';
   let transcriptId = null;
 
+  const recordingBase = process.env.TWILIO_WEBHOOK_BASE_URL
+    ? process.env.TWILIO_WEBHOOK_BASE_URL.replace(/\/$/, '')
+    : `https://${req.headers.host}`;
+  const audioUrl = `${RecordingUrl}.mp3`;
+
+  // Download the recording from Twilio once (used by whichever STT engine runs)
+  let audioBuffer = null;
   try {
-    if (!process.env.ASSEMBLYAI_API_KEY) throw new Error('ASSEMBLYAI_API_KEY not configured');
-
-    const audioUrl = `${RecordingUrl}.mp3`;
-
-    // Download the recording from Twilio
     const twilioAudio = await fetch(audioUrl, {
-      headers: {
-        Authorization: `Basic ${Buffer.from(
-          `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
-        ).toString('base64')}`
-      }
+      headers: { Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')}` }
     });
     if (!twilioAudio.ok) throw new Error(`Twilio audio fetch failed: ${twilioAudio.status}`);
-    const audioBuffer = Buffer.from(await twilioAudio.arrayBuffer());
+    audioBuffer = Buffer.from(await twilioAudio.arrayBuffer());
+  } catch (e) {
+    console.error('Recording download failed:', e.message);
+    transcriptPlaceholder = `ERROR: ${e.message}`;
+  }
 
-    // Upload to AssemblyAI
-    const uploadRes = await fetch('https://api.assemblyai.com/v2/upload', {
-      method: 'POST',
-      headers: {
-        Authorization: process.env.ASSEMBLYAI_API_KEY,
-        'Content-Type': 'application/octet-stream'
-      },
-      body: audioBuffer
-    });
-    const uploadData = await uploadRes.json();
-    if (!uploadData.upload_url) throw new Error('AssemblyAI upload failed: ' + JSON.stringify(uploadData));
+  // ── PRIMARY: Deepgram. POST the audio with an async callback so this webhook
+  //    stays fast; Deepgram transcribes and POSTs the result to our callback. ──
+  if (audioBuffer && process.env.DEEPGRAM_API_KEY) {
+    try {
+      const cb = `${recordingBase}/api/assemblyai-webhook?dg=1&call_sid=${encodeURIComponent(CallSid || '')}`;
+      const dgUrl = `https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true&diarize=true&callback=${encodeURIComponent(cb)}`;
+      const dgRes = await fetch(dgUrl, {
+        method: 'POST',
+        headers: { Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`, 'Content-Type': 'audio/mpeg' },
+        body: audioBuffer
+      });
+      const dgData = await dgRes.json();
+      const reqId = dgData.request_id || dgData.requestId;
+      if (dgRes.ok && reqId) {
+        transcriptId = reqId;
+        transcriptPlaceholder = `PENDING:dg:${reqId}`;
+      } else {
+        throw new Error('Deepgram submit failed: ' + JSON.stringify(dgData).slice(0, 160));
+      }
+    } catch (e) {
+      console.error('Deepgram failed — falling back to AssemblyAI:', e.message);
+    }
+  }
 
-    // Submit transcription job
-    const recordingBase = process.env.TWILIO_WEBHOOK_BASE_URL
-      ? process.env.TWILIO_WEBHOOK_BASE_URL.replace(/\/$/, '')
-      : `https://${req.headers.host}`;
-    const webhookCallbackUrl = `${recordingBase}/api/assemblyai-webhook`;
-
-    const submitRes = await fetch('https://api.assemblyai.com/v2/transcript', {
-      method: 'POST',
-      headers: {
-        Authorization: process.env.ASSEMBLYAI_API_KEY,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        audio_url: uploadData.upload_url,
-        speaker_labels: true,
-        webhook_url: webhookCallbackUrl,
-        // Authenticate the callback so only AssemblyAI can post results
-        // (inert until AAI_WEBHOOK_SECRET is set in the environment).
-        ...(process.env.AAI_WEBHOOK_SECRET ? {
-          webhook_auth_header_name: 'x-aai-secret',
-          webhook_auth_header_value: process.env.AAI_WEBHOOK_SECRET
-        } : {})
-      })
-    });
-    const submitData = await submitRes.json();
-    if (!submitData.id) throw new Error('AssemblyAI submit failed: ' + JSON.stringify(submitData));
-
-    transcriptId = submitData.id;
-    transcriptPlaceholder = `PENDING:${transcriptId}`;
-  } catch (transcriptionErr) {
-    console.error('Transcription setup error (call will still be saved):', transcriptionErr);
-    transcriptPlaceholder = `ERROR: ${transcriptionErr.message}`;
+  // ── FALLBACK: AssemblyAI (only if Deepgram didn't start a job) ──
+  if (!transcriptId && audioBuffer && process.env.ASSEMBLYAI_API_KEY) {
+    try {
+      const uploadRes = await fetch('https://api.assemblyai.com/v2/upload', {
+        method: 'POST',
+        headers: { Authorization: process.env.ASSEMBLYAI_API_KEY, 'Content-Type': 'application/octet-stream' },
+        body: audioBuffer
+      });
+      const uploadData = await uploadRes.json();
+      if (!uploadData.upload_url) throw new Error('AssemblyAI upload failed: ' + JSON.stringify(uploadData));
+      const submitRes = await fetch('https://api.assemblyai.com/v2/transcript', {
+        method: 'POST',
+        headers: { Authorization: process.env.ASSEMBLYAI_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audio_url: uploadData.upload_url,
+          speaker_labels: true,
+          webhook_url: `${recordingBase}/api/assemblyai-webhook`,
+          ...(process.env.AAI_WEBHOOK_SECRET ? { webhook_auth_header_name: 'x-aai-secret', webhook_auth_header_value: process.env.AAI_WEBHOOK_SECRET } : {})
+        })
+      });
+      const submitData = await submitRes.json();
+      if (!submitData.id) throw new Error('AssemblyAI submit failed: ' + JSON.stringify(submitData));
+      transcriptId = submitData.id;
+      transcriptPlaceholder = `PENDING:${transcriptId}`;
+    } catch (e) {
+      console.error('AssemblyAI fallback failed:', e.message);
+      transcriptPlaceholder = `ERROR: ${e.message}`;
+    }
   }
 
   // Always insert the call record regardless of transcription success
   try {
-    const audioUrl = `${RecordingUrl}.mp3`;
     const { error: insertErr } = await supabase.from('calls').insert({
       call_sid: CallSid,
       recording_sid: RecordingSid,
@@ -119,7 +128,7 @@ export default async function handler(req, res) {
       to_number: To,
       duration: parseInt(RecordingDuration) || 0,
       transcript: transcriptPlaceholder,
-      notes: transcriptId ? '' : 'Transcription could not be started — check AssemblyAI API key',
+      notes: transcriptId ? '' : 'Transcription could not be started',
       heat_score: null,
       sentiment: null,
       next_step: '',

@@ -43,7 +43,7 @@ export default async function handler(req, res) {
 
   // Shared-secret auth: only AssemblyAI (which echoes the header we set when
   // submitting the transcript) can post. Inert until AAI_WEBHOOK_SECRET is set.
-  if (process.env.AAI_WEBHOOK_SECRET && req.headers['x-aai-secret'] !== process.env.AAI_WEBHOOK_SECRET) {
+  if (req.query.dg !== '1' && process.env.AAI_WEBHOOK_SECRET && req.headers['x-aai-secret'] !== process.env.AAI_WEBHOOK_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -52,40 +52,48 @@ export default async function handler(req, res) {
   if (!process.env.ASSEMBLYAI_API_KEY)
     return res.status(500).json({ error: 'ASSEMBLYAI_API_KEY not configured' });
 
-  console.log('AAI webhook body:', JSON.stringify(req.body || {}).slice(0, 300));
-  const { transcript_id, status } = req.body || {};
-  if (!transcript_id) return res.status(400).json({ error: 'No transcript_id' });
-
+  console.log('STT webhook:', req.query.dg === '1' ? 'deepgram' : 'assemblyai', JSON.stringify(req.body || {}).slice(0, 200));
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-  if (status === 'error') {
-    await supabase.from('calls')
-      .update({ transcript: 'ERROR: Transcription failed', notes: 'Transcription failed' })
-      .eq('transcript', `PENDING:${transcript_id}`);
-    return res.status(200).json({ ok: true });
+  // Resolve the transcript text + the target call from EITHER STT source.
+  let transcriptText = '';
+  let callRecord = null;
+
+  if (req.query.dg === '1') {
+    // Deepgram async callback: the POST body IS the transcription result.
+    const alt = req.body?.results?.channels?.[0]?.alternatives?.[0] || {};
+    transcriptText = String(alt.paragraphs?.transcript || alt.transcript || '').trim();
+    const callSid = req.query.call_sid || '';
+    if (callSid) {
+      const { data } = await supabase.from('calls')
+        .select('id, to_number, from_number, user_id')
+        .eq('call_sid', callSid).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      callRecord = data || null;
+    }
+  } else {
+    // AssemblyAI callback
+    const { transcript_id, status } = req.body || {};
+    if (!transcript_id) return res.status(400).json({ error: 'No transcript_id' });
+    if (status === 'error') {
+      await supabase.from('calls').update({ transcript: 'ERROR: Transcription failed', notes: 'Transcription failed' }).eq('transcript', `PENDING:${transcript_id}`);
+      return res.status(200).json({ ok: true });
+    }
+    if (status !== 'completed') return res.status(200).json({ status: 'ignored' });
+    const aaiRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcript_id}`, { headers: { Authorization: process.env.ASSEMBLYAI_API_KEY } });
+    const aaiData = await aaiRes.json();
+    transcriptText = aaiData.text || '';
+    const { data } = await supabase.from('calls').select('id, to_number, from_number, user_id').eq('transcript', `PENDING:${transcript_id}`).maybeSingle();
+    callRecord = data || null;
   }
 
-  if (status !== 'completed') return res.status(200).json({ status: 'ignored' });
+  if (!callRecord) { console.error('STT webhook: no matching call row'); return res.status(200).json({ status: 'no_call' }); }
 
   try {
-    // Fetch transcript from AssemblyAI
-    const aaiRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcript_id}`, {
-      headers: { Authorization: process.env.ASSEMBLYAI_API_KEY }
-    });
-    const aaiData = await aaiRes.json();
-    const transcriptText = aaiData.text || '';
-
-    // Find the matching call record
-    const { data: callRecord } = await supabase
-      .from('calls')
-      .select('id, to_number, from_number, user_id')
-      .eq('transcript', `PENDING:${transcript_id}`)
-      .single();
 
     if (!transcriptText) {
       await supabase.from('calls')
         .update({ transcript: '', notes: 'No speech detected' })
-        .eq('transcript', `PENDING:${transcript_id}`);
+        .eq('id', callRecord.id);
       // Still save the contact via carrier lookup so unanswered calls get a name
       const silentPhone = callRecord?.to_number || callRecord?.from_number || null;
       if (silentPhone && callRecord?.user_id) {
@@ -220,7 +228,7 @@ ${transcriptText}`
         next_step: analysis.nextStep || '',
         contact_id: contact?.id || null
       })
-      .eq('transcript', `PENDING:${transcript_id}`)
+      .eq('id', callRecord.id)
       .select('id');
     console.log('calls update:', JSON.stringify({ matched: updatedRows?.length ?? null, error: updateErr?.message || null }));
 
@@ -240,11 +248,10 @@ ${transcriptText}`
       } catch {
         scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       }
-      const { data: callRow } = await supabase.from('calls').select('id').eq('transcript', transcriptText).eq('user_id', userId).order('created_at', { ascending: false }).limit(1).single();
       await supabase.from('follow_ups').insert({
         user_id: userId,
         contact_id: contact.id,
-        call_id: callRow?.id || null,
+        call_id: callRecord.id,
         type,
         title: String(fu.title || analysis.nextStep || 'Follow up').slice(0, 140),
         message: String(fu.message || analysis.nextStep || '').slice(0, 300),
