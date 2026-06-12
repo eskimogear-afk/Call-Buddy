@@ -3965,10 +3965,46 @@ async function fcMarkDone() {
 // Find AI suggestions awaiting review; prefer the one tied to callId
 /* ── In-app reminders: pop up on any screen when a reminder is due, require ack ── */
 let reminderPollTimer = null, reminderShowing = false;
+async function syncMeetingReminders() {
+  if (!currentUser) return;
+  try {
+    const nowMs = Date.now();
+    const { data: meetings } = await db.from('follow_ups')
+      .select('id, title, message, scheduled_at, contacts(name)')
+      .eq('type', 'meeting').neq('status', 'done')
+      .gte('scheduled_at', new Date(nowMs - 60 * 60 * 1000).toISOString())
+      .lte('scheduled_at', new Date(nowMs + 8 * 24 * 3600 * 1000).toISOString());
+    if (!meetings || !meetings.length) return;
+    const { data: existing } = await db.from('reminders').select('source_id, reminder_window').not('source_id', 'is', null);
+    const have = new Set((existing || []).map(r => r.source_id + '|' + r.reminder_window));
+    const windows = [{ key: '6h', ms: 6 * 3600 * 1000, label: '6 hours' }, { key: '2h15m', ms: (2 * 3600 + 15 * 60) * 1000, label: '2 hours 15 min' }];
+    const rows = [];
+    for (const m of meetings) {
+      const start = new Date(m.scheduled_at).getTime();
+      const whenStr = new Date(start).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const who = m.contacts?.name && m.contacts.name.toLowerCase() !== 'unknown' ? ' with ' + m.contacts.name : '';
+      for (const w of windows) {
+        if (have.has(m.id + '|' + w.key)) continue;
+        const fireAt = start - w.ms;
+        if (fireAt < nowMs - 24 * 3600 * 1000) continue; // don't backfill ancient windows
+        rows.push({
+          user_id: currentUser.id, source_id: m.id, reminder_window: w.key,
+          fire_at: new Date(fireAt).toISOString(),
+          title: '⏰ Meeting in ' + w.label,
+          body: (m.title || ('Meeting' + who)) + ' — ' + whenStr + '.',
+          channel: 'app'
+        });
+      }
+    }
+    if (rows.length) await db.from('reminders').upsert(rows, { onConflict: 'source_id,reminder_window', ignoreDuplicates: true });
+  } catch (e) { console.warn('meeting reminder sync failed', e); }
+}
+
 function startReminderPolling() {
+  syncMeetingReminders();
   checkReminders();
   if (reminderPollTimer) clearInterval(reminderPollTimer);
-  reminderPollTimer = setInterval(checkReminders, 45000);
+  reminderPollTimer = setInterval(() => { syncMeetingReminders(); checkReminders(); }, 60000);
 }
 async function checkReminders() {
   if (!currentUser || reminderShowing) return;
