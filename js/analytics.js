@@ -199,9 +199,13 @@ function anRenderDaily(vol, now, fromDials) {
 }
 
 function anRenderHour(vol, fromDials) {
+  // Average over the last 30 days. The dials query is already capped to 30 days;
+  // this also bounds the logged-calls fallback, which otherwise loads all time.
+  const cut = Date.now() - 30 * AN_DAY;
+  const rows = vol.filter(v => v.t.getTime() >= cut);
   const hours = []; for (let h = 8; h <= 18; h++) hours.push(h);
   const total = hours.map(() => 0), ok = hours.map(() => 0);
-  vol.forEach(v => {
+  rows.forEach(v => {
     const i = hours.indexOf(v.t.getHours());
     if (i === -1) return;
     total[i]++; if (v.ok) ok[i]++;
@@ -219,10 +223,11 @@ function anRenderHour(vol, fromDials) {
   const n = total.reduce((a, b) => a + b, 0);
   let best = -1;
   rates.forEach((r, i) => { if (r !== null && total[i] >= 3 && r > 0 && (best === -1 || r > rates[best])) best = i; });
-  const src = fromDials ? 'answer rate by hour, last 30 days' : 'connect rate by hour, all logged calls';
+  const metric = fromDials ? 'Answer rate by hour' : 'Connect rate by hour';
+  const base = metric + ', averaged over the last 30 days.';
   anSet('an-hour-note', (n < 30 || best === -1)
-    ? src.charAt(0).toUpperCase() + src.slice(1) + '. Gets sharper as you log more dials.'
-    : src.charAt(0).toUpperCase() + src.slice(1) + '. Best window so far: around ' + labels[best].replace('a', ' am').replace('p', ' pm') + '.');
+    ? base + ' Gets sharper as you log more calls.'
+    : base + ' Best window so far: around ' + labels[best].replace('a', ' am').replace('p', ' pm') + '.');
 }
 
 function anRenderOutcomes(d30) {
