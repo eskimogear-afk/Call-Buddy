@@ -1999,7 +1999,7 @@ function startLiveAssist() {
   const card = document.getElementById('copilot-card');
   if (document.getElementById('copilot-toggle')?.checked) { card.classList.remove('hidden'); document.getElementById('copilot-say').textContent = 'Listening…'; }
   if (copilotTimer) clearInterval(copilotTimer);
-  copilotTimer = setInterval(runLiveAssist, 6000);
+  copilotTimer = setInterval(runLiveAssist, 3500);
 }
 function stopLiveAssist() {
   if (copilotTimer) { clearInterval(copilotTimer); copilotTimer = null; }
@@ -2011,12 +2011,12 @@ async function runLiveAssist() {
   const card = document.getElementById('copilot-card');
   if (!document.getElementById('copilot-toggle')?.checked) { card.classList.add('hidden'); return; }
   const t = (fullTranscript || '').trim();
-  if (t.length < 25 || t.length - copilotLastLen < 35) return; // wait for meaningful new speech
+  if (t.length < 20 || t.length - copilotLastLen < 18) return; // wait for meaningful new speech
   copilotLastLen = t.length;
   copilotBusy = true;
   try {
     const { data: { session } } = await db.auth.getSession();
-    const r = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token}, body: JSON.stringify({ type:'live_assist', transcript: t }) });
+    const r = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token}, body: JSON.stringify({ type:'live_assist', transcript: t, lo_rates: loRatesString() }) });
     const d = await r.json();
     if (r.ok && d.say_now) {
       card.classList.remove('hidden');
@@ -3998,6 +3998,7 @@ async function draftNextAction(callId, name) {
 /* ═══════════════════════════════════════════════════════
    MORTGAGE PRICING TOOL
 ═══════════════════════════════════════════════════════ */
+function loRatesString(){ try { return Object.values(PR_PROGRAMS).map(p=>p.label+' '+p.rate+'%').join(', '); } catch(e){ return ''; } }
 const PR_PROGRAMS = {
   conventional: { label: 'Conventional', rate: 6.625, maxLtv: 97, io: false },
   fha:          { label: 'FHA',          rate: 6.25,  maxLtv: 96.5, io: false },

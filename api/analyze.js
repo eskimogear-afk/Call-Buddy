@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     }
   } catch (e) { console.error('rate-limit check failed (allowing):', e.message); }
 
-  const { transcript, type, name, summary, painPoints, nextSteps, call_id, phone, force, question } = req.body || {};
+  const { transcript, type, name, summary, painPoints, nextSteps, call_id, phone, force, question, lo_rates } = req.body || {};
 
   /* ── Prospect research: AI web-search brief on the realtor behind a number ── */
   if (type === 'research') {
@@ -241,9 +241,9 @@ ${emailTranscript || '(no transcript available — write a brief, generic but wa
         headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 220,
-          system: [{ type: 'text', text: 'You are a live cold-call co-pilot for a mortgage loan officer. You read a LIVE, in-progress call transcript (both sides, unlabeled, possibly mid-sentence) and tell the LO what to say NEXT, fast, specific, natural. Mortgage programs in play: conventional, FHA, VA, jumbo, bank-statement, DSCR, hard money. Output ONLY compact JSON.', cache_control: { type: 'ephemeral' } }],
-          messages: [{ role: 'user', content: 'Live call transcript so far (between angle brackets):\n<<<' + t.slice(-1800) + '>>>\n\nBased on the MOST RECENT thing the other person said, return ONLY JSON: {"objection":"the concern/objection they just raised, or null","say_now":"the exact 1-2 sentence line the LO should say next, natural and specific to what was said; if they are still talking or it is small talk, give a short nudge like Let them finish then ask what is prompting the move","tip":"a 3-6 word cue, e.g. slow down ask why"}' }]
+          max_tokens: 170,
+          system: [{ type: 'text', text: "You are an elite mortgage loan officer's LIVE call co-pilot. You hear a call in progress and tell the LO EXACTLY what to say next: specific, confident, grounded in real mortgage knowledge. You know the programs cold: Conventional (640+ credit, as little as 3% down, PMI drops at 80% LTV), FHA (down to ~580, 3.5% down, easier qualifying but lifetime MIP), VA (eligible veterans, 0 down, no PMI), USDA (rural, 0 down), Jumbo (above conforming limits, 700+ and reserves), Bank Statement (self-employed, qualify on 12-24mo deposits not tax returns), DSCR (investors, qualify on the property's rent not personal income), Hard Money (fix-and-flip, asset-based, fast). You know rate vs APR (APR = note rate plus closing costs annualized; quote APR for transparency like the big lenders), temporary buydowns (2-1, 3-2-1), discount points, DTI and LTV. You handle objections like a closer who has heard them a thousand times. Use the LO's actual rate sheet when given. Be FAST, SPECIFIC, name the program and the number, give the exact words. Output ONLY compact JSON.", cache_control: { type: 'ephemeral' } }],
+          messages: [{ role: 'user', content: (lo_rates ? ("LO's rate sheet today: " + String(lo_rates).slice(0,300) + "\\n\\n") : '') + 'LIVE call transcript (most recent words last):\n<<<' + t.slice(-900) + '>>>\n\nBased on the LATEST thing the other person said, what should the LO say RIGHT NOW? ONLY JSON: {"objection":"their concern in 2-5 words, or null","say_now":"the exact 1-2 sentences to say next: specific, name a program/rate/number when it helps, confident and natural","tip":"3-6 word coaching cue"}' }]
         })
       });
       const ad = await ar.json();

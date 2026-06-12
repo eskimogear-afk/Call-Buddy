@@ -267,7 +267,7 @@ function showOverageToast(u) {
    to Deepgram for live transcription, and every ~6s asks Claude what to say
    next — shown in a floating card. All best-effort: any failure leaves the
    call working normally. */
-let dgStop = null, dgTranscript = '', dgAssistTimer = null, dgLastLen = 0, dgAssistBusy = false;
+let dgStop = null, dgTranscript = '', dgAssistTimer = null, dgLastLen = 0, dgAssistBusy = false, dgLastFire = 0;
 
 async function startDialerCopilot(call) {
   try {
@@ -297,7 +297,7 @@ async function startDialerCopilot(call) {
       ws.send(i16.buffer);
     };
     ws.onmessage = (m) => {
-      try { const j = JSON.parse(m.data); const t = j.channel?.alternatives?.[0]?.transcript; if (t && t.trim()) dgTranscript += t.trim() + ' '; } catch (e) {}
+      try { const j = JSON.parse(m.data); const t = j.channel?.alternatives?.[0]?.transcript; if (t && t.trim()) { dgTranscript += t.trim() + ' '; scheduleDialerAssist(); } } catch (e) {}
     };
     ws.onerror = (e) => console.warn('copilot ws error', e);
 
@@ -306,10 +306,9 @@ async function startDialerCopilot(call) {
       try { ac.close(); } catch (e) {}
       try { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'CloseStream' })); ws.close(); } catch (e) {}
     };
-    dgTranscript = ''; dgLastLen = 0;
+    dgTranscript = ''; dgLastLen = 0; dgLastFire = 0;
     const card = document.getElementById('dialer-copilot');
     if (card) { card.classList.remove('hidden'); document.getElementById('dco-say').textContent = 'Listening to your call…'; }
-    dgAssistTimer = setInterval(runDialerAssist, 6000);
   } catch (e) { console.warn('copilot start failed', e); }
 }
 
@@ -319,13 +318,19 @@ function stopDialerCopilot() {
   document.getElementById('dialer-copilot')?.classList.add('hidden');
 }
 
+// Debounced: fires ~1.1s after the speaker pauses (event-driven, not a slow poll)
+function scheduleDialerAssist() {
+  if (dgAssistTimer) clearTimeout(dgAssistTimer);
+  dgAssistTimer = setTimeout(runDialerAssist, 1100);
+}
 async function runDialerAssist() {
   const t = (dgTranscript || '').trim();
-  if (dgAssistBusy || t.length < 25 || t.length - dgLastLen < 35) return;
-  dgLastLen = t.length; dgAssistBusy = true;
+  const now = Date.now();
+  if (dgAssistBusy || t.length < 20 || t.length - dgLastLen < 18 || now - dgLastFire < 2500) return;
+  dgLastFire = now; dgLastLen = t.length; dgAssistBusy = true;
   try {
     const { data: { session } } = await db.auth.getSession();
-    const r = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify({ type: 'live_assist', transcript: t }) });
+    const r = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify({ type: 'live_assist', transcript: t, lo_rates: (typeof loRatesString === 'function' ? loRatesString() : '') }) });
     const d = await r.json();
     if (r.ok && d.say_now) {
       const say = document.getElementById('dco-say'); if (say) say.textContent = d.say_now;
