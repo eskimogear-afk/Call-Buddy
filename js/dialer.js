@@ -147,7 +147,7 @@ async function makeCall() {
     // Kick off pre-call intelligence while it rings (no-op if app lacks the handler)
     window.dispatchEvent(new CustomEvent('cb:call-started', { detail: { number } }));
 
-    currentCall.on('accept', () => setStatus('📞 Connected'));
+    currentCall.on('accept', () => { setStatus('📞 Connected'); startDialerCopilot(currentCall); });
     currentCall.on('disconnect', endCallUI);
     currentCall.on('cancel', endCallUI);
     currentCall.on('reject', endCallUI);
@@ -171,6 +171,7 @@ function restoreDialerUI() {
 }
 
 function endCallUI() {
+  stopDialerCopilot();
   const h = document.getElementById('btn-hangup');
   const c = document.getElementById('btn-call');
   if (h) h.style.display = 'none';
@@ -259,4 +260,80 @@ function showOverageToast(u) {
   t.innerHTML = '⚠️ <strong>You\'ve used your included ' + (u.included || 0).toLocaleString() + ' dialer minutes this month.</strong><br><span style="color:var(--text2)">Calls keep working — additional minutes bill at $0.03/min on your next invoice.</span>';
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 9000);
+}
+
+/* ════════════ Live in-call co-pilot for the browser dialer ════════════
+   Captures BOTH sides of the call (Twilio local + remote streams), streams
+   to Deepgram for live transcription, and every ~6s asks Claude what to say
+   next — shown in a floating card. All best-effort: any failure leaves the
+   call working normally. */
+let dgStop = null, dgTranscript = '', dgAssistTimer = null, dgLastLen = 0, dgAssistBusy = false;
+
+async function startDialerCopilot(call) {
+  try {
+    const streams = [];
+    try { const l = call.getLocalStream && call.getLocalStream(); if (l) streams.push(l); } catch (e) {}
+    try { const r = call.getRemoteStream && call.getRemoteStream(); if (r) streams.push(r); } catch (e) {}
+    if (!streams.length) { console.warn('copilot: no call streams'); return; }
+
+    const { data: { session } } = await db.auth.getSession();
+    const tr = await fetch('/api/contacts?resource=dg-token', { headers: { Authorization: 'Bearer ' + session.access_token } });
+    const tok = await tr.json();
+    if (!tok.token) { console.warn('copilot: no token'); return; }
+
+    const ws = new WebSocket('wss://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&interim_results=false&encoding=linear16&sample_rate=16000&channels=1&endpointing=300', ['token', tok.token]);
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ac = new AC({ sampleRate: 16000 });
+    try { await ac.resume(); } catch (e) {}
+    const proc = ac.createScriptProcessor(4096, 1, 1);
+    streams.forEach(st => { try { ac.createMediaStreamSource(st).connect(proc); } catch (e) {} });
+    const mute = ac.createGain(); mute.gain.value = 0;
+    proc.connect(mute); mute.connect(ac.destination);
+    proc.onaudioprocess = (e) => {
+      if (ws.readyState !== 1) return;
+      const f = e.inputBuffer.getChannelData(0);
+      const i16 = new Int16Array(f.length);
+      for (let i = 0; i < f.length; i++) { const x = Math.max(-1, Math.min(1, f[i])); i16[i] = x < 0 ? x * 32768 : x * 32767; }
+      ws.send(i16.buffer);
+    };
+    ws.onmessage = (m) => {
+      try { const j = JSON.parse(m.data); const t = j.channel?.alternatives?.[0]?.transcript; if (t && t.trim()) dgTranscript += t.trim() + ' '; } catch (e) {}
+    };
+    ws.onerror = (e) => console.warn('copilot ws error', e);
+
+    dgStop = () => {
+      try { proc.disconnect(); mute.disconnect(); } catch (e) {}
+      try { ac.close(); } catch (e) {}
+      try { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'CloseStream' })); ws.close(); } catch (e) {}
+    };
+    dgTranscript = ''; dgLastLen = 0;
+    const card = document.getElementById('dialer-copilot');
+    if (card) { card.classList.remove('hidden'); document.getElementById('dco-say').textContent = 'Listening to your call…'; }
+    dgAssistTimer = setInterval(runDialerAssist, 6000);
+  } catch (e) { console.warn('copilot start failed', e); }
+}
+
+function stopDialerCopilot() {
+  if (dgAssistTimer) { clearInterval(dgAssistTimer); dgAssistTimer = null; }
+  if (dgStop) { try { dgStop(); } catch (e) {} dgStop = null; }
+  document.getElementById('dialer-copilot')?.classList.add('hidden');
+}
+
+async function runDialerAssist() {
+  const t = (dgTranscript || '').trim();
+  if (dgAssistBusy || t.length < 25 || t.length - dgLastLen < 35) return;
+  dgLastLen = t.length; dgAssistBusy = true;
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const r = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify({ type: 'live_assist', transcript: t }) });
+    const d = await r.json();
+    if (r.ok && d.say_now) {
+      const say = document.getElementById('dco-say'); if (say) say.textContent = d.say_now;
+      const obj = document.getElementById('dco-obj');
+      if (obj) { if (d.objection) { obj.textContent = '⚠ ' + d.objection; obj.classList.remove('hidden'); } else obj.classList.add('hidden'); }
+      const tip = document.getElementById('dco-tip');
+      if (tip) { if (d.tip) { tip.textContent = '→ ' + d.tip; tip.classList.remove('hidden'); } else tip.classList.add('hidden'); }
+    }
+  } catch (e) {}
+  dgAssistBusy = false;
 }

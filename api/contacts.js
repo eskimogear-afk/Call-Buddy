@@ -116,6 +116,27 @@ export default async function handler(req, res) {
     // ── Do Not Call list (folded into this endpoint to stay within Vercel's
     //    12-function limit). Triggered by resource=dnc on query or body. ──
     // ── Dialer minute metering (plan bundles, team pooling, overage) ────────
+    // ── Short-lived Deepgram token for browser live-streaming (dialer co-pilot).
+    //    Mints a 30-min, usage:write-only key from the Owner key so the real
+    //    key never reaches the browser. ──
+    if (req.query.resource === 'dg-token') {
+      if (!process.env.DEEPGRAM_API_KEY || !process.env.DEEPGRAM_PROJECT_ID)
+        return res.status(503).json({ error: 'Live transcription not configured' });
+      try {
+        const r = await fetch(`https://api.deepgram.com/v1/projects/${process.env.DEEPGRAM_PROJECT_ID}/keys`, {
+          method: 'POST',
+          headers: { Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comment: `pitchlog-live-${String(user.id).slice(0, 8)}`, scopes: ['usage:write'], time_to_live_in_seconds: 1800 })
+        });
+        const d = await r.json();
+        if (!d.key) { console.error('dg-token mint failed:', JSON.stringify(d).slice(0, 160)); return res.status(502).json({ error: 'Could not start live transcription' }); }
+        return res.status(200).json({ token: d.key, expires_in: 1800 });
+      } catch (e) {
+        console.error('dg-token error:', e.message);
+        return res.status(502).json({ error: 'Could not start live transcription' });
+      }
+    }
+
     if (req.query.resource === 'usage') {
       const period = new Date().toISOString().slice(0, 8) + '01';
 

@@ -4903,6 +4903,14 @@ setInterval(() => {
   </div>
 </div>
 
+<div id="dialer-copilot" class="hidden" style="position:fixed;bottom:20px;right:20px;z-index:9998;width:340px;max-width:calc(100vw - 40px);border:1.5px solid var(--brand);background:var(--bg2);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.5);padding:15px 17px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <span style="font-size:10px;font-weight:800;letter-spacing:1px;color:var(--brand-mid)">💡 SAY THIS NOW</span>
+    <span id="dco-obj" class="hidden" style="font-size:10px;font-weight:700;color:var(--warm);background:var(--warm-bg);border:1px solid var(--warm);padding:1px 8px;border-radius:99px"></span>
+  </div>
+  <div id="dco-say" style="font-size:14.5px;line-height:1.5;color:var(--text);font-weight:500">Listening to your call…</div>
+  <div id="dco-tip" class="hidden" style="font-size:11.5px;color:var(--text3);margin-top:7px"></div>
+</div>
 <div id="quote-sheet"></div>
 <div id="partner-sheet"></div>
 <script src="/js/analytics.js"></script>
