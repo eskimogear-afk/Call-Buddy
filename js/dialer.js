@@ -297,7 +297,7 @@ async function startDialerCopilot(call) {
       ws.send(i16.buffer);
     };
     ws.onmessage = (m) => {
-      try { const j = JSON.parse(m.data); const t = j.channel?.alternatives?.[0]?.transcript; if (t && t.trim()) { dgTranscript += t.trim() + ' '; scheduleDialerAssist(); } } catch (e) {}
+      try { const j = JSON.parse(m.data); const t = j.channel?.alternatives?.[0]?.transcript; if (t && t.trim()) { dgTranscript += t.trim() + ' '; const tx = document.getElementById('dco-transcript'); if (tx) { tx.textContent = dgTranscript.slice(-500).trim(); tx.scrollTop = tx.scrollHeight; } scheduleDialerAssist(); } } catch (e) {}
     };
     ws.onerror = (e) => console.warn('copilot ws error', e);
 
@@ -308,7 +308,7 @@ async function startDialerCopilot(call) {
     };
     dgTranscript = ''; dgLastLen = 0; dgLastFire = 0;
     const card = document.getElementById('dialer-copilot');
-    if (card) { card.classList.remove('hidden'); document.getElementById('dco-say').textContent = 'Listening to your call…'; }
+    if (card) { card.classList.remove('hidden'); const tx0 = document.getElementById('dco-transcript'); if (tx0) tx0.textContent = 'Listening to your call…'; const sy0 = document.getElementById('dco-say'); if (sy0) sy0.textContent = 'Coaching appears here as you talk.'; }
   } catch (e) { console.warn('copilot start failed', e); }
 }
 
@@ -333,7 +333,7 @@ async function runDialerAssist() {
     const r = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify({ type: 'live_assist', transcript: t, lo_rates: (typeof loRatesString === 'function' ? loRatesString() : '') }) });
     const d = await r.json();
     if (r.ok && d.say_now) {
-      const say = document.getElementById('dco-say'); if (say) say.textContent = d.say_now;
+      const say = document.getElementById('dco-say'); if (say) { say.textContent = d.say_now; const sug = say.closest('.dco-suggestion'); if (sug) { sug.style.animation = 'none'; void sug.offsetWidth; sug.style.animation = 'dcoFlash .6s ease'; } }
       const obj = document.getElementById('dco-obj');
       if (obj) { if (d.objection) { obj.textContent = '⚠ ' + d.objection; obj.classList.remove('hidden'); } else obj.classList.add('hidden'); }
       const tip = document.getElementById('dco-tip');
