@@ -43,6 +43,38 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  // ── PUBLIC: live mortgage-rate drivers from FRED (no auth — shown on the
+  //    marketing site). Cached at the edge so we don't hammer FRED. ──
+  if (req.query.resource === 'rates') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (!process.env.FRED_API_KEY) return res.status(503).json({ error: 'Rates not configured' });
+    const SERIES = [
+      { key: 'treasury10', id: 'DGS10', units: '', label: '10-Year Treasury', unit: '%', note: 'Mortgage rates track this most closely' },
+      { key: 'mortgage30', id: 'MORTGAGE30US', units: '', label: '30-Yr Fixed Avg', unit: '%', note: 'Freddie Mac national average (weekly)' },
+      { key: 'fedfunds', id: 'DFEDTARU', units: '', label: 'Fed Funds Rate', unit: '%', note: 'The Fed\\'s target — set at FOMC meetings' },
+      { key: 'cpi', id: 'CPIAUCSL', units: 'pc1', label: 'Inflation (CPI)', unit: '% YoY', note: 'Hotter inflation pushes rates up' },
+      { key: 'unemployment', id: 'UNRATE', units: '', label: 'Unemployment', unit: '%', note: 'A weaker job market tends to ease rates' },
+      { key: 'jobs', id: 'PAYEMS', units: 'chg', label: 'Jobs Added', unit: 'K', note: 'Strong hiring tends to push rates up' }
+    ];
+    try {
+      const out = await Promise.all(SERIES.map(async (s) => {
+        const u = s.units ? `&units=${s.units}` : '';
+        const r = await fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=${s.id}&api_key=${process.env.FRED_API_KEY}&file_type=json&sort_order=desc&limit=2${u}`);
+        const d = await r.json();
+        const obs = (d.observations || []).filter(o => o.value !== '.');
+        const cur = obs[0], prev = obs[1];
+        const val = cur ? parseFloat(cur.value) : null;
+        const pval = prev ? parseFloat(prev.value) : null;
+        return { key: s.key, label: s.label, unit: s.unit, note: s.note, value: val, date: cur?.date || null, change: (val != null && pval != null) ? Math.round((val - pval) * 100) / 100 : null };
+      }));
+      res.setHeader('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600');
+      return res.status(200).json({ indicators: out, fetched_at: new Date().toISOString() });
+    } catch (e) {
+      console.error('rates error:', e.message);
+      return res.status(502).json({ error: 'Rate data unavailable' });
+    }
+  }
+
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY)
     return res.status(500).json({ error: 'Supabase not configured' });
 
