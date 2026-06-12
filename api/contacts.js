@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     const SERIES = [
       { key: 'treasury10', id: 'DGS10', units: '', label: '10-Year Treasury', unit: '%', note: 'Mortgage rates track this most closely' },
       { key: 'mortgage30', id: 'MORTGAGE30US', units: '', label: '30-Yr Fixed Avg', unit: '%', note: 'Freddie Mac national average (weekly)' },
-      { key: 'fedfunds', id: 'DFEDTARU', units: '', label: 'Fed Funds Rate', unit: '%', note: 'The Fed\\'s target — set at FOMC meetings' },
+      { key: 'fedfunds', id: 'DFEDTARU', units: '', label: 'Fed Funds Rate', unit: '%', note: 'The Fed funds target — set at FOMC meetings' },
       { key: 'cpi', id: 'CPIAUCSL', units: 'pc1', label: 'Inflation (CPI)', unit: '% YoY', note: 'Hotter inflation pushes rates up' },
       { key: 'unemployment', id: 'UNRATE', units: '', label: 'Unemployment', unit: '%', note: 'A weaker job market tends to ease rates' },
       { key: 'jobs', id: 'PAYEMS', units: 'chg', label: 'Jobs Added', unit: 'K', note: 'Strong hiring tends to push rates up' }
