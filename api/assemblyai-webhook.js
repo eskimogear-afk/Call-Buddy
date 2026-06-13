@@ -116,6 +116,11 @@ export default async function handler(req, res) {
       return res.status(200).json({ status: 'no_speech' });
     }
 
+    // Phase 1 — save the transcript IMMEDIATELY so it shows up the moment Deepgram
+    // returns, instead of waiting on the (slower) Claude analysis below. The AI
+    // summary / outcome / heat then fill in a few seconds later via the update at the end.
+    await supabase.from('calls').update({ transcript: transcriptText }).eq('id', callRecord.id);
+
     // Analyse with Claude
     let analysis = { name: 'Unknown', company: '', notes: '', heatScore: 'Cold', sentiment: 'neutral', nextStep: '', outcome: '' };
 
@@ -123,7 +128,7 @@ export default async function handler(req, res) {
       try {
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
         const aiResponse = await anthropic.messages.create({
-          model: 'claude-sonnet-4-6',
+          model: 'claude-haiku-4-5',
           max_tokens: 1024,
           system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
           messages: [{

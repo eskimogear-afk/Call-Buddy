@@ -2795,7 +2795,7 @@ function schedulePendingRefresh() {
       openIds.forEach(id => { const c = document.getElementById(id); if (c) { c.classList.add('open'); fillLazyTranscript(id.replace(/^cc-/, '')); } });
     }
     if (after === 0) { clearInterval(pendingPollTimer); pendingPollTimer = null; }
-  }, 10000);
+  }, 5000);
 }
 
 function planLabelLong() {
