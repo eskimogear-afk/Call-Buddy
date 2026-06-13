@@ -2305,9 +2305,15 @@ function buildTable(recs) {
     const hasRealName = display !== fmtPhone(phone);
     const heat = r.heat_score || '';
     const pending = String(r.transcript || '').startsWith('PENDING:');
+    // Real transcription finishes in ~1-2 min. A call still PENDING after 10 min
+    // didn't complete — show it honestly instead of a forever "transcribing" spinner.
+    const pendingAgeMin = pending ? (Date.now() - new Date(r.created_at).getTime()) / 60000 : 0;
+    const stalePending = pending && pendingAgeMin > 10;
     const transcript = pending ? '' : String(r.transcript || '');
     const rawSummary = r.ai_summary || r.notes || '';
-    const summary = pending && !rawSummary ? '⏳ AI is transcribing this call…' : rawSummary;
+    const summary = pending && !stalePending && !rawSummary ? '⏳ AI is transcribing this call…'
+      : stalePending && !rawSummary ? '⚠️ Transcription didn’t finish — the recording is saved'
+      : rawSummary;
     const next = r.next_steps || r.next_step || '';
     const sentiment = r.sentiment === 'positive' ? '😊 Positive' : r.sentiment === 'negative' ? '😕 Negative' : r.sentiment ? '😐 Neutral' : '';
     const initials = (hasRealName ? display.split(/\s+/).map(w => w[0]).slice(0, 2).join('') : (phone ? String(phone).replace(/\D/g, '').slice(-2) : '?')).toUpperCase();
@@ -2693,7 +2699,10 @@ function renderLog() {
 // appear on their own — no manual refresh. Stops once nothing is pending.
 let pendingPollTimer = null;
 function countPending() {
-  return records.filter(r => String(r.transcript || '').startsWith('PENDING:')).length;
+  // Only poll for calls genuinely still transcribing (created < 10 min ago).
+  // Older PENDING rows never finished, so polling them forever is pointless.
+  const now = Date.now();
+  return records.filter(r => String(r.transcript || '').startsWith('PENDING:') && (now - new Date(r.created_at).getTime()) < 10 * 60000).length;
 }
 function schedulePendingRefresh() {
   if (countPending() === 0) {
