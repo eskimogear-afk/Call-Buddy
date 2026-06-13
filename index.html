@@ -1693,9 +1693,9 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 </div>
 
 <!-- ══ AI FOLLOW-UP CONFIRM MODAL ══════════════════════════════════════════ -->
-<div id="fc-modal" class="modal-overlay hidden" onclick="bgClose(event,'fc-modal')">
+<div id="fc-modal" class="modal-overlay hidden" onclick="fcBgClose(event)">
   <div class="modal" style="max-width:500px">
-    <button class="modal-close" onclick="closeModal('fc-modal')">×</button>
+    <button class="modal-close" onclick="fcClose()">×</button>
     <h2 id="fc-title">🤖 PitchLog suggests a follow-up</h2>
     <p class="modal-sub" id="fc-sub">Based on your call — is this correct?</p>
     <div id="fc-loading" class="hidden" style="text-align:center;padding:28px 0;color:var(--text2)"><div class="spinner spinner-dark" style="margin:0 auto 12px"></div>Analyzing the call and picking the best next move…</div>
@@ -4131,6 +4131,18 @@ async function fcDismiss() {
     el.textContent = e.message; el.classList.remove('hidden');
   }
 }
+// Closing a SUGGESTION popup (the ✕ or tapping outside) now dismisses it for good
+// so it stops re-appearing on every app open. Manual create/edit modals just close.
+async function fcClose() {
+  const cur = fcCurrent;
+  closeModal('fc-modal');
+  fcCurrent = null;
+  if (cur && cur.mode === 'suggest' && cur.row && cur.row.id) {
+    try { await fuFetch('/api/follow-ups?id=' + cur.row.id, { method: 'DELETE' }); } catch (e) {}
+    if (typeof loadFollowUps === 'function') loadFollowUps();
+  }
+}
+function fcBgClose(e) { if (e.target.id === 'fc-modal') fcClose(); }
 async function fcMarkDone() {
   if (!fcCurrent) return;
   try {
