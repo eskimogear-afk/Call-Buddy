@@ -1210,7 +1210,10 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Call log</h1>
             <p style="font-size:14px;color:var(--text2);margin-top:4px">Every prospect, all in one place.</p>
           </div>
-          <button class="btn btn-outline" onclick="exportAll()">Export all to Excel</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline" id="retry-stuck-btn" onclick="retryAllStuck(this)" style="display:none"></button>
+            <button class="btn btn-outline" onclick="exportAll()">Export all to Excel</button>
+          </div>
         </div>
         <div class="table-card"><div id="log-table"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div></div>
       </div>
@@ -2348,6 +2351,7 @@ function buildTable(recs) {
         <div class="cc-actions">
           ${phone && !isDNC(phone) ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="callAgain('${escAttr(phone)}')">📞 Call again</button>` : ''}
           ${phone ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="followUpFromCall('${r.contact_id || ''}','${escAttr(display)}','${escAttr(phone)}')">⏰ Schedule follow-up</button>` : ''}
+          ${pending && r.recording_url ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="retranscribeCall('${r.id}', this)">🔁 Re-transcribe</button>` : ''}
           ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="openCoach('${r.id}','${escAttr(display)}')">🧠 Ask Claude</button>` : ''}
           ${!pending ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftEmail('${r.id}','${escAttr(display)}')">✉️ Draft email</button>` : ''}
           ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftNextAction('${r.id}','${escAttr(display)}')">📅 Schedule next</button>` : ''}
@@ -2693,6 +2697,74 @@ function refreshDashboard() {
 function renderLog() {
   document.getElementById('log-table').innerHTML = buildTable(records);
   schedulePendingRefresh();
+  updateRetryStuckButton();
+}
+
+// ── Re-transcribe: recover calls whose transcription never finished ──
+function stuckCalls() {
+  const now = Date.now();
+  return records.filter(r => String(r.transcript || '').startsWith('PENDING:') && (now - new Date(r.created_at).getTime()) > 10 * 60000);
+}
+function updateRetryStuckButton() {
+  const btn = document.getElementById('retry-stuck-btn');
+  if (!btn) return;
+  const n = stuckCalls().length;
+  if (n) { btn.style.display = ''; btn.textContent = `🔁 Retry ${n} stuck transcription${n > 1 ? 's' : ''}`; btn.disabled = false; }
+  else btn.style.display = 'none';
+}
+async function postRetranscribe(callId) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) throw new Error('Not signed in');
+  const r = await fetch('/api/twilio-recording?retranscribe=1', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+    body: JSON.stringify({ call_id: callId })
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Re-transcribe failed');
+  return d;
+}
+async function retranscribeCall(callId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Submitting…'; }
+  try {
+    await postRetranscribe(callId);
+    if (btn) btn.textContent = '⏳ Transcribing…';
+    pollRetranscribe([callId], 0);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '🔁 Re-transcribe'; }
+    alert('Re-transcribe failed: ' + e.message);
+  }
+}
+async function retryAllStuck(btn) {
+  const ids = stuckCalls().map(r => r.id);
+  if (!ids.length) return;
+  if (btn) { btn.disabled = true; btn.textContent = `⏳ Submitting ${ids.length}…`; }
+  let ok = 0;
+  for (const id of ids) {
+    try { await postRetranscribe(id); ok++; } catch (e) { console.warn('retry failed for', id, e.message); }
+  }
+  if (btn) btn.textContent = `⏳ Transcribing ${ok}…`;
+  pollRetranscribe(ids, 0);
+}
+// Poll until the re-submitted calls finish (Deepgram + webhook ~1-2 min). These
+// rows are older than the auto-refresh window, so we watch them explicitly here.
+async function pollRetranscribe(ids, tries) {
+  const rerender = () => {
+    const openIds = [...document.querySelectorAll('.call-card.open')].map(el => el.id);
+    renderLog();
+    if (!document.getElementById('panel-dashboard')?.classList.contains('hidden')) refreshDashboard();
+    openIds.forEach(id => { const c = document.getElementById(id); if (c) { c.classList.add('open'); fillLazyTranscript(id.replace(/^cc-/, '')); } });
+  };
+  if (tries > 20) { await loadRecords(); rerender(); return; } // ~2.5 min cap
+  setTimeout(async () => {
+    await loadRecords();
+    const stillPending = ids.filter(id => {
+      const rec = records.find(r => r.id === id);
+      return rec && String(rec.transcript || '').startsWith('PENDING:');
+    });
+    rerender();
+    if (stillPending.length) pollRetranscribe(stillPending, tries + 1);
+  }, 8000);
 }
 
 // While any call is still transcribing, quietly poll so its details/recording

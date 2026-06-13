@@ -9,6 +9,57 @@ export default async function handler(req, res) {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY)
     return res.status(500).json({ error: 'Supabase not configured' });
 
+  // ── Re-transcribe an existing call (user-triggered recovery). Authenticated by
+  //    the user's Supabase JWT, NOT a Twilio signature — so it runs before the
+  //    signature gate. Re-downloads the saved recording and re-submits to Deepgram
+  //    with the async callback; the webhook then completes it like a fresh call. ──
+  if (req.query.retranscribe === '1') {
+    if (!process.env.DEEPGRAM_API_KEY) return res.status(500).json({ error: 'Deepgram not configured' });
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    if (!token) return res.status(401).json({ error: 'Not signed in' });
+    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    const { data: { user } = {}, error: authErr } = await sb.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+    const callId = (req.body && req.body.call_id) || req.query.call_id;
+    if (!callId) return res.status(400).json({ error: 'call_id required' });
+    const { data: call } = await sb.from('calls')
+      .select('id, recording_url, call_sid, user_id').eq('id', callId).eq('user_id', user.id).maybeSingle();
+    if (!call) return res.status(404).json({ error: 'Call not found' });
+    if (!call.recording_url) return res.status(400).json({ error: 'No recording saved for this call' });
+    // download the recording with Twilio auth
+    let audio;
+    try {
+      const a = await fetch(call.recording_url, {
+        headers: { Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')}` }
+      });
+      if (!a.ok) throw new Error('recording fetch ' + a.status);
+      audio = Buffer.from(await a.arrayBuffer());
+    } catch (e) {
+      return res.status(502).json({ error: 'Could not fetch recording: ' + e.message });
+    }
+    // resubmit to Deepgram → its async callback hits the (now-fixed) webhook
+    const rbase = process.env.TWILIO_WEBHOOK_BASE_URL
+      ? process.env.TWILIO_WEBHOOK_BASE_URL.replace(/\/$/, '')
+      : `https://${req.headers.host}`;
+    const cb = `${rbase}/api/assemblyai-webhook?dg=1&call_sid=${encodeURIComponent(call.call_sid || '')}`;
+    const dgUrl = `https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true&punctuate=true&diarize=true&callback=${encodeURIComponent(cb)}`;
+    let reqId;
+    try {
+      const dgRes = await fetch(dgUrl, {
+        method: 'POST',
+        headers: { Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`, 'Content-Type': 'audio/mpeg' },
+        body: audio
+      });
+      const dgData = await dgRes.json();
+      reqId = dgData.request_id || dgData.requestId;
+      if (!dgRes.ok || !reqId) throw new Error('Deepgram submit: ' + JSON.stringify(dgData).slice(0, 160));
+    } catch (e) {
+      return res.status(502).json({ error: 'Deepgram submit failed: ' + e.message });
+    }
+    await sb.from('calls').update({ transcript: `PENDING:dg:${reqId}` }).eq('id', call.id);
+    return res.status(200).json({ ok: true, request_id: reqId });
+  }
+
   // Validate Twilio signature against the URL exactly as requested — req.url preserves
   // the original encoding (Twilio normalizes %3A back to ':' etc., so rebuilding the
   // query string with URLSearchParams produces a different string and fails validation)
