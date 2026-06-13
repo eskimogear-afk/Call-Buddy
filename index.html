@@ -1402,7 +1402,10 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Inbox</h1>
             <p style="font-size:14px;color:var(--text2);margin-top:4px">Two-way texting with your leads.</p>
           </div>
-          <button class="btn btn-outline" onclick="loadInbox()" style="font-size:13px">↻ Refresh</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="openCompose()" style="font-size:13px">✏️ New message</button>
+            <button class="btn btn-outline" onclick="loadInbox()" style="font-size:13px">↻ Refresh</button>
+          </div>
         </div>
         <div id="inbox-threads"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div>
         <div id="inbox-thread-view" class="hidden">
@@ -1662,6 +1665,27 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       </div>
     </div>
     <div id="email-error" class="alert alert-error hidden"></div>
+  </div>
+</div>
+
+<!-- ══ NEW MESSAGE (COMPOSE) MODAL ═════════════════════════════════════════ -->
+<div id="compose-modal" class="modal-overlay hidden" onclick="bgClose(event,'compose-modal')">
+  <div class="modal" style="max-width:480px">
+    <button class="modal-close" onclick="closeModal('compose-modal')">×</button>
+    <h2>✏️ New message</h2>
+    <p class="modal-sub">Start a text with a lead through your PitchLog number.</p>
+    <div id="compose-alert" class="alert alert-error hidden"></div>
+    <div class="form-group"><label>Contact <span style="color:var(--text3);font-weight:400">— or just type a number below</span></label>
+      <select id="compose-contact" onchange="composePickContact()"><option value="">Select a contact…</option></select>
+    </div>
+    <div class="form-group"><label>To</label>
+      <input type="tel" id="compose-phone" placeholder="(555) 123-4567" oninput="composePhoneChanged()">
+      <div id="compose-dnc" class="hidden" style="font-size:12.5px;color:var(--danger);font-weight:600;margin-top:6px">🚫 This number is on your Do Not Call list.</div>
+    </div>
+    <div class="form-group"><label>Message</label>
+      <textarea id="compose-body" placeholder="Hi, just following up…" style="height:96px;font-family:inherit;line-height:1.5"></textarea>
+    </div>
+    <button class="btn btn-primary btn-full" id="compose-send" onclick="composeSend()">Send text</button>
   </div>
 </div>
 
@@ -4971,6 +4995,77 @@ async function sendThreadMessage() {
   }
   btn.disabled = false;
   input.focus();
+}
+
+/* ── Compose a brand-new text (no existing thread needed) ── */
+let composeContactId = null;
+function openCompose() {
+  composeContactId = null;
+  const sel = document.getElementById('compose-contact');
+  const fill = () => {
+    sel.innerHTML = '<option value="">Select a contact…</option>' +
+      contactsCache.filter(c => c.phone).map(c => `<option value="${c.id}" data-phone="${escAttr(c.phone)}">${esc(displayName(c.name, c.phone))} — ${esc(fmtPhone(c.phone))}</option>`).join('');
+  };
+  fill();
+  if (!contactsCache.length) {
+    db.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return;
+      fetch('/api/contacts', { headers: { Authorization: 'Bearer ' + session.access_token } })
+        .then(r => r.json()).then(data => { contactsCache = data || []; fill(); }).catch(() => {});
+    });
+  }
+  document.getElementById('compose-phone').value = '';
+  document.getElementById('compose-body').value = '';
+  document.getElementById('compose-alert').classList.add('hidden');
+  document.getElementById('compose-dnc').classList.add('hidden');
+  document.getElementById('compose-modal').classList.remove('hidden');
+}
+function composePickContact() {
+  const sel = document.getElementById('compose-contact');
+  const opt = sel.options[sel.selectedIndex];
+  composeContactId = sel.value || null;
+  const phone = opt ? opt.getAttribute('data-phone') : '';
+  if (phone) { document.getElementById('compose-phone').value = fmtPhone(phone); composePhoneChanged(); }
+}
+function composePhoneChanged() {
+  document.getElementById('compose-dnc').classList.toggle('hidden', !isDNC(document.getElementById('compose-phone').value));
+}
+function toE164(p) {
+  const raw = String(p || '').trim();
+  const d = raw.replace(/\D/g, '');
+  if (d.length === 11 && d[0] === '1') return '+' + d;
+  if (d.length === 10) return '+1' + d;
+  if (raw.startsWith('+') && d.length >= 8) return '+' + d;
+  return '';
+}
+async function composeSend() {
+  const alertEl = document.getElementById('compose-alert');
+  alertEl.classList.add('hidden');
+  const to = toE164(document.getElementById('compose-phone').value);
+  const body = document.getElementById('compose-body').value.trim();
+  if (!to) { alertEl.textContent = 'Enter a valid phone number.'; alertEl.classList.remove('hidden'); return; }
+  if (!body) { alertEl.textContent = 'Type a message to send.'; alertEl.classList.remove('hidden'); return; }
+  if (isDNC(to)) { alertEl.textContent = 'That number is on your Do Not Call list — remove it from the DNC list first if you really mean to text it.'; alertEl.classList.remove('hidden'); return; }
+  const btn = document.getElementById('compose-send');
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    const saved = await inboxFetch('/api/twilio-sms', {
+      method: 'POST',
+      body: JSON.stringify({ to, body, contact_id: composeContactId })
+    });
+    if (saved) inboxCache.push(saved);
+    closeModal('compose-modal');
+    openThread(to);
+    if (composeContactId) {
+      const c = contactsCache.find(x => x.id === composeContactId);
+      if (c) document.getElementById('thread-name').textContent = displayName(c.name, to);
+    }
+  } catch (e) {
+    alertEl.textContent = 'Failed to send: ' + (e.message || e);
+    alertEl.classList.remove('hidden');
+  }
+  btn.disabled = false; btn.textContent = label;
 }
 
 async function updateInboxBadge() {
