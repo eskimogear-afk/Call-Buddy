@@ -2294,7 +2294,7 @@ const AVATAR_COLORS = { Hot: '#DC2626', Warm: '#D97706', Cold: '#3B82F6' };
 
 function buildTable(recs) {
   if (!recs.length) return `<div class="empty-state"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="margin:0 auto 12px;display:block;color:var(--text3)"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.77 9.11 19.79 19.79 0 01.7 6.48A2 2 0 012.68 4h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 11.1a16 16 0 006 6l1.06-1.06a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>No calls logged yet. Use the dialer or hit "New call" to get started.</div>`;
-  return recs.map(r => {
+  return recs.map((r, idx) => {
     // Rows come from two flows: browser recorder (prospect_name/outcome/ai_summary)
     // and the dialer pipeline (to_number/heat_score/notes/transcript). Dialer
     // calls keep the person's name on the linked contact, so fall back to it.
@@ -2336,12 +2336,14 @@ function buildTable(recs) {
         </div>
         ${r.recording_url ? `<div class="cc-field" style="margin-bottom:6px"><b>Recording</b></div>
         <div id="rec-${r.id}" style="margin-bottom:14px"><button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="playRecording('${r.id}', this)">▶ Play recording</button></div>` : ''}
-        ${transcript ? `<div class="cc-field" style="margin-bottom:6px"><b>Transcript</b></div><div class="cc-transcript">${esc(transcript)}</div>` : ''}
+        ${transcript ? (idx === 0
+          ? `<div class="cc-field" style="margin-bottom:6px"><b>Transcript</b></div><div class="cc-transcript">${esc(transcript)}</div>`
+          : `<div class="cc-field" style="margin-bottom:6px"><b>Transcript</b></div><div class="cc-transcript" data-lazy="1"><span style="color:var(--text3)">Expand to load transcript…</span></div>`) : ''}
         <div class="cc-actions">
           ${phone && !isDNC(phone) ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="callAgain('${escAttr(phone)}')">📞 Call again</button>` : ''}
           ${phone ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="followUpFromCall('${r.contact_id || ''}','${escAttr(display)}','${escAttr(phone)}')">⏰ Schedule follow-up</button>` : ''}
           ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="openCoach('${r.id}','${escAttr(display)}')">🧠 Ask Claude</button>` : ''}
-          ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftEmail('${r.id}','${escAttr(display)}')">✉️ Draft email</button>` : ''}
+          ${!pending ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftEmail('${r.id}','${escAttr(display)}')">✉️ Draft email</button>` : ''}
           ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftNextAction('${r.id}','${escAttr(display)}')">📅 Schedule next</button>` : ''}
           <button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="priceFromCall('${r.id}','${hasRealName ? escAttr(display) : ''}')">💲 Quote</button>
           ${phone && !isDNC(phone) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="markDoNotCall('${escAttr(phone)}')">🚫 Do Not Call</button>` : ''}
@@ -2354,7 +2356,23 @@ function buildTable(recs) {
 }
 
 function toggleCallDetail(id) {
-  document.getElementById('cc-' + id)?.classList.toggle('open');
+  const card = document.getElementById('cc-' + id);
+  if (!card) return;
+  card.classList.toggle('open');
+  if (card.classList.contains('open')) fillLazyTranscript(id);
+}
+
+// Older calls render their transcript lazily — fill it from the in-memory
+// records the first time the card is expanded (no extra network call).
+function fillLazyTranscript(id) {
+  const card = document.getElementById('cc-' + id);
+  if (!card) return;
+  const box = card.querySelector('.cc-transcript[data-lazy="1"]');
+  if (!box || box.dataset.filled) return;
+  const rec = records.find(r => r.id === id);
+  const t = rec ? String(rec.transcript || '') : '';
+  box.textContent = (t && !t.startsWith('PENDING:')) ? t : '';
+  box.dataset.filled = '1';
 }
 
 async function playRecording(callId, btn) {
@@ -2473,7 +2491,7 @@ function followUpFromCall(contactId, name, phone) {
 /* ═══════════════════════════════════════════════════════
    AI FOLLOW-UP EMAIL DRAFT
 ═══════════════════════════════════════════════════════ */
-let emailCurrentCallId = null, emailCurrentName = '';
+let emailCurrentCallId = null, emailCurrentName = '', emailCurrentFallbackEmail = '';
 let coachCallId = null, coachName = '';
 function chip(label, color){ return `<span style="display:inline-block;font-size:11px;font-weight:700;color:${color};background:${color}1f;padding:2px 9px;border-radius:99px">${label}</span>`; }
 
@@ -2541,9 +2559,10 @@ async function askCoach() {
   document.getElementById(aId).scrollIntoView({block:'end'});
 }
 
-async function draftEmail(callId, name) {
+async function draftEmail(callId, name, fallbackEmail) {
   emailCurrentCallId = callId; emailCurrentName = name || '';
-  document.getElementById('email-sub').textContent = name ? `Drafted from your call with ${name}.` : 'Drafted from your call transcript.';
+  if (fallbackEmail !== undefined) emailCurrentFallbackEmail = fallbackEmail || '';
+  document.getElementById('email-sub').textContent = callId ? (name ? `Drafted from your call with ${name}.` : 'Drafted from your call transcript.') : 'Drafted from this contact — edit anything before you send.';
   document.getElementById('email-loading').classList.remove('hidden');
   document.getElementById('email-fields').classList.add('hidden');
   document.getElementById('email-error').classList.add('hidden');
@@ -2554,11 +2573,11 @@ async function draftEmail(callId, name) {
     const r = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
-      body: JSON.stringify({ type: 'email', call_id: callId })
+      body: JSON.stringify({ type: 'email', call_id: callId, name: emailCurrentName })
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Draft failed');
-    document.getElementById('email-to').value = d.to || '';
+    document.getElementById('email-to').value = d.to || emailCurrentFallbackEmail || '';
     document.getElementById('email-subject').value = d.subject || 'Following up on our call';
     document.getElementById('email-body').value = d.body || '';
     document.getElementById('email-loading').classList.add('hidden');
@@ -2570,6 +2589,15 @@ async function draftEmail(callId, name) {
     err.classList.remove('hidden');
   }
 }
+
+// Draft an email straight from a contact row. Grounds it in the contact's most
+// recent completed call if there is one; otherwise drafts from the contact's name.
+function draftEmailForContact(contactId, name) {
+  const c = contactsCache.find(x => x.id === contactId);
+  const call = records.find(r => r.contact_id === contactId && !String(r.transcript || '').startsWith('PENDING:') && (r.transcript || r.notes));
+  draftEmail(call ? call.id : null, name || (c ? displayName(c.name, c.phone) : ''), c?.email || '');
+}
+
 function openEmailClient() {
   const to = encodeURIComponent(document.getElementById('email-to').value || '');
   const subject = encodeURIComponent(document.getElementById('email-subject').value || '');
@@ -2643,6 +2671,7 @@ function refreshDashboard() {
   document.getElementById('st-int').textContent = records.filter(r => r.heat_score === 'Hot' || r.outcome === 'Interested').length;
   document.getElementById('st-cb').textContent = records.filter(r => r.heat_score === 'Warm' || r.outcome === 'Callback').length;
   document.getElementById('dash-table').innerHTML = buildTable(records.slice(0, 8));
+  schedulePendingRefresh();
   // Load overdue follow-ups count from API
   db.auth.getSession().then(({ data: { session } }) => {
     if (!session) return;
@@ -2657,6 +2686,35 @@ function refreshDashboard() {
 
 function renderLog() {
   document.getElementById('log-table').innerHTML = buildTable(records);
+  schedulePendingRefresh();
+}
+
+// While any call is still transcribing, quietly poll so its details/recording
+// appear on their own — no manual refresh. Stops once nothing is pending.
+let pendingPollTimer = null;
+function countPending() {
+  return records.filter(r => String(r.transcript || '').startsWith('PENDING:')).length;
+}
+function schedulePendingRefresh() {
+  if (countPending() === 0) {
+    if (pendingPollTimer) { clearInterval(pendingPollTimer); pendingPollTimer = null; }
+    return;
+  }
+  if (pendingPollTimer) return; // already watching
+  pendingPollTimer = setInterval(async () => {
+    const before = countPending();
+    await loadRecords();
+    const after = countPending();
+    if (after !== before) {
+      const openIds = [...document.querySelectorAll('.call-card.open')].map(el => el.id);
+      const dash = document.getElementById('panel-dashboard');
+      const log = document.getElementById('panel-log');
+      if (dash && !dash.classList.contains('hidden')) refreshDashboard();
+      if (log && !log.classList.contains('hidden')) renderLog();
+      openIds.forEach(id => { const c = document.getElementById(id); if (c) { c.classList.add('open'); fillLazyTranscript(id.replace(/^cc-/, '')); } });
+    }
+    if (after === 0) { clearInterval(pendingPollTimer); pendingPollTimer = null; }
+  }, 10000);
 }
 
 function planLabelLong() {
@@ -3381,6 +3439,7 @@ function renderContacts() {
           <td style="padding:10px 14px;color:var(--text2)">${c.call_count||0}</td>
           <td style="padding:10px 14px;color:var(--text2);font-size:13px">${nfu}</td>
           <td style="padding:10px 14px">
+            <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="draftEmailForContact('${c.id}','${escAttr(displayName(c.name, c.phone))}')">✉️ Email</button>
             <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="openContactFollowUp('${c.id}','${escAttr(displayName(c.name, c.phone))}')">Follow-up</button>
             <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="openFundedModal('${c.id}','${escAttr(displayName(c.name, c.phone))}')">💰 Funded</button>
             <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="deleteContact('${c.id}')">Delete</button>
