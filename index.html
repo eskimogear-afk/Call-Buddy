@@ -1280,7 +1280,10 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Pipeline</h1>
             <p style="font-size:14px;color:var(--text2);margin-top:4px">Your prospect pipeline.</p>
           </div>
-          <button class="btn btn-primary" onclick="openAddContactModal()">+ Add contact</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline" onclick="suggestVisibleCities()" title="Guess a city for shown contacts that don't have one yet, from their area code (you verify each)">📍 Suggest cities</button>
+            <button class="btn btn-primary" onclick="openAddContactModal()">+ Add contact</button>
+          </div>
         </div>
         <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
           <input id="contact-search" type="text" placeholder="Search name, company, phone..." oninput="renderContacts()"
@@ -3508,6 +3511,60 @@ function sortContacts(rows) {
   return arr;
 }
 
+function cityCell(c) {
+  if (c._cityLoading) return '<span style="font-size:12px;color:var(--text3)">…</span>';
+  if (c.city_status === 'confirmed' && c.city) return `<span style="font-size:13px">📍 ${esc(c.city)}</span>`;
+  if (c.city_suggested && c.city_status === 'suggested') {
+    return `<span style="display:inline-flex;align-items:center;gap:5px">
+      <span style="font-size:13px;color:var(--text2)">${esc(c.city_suggested)}?</span>
+      <button class="btn btn-ghost" title="Correct" style="font-size:13px;padding:2px 7px;color:#16a34a" onclick="confirmCity('${c.id}', true)">✓</button>
+      <button class="btn btn-ghost" title="Wrong" style="font-size:13px;padding:2px 7px;color:var(--danger)" onclick="confirmCity('${c.id}', false)">✕</button>
+    </span>`;
+  }
+  if (c.city_status === 'denied') return `<button class="btn btn-ghost" style="font-size:12px;padding:3px 8px;color:var(--text3)" onclick="suggestCity('${c.id}', true)">↻ retry</button>`;
+  return `<button class="btn btn-ghost" style="font-size:12px;padding:4px 9px" onclick="suggestCity('${c.id}')">📍 Suggest</button>`;
+}
+
+async function suggestCity(id, force) {
+  const c = contactsCache.find(x => x.id === id);
+  if (!c) return;
+  c._cityLoading = true; renderContacts();
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const r = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify({ type: 'city_suggest', contact_id: id, force: !!force }) });
+    const d = await r.json();
+    if (r.ok) { c.city_suggested = d.city || null; c.city_status = d.status || 'suggested'; if (d.status === 'confirmed') c.city = d.city; }
+  } catch (e) { /* leave as-is */ }
+  c._cityLoading = false; renderContacts();
+}
+
+async function confirmCity(id, accept) {
+  const c = contactsCache.find(x => x.id === id);
+  if (!c) return;
+  if (accept) { c.city = c.city_suggested; c.city_status = 'confirmed'; } else { c.city_status = 'denied'; }
+  renderContacts();
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const body = accept ? { id, city: c.city, city_status: 'confirmed' } : { id, city_status: 'denied' };
+    await fetch('/api/contacts', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify(body) });
+  } catch (e) { /* optimistic; cache already updated */ }
+}
+
+// Pair up to 20 currently-shown, un-paired contacts with a suggested city (sequential,
+// stops on rate-limit/error). The user then verifies each with the inline ✓ / ✕.
+async function suggestVisibleCities() {
+  const search = (document.getElementById('contact-search')?.value || '').toLowerCase();
+  const stage = document.getElementById('contact-stage-filter')?.value || '';
+  let rows = contactsCache;
+  if (search) rows = rows.filter(c => (c.name||'').toLowerCase().includes(search) || (c.company||'').toLowerCase().includes(search) || (c.phone||'').includes(search));
+  if (stage) rows = rows.filter(c => c.stage === stage);
+  const todo = rows.filter(c => !c.city_status && !c.city_suggested && c.phone).slice(0, 20);
+  for (const c of todo) {
+    await suggestCity(c.id);
+    if (c.city_status !== 'suggested') break; // stop on error / rate limit
+  }
+}
+
 function renderContacts() {
   const search = (document.getElementById('contact-search')?.value || '').toLowerCase();
   const stage = document.getElementById('contact-stage-filter')?.value || '';
@@ -3531,6 +3588,7 @@ function renderContacts() {
         <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Name</th>
         <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Phone</th>
         <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Company</th>
+        <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">City</th>
         <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Stage</th>
         <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Heat</th>
         <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Calls</th>
@@ -3546,6 +3604,7 @@ function renderContacts() {
           <td style="padding:10px 14px;font-weight:500">${esc(displayName(c.name, c.phone))}</td>
           <td style="padding:10px 14px;color:var(--text2)">${esc(fmtPhone(c.phone)||'—')}</td>
           <td style="padding:10px 14px;color:var(--text2)">${esc(c.brokerage||c.company||'—')}${c.agent_type ? ` <span style="font-size:11px;color:var(--brand-mid)">· ${esc(c.agent_type)}</span>` : ''}${c.current_lender ? `<div style="font-size:11px;color:var(--text3)">Lender: ${esc(c.current_lender)}</div>` : ''}</td>
+          <td style="padding:10px 14px">${cityCell(c)}</td>
           <td style="padding:10px 14px"><span style="background:${STAGE_COLORS[stage]}22;color:${STAGE_COLORS[stage]};font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px">${STAGE_LABELS[stage]||stage}</span></td>
           <td style="padding:10px 14px"><span style="color:${hc};font-weight:600;font-size:13px">${heat}</span></td>
           <td style="padding:10px 14px;color:var(--text2)">${c.call_count||0}</td>
