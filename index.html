@@ -1836,8 +1836,8 @@ let timerInterval = null;
 let seconds = 0;
 let fullTranscript = '';
 
-// Checkout is server-side now (api/create-checkout-session.js). Price IDs and the
-// secret key live only in Vercel env — nothing Stripe-secret in the client.
+// Checkout is server-side now (handled inside api/stripe-webhook.js). Price IDs and
+// the secret key live only in Vercel env — nothing Stripe-secret in the client.
 const PLANS = {
   free:       { label: 'Free',           minutes: 0,    calls: 25 },
   solo:       { label: 'Solo',           minutes: 1500 },
@@ -3261,7 +3261,8 @@ async function handleStripe(tier) {
   try {
     const { data: { session } } = await db.auth.getSession();
     if (!session) { emailFallback(); return; }
-    const r = await fetch('/api/create-checkout-session', {
+    // POST to the Stripe function with no stripe-signature → routed to checkout
+    const r = await fetch('/api/stripe-webhook', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
       body: JSON.stringify({ tier, seats })
