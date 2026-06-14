@@ -3524,10 +3524,14 @@ function sortContacts(rows) {
   const dateDesc = (a, b) => { const x = t(a), y = t(b); if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1; return y - x; };
   const dateAsc = (a, b) => { const x = t(a), y = t(b); if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1; return x - y; };
   const strAsc = (a, b) => { const A = (a || '').trim(), B = (b || '').trim(); if (!A && !B) return 0; if (!A) return 1; if (!B) return -1; return A.toLowerCase().localeCompare(B.toLowerCase()); };
+  // Effective city, mirroring cityCell() exactly: confirmed -> city, suggested -> city_suggested,
+  // otherwise '' so rows that show no city (denied / un-enriched) sort LAST rather than by a
+  // hidden street address the cell never displays.
+  const effCity = c => (c.city_status === 'confirmed' && c.city) ? c.city : (c.city_status === 'suggested' && c.city_suggested) ? c.city_suggested : '';
   const arr = [...rows];
   switch (sort) {
     case 'called': arr.sort((a, b) => dateDesc(a.last_called, b.last_called)); break;
-    case 'city': arr.sort((a, b) => strAsc(a.address, b.address)); break;
+    case 'city': arr.sort((a, b) => strAsc(effCity(a), effCity(b))); break;
     case 'name': arr.sort((a, b) => strAsc(displayName(a.name, a.phone), displayName(b.name, b.phone))); break;
     case 'company': arr.sort((a, b) => strAsc(a.brokerage || a.company, b.brokerage || b.company)); break;
     case 'heat': arr.sort((a, b) => (HEAT_RANK[a.heat_score] ?? 3) - (HEAT_RANK[b.heat_score] ?? 3)); break;
