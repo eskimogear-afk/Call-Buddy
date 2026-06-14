@@ -122,8 +122,8 @@ async function anLoadFollowUps() {
   } catch (e) { anSet('an-due', '—'); anSet('an-due-sub', ''); anMeetingFus = []; anRenderFunnels(); }
 }
 
-function anHeatPill(label, count, fg, bg) {
-  return `<span style="background:${bg};color:${fg};font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px">${label} ${count}</span>`;
+function anHeatPill(label, count, fg, bg, seg) {
+  return `<span onclick="openContactsSegment('${seg}')" title="See ${label.toLowerCase()} leads" style="background:${bg};color:${fg};font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;cursor:pointer">${label} ${count}</span>`;
 }
 
 async function anLoadContacts() {
@@ -139,9 +139,9 @@ async function anLoadContacts() {
     list.forEach(c => { heat[heat.hasOwnProperty(c.heat_score) ? c.heat_score : 'Cold']++; });
     const heatEl = document.getElementById('an-heat');
     if (heatEl) heatEl.innerHTML =
-      anHeatPill('Hot', heat.Hot, 'var(--hot)', 'var(--hot-bg)') +
-      anHeatPill('Warm', heat.Warm, 'var(--warm)', 'var(--warm-bg)') +
-      anHeatPill('Cold', heat.Cold, 'var(--cold)', 'var(--cold-bg)');
+      anHeatPill('Hot', heat.Hot, 'var(--hot)', 'var(--hot-bg)', 'heat_Hot') +
+      anHeatPill('Warm', heat.Warm, 'var(--warm)', 'var(--warm-bg)', 'heat_Warm') +
+      anHeatPill('Cold', heat.Cold, 'var(--cold)', 'var(--cold-bg)', 'heat_Cold');
     const stale = open.filter(c => { const ref = c.last_called || c.created_at; return ref && now - new Date(ref) > AN_STALE_DAYS * AN_DAY; });
     anSet('an-stale', stale.length);
     anRenderFunnels();

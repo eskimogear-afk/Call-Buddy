@@ -1079,12 +1079,12 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             </div>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:10px;margin-bottom:20px">
-            <div class="sb-item sb-red" style="cursor:pointer" title="Open contacts" onclick="switchPanel('contacts')">
+            <div class="sb-item sb-red" style="cursor:pointer" title="See these leads" onclick="openContactsSegment('hot_no_next')">
               <div class="sb-lbl">Hot, no next step</div>
               <div class="sb-val num" id="an-hotnonext">–</div>
               <div class="sb-sub">hot leads w/o a scheduled follow-up</div>
             </div>
-            <div class="sb-item sb-amber" style="cursor:pointer" title="Open contacts" onclick="switchPanel('contacts')">
+            <div class="sb-item sb-amber" style="cursor:pointer" title="See these leads" onclick="openContactsSegment('stale')">
               <div class="sb-lbl">Going stale</div>
               <div class="sb-val num" id="an-stale">–</div>
               <div class="sb-sub">open leads untouched 14+ days</div>
@@ -1094,7 +1094,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
               <div class="sb-val num" id="an-sms">–</div>
               <div class="sb-sub" id="an-sms-sub"></div>
             </div>
-            <div class="sb-item sb-emerald" style="cursor:pointer" title="Open contacts" onclick="switchPanel('contacts')">
+            <div class="sb-item sb-emerald">
               <div class="sb-lbl">Pipeline heat</div>
               <div id="an-heat" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">–</div>
             </div>
@@ -2035,7 +2035,7 @@ function switchPanel(p) {
   if (p === 'dashboard') refreshDashboard();
   if (p === 'analytics') renderAnalytics();
   if (p === 'log') renderLog();
-  if (p === 'contacts') loadContacts();
+  if (p === 'contacts') { if (!contactsSegNavPending) contactsSegment = null; contactsSegNavPending = false; loadContacts(); }
   if (p === 'followups') loadFollowUps();
   if (p === 'power') { pdRender(); loadTeamLists(); }
   if (p === 'inbox') loadInbox();
@@ -3429,6 +3429,31 @@ let contactsCache = [];
 const STAGE_LABELS = { new:'Researching', contacted:'Contacted', meeting:'Meeting set', comarketing:'Co-marketing live', referral:'First referral', partner:'Repeat partner' };
 const STAGE_COLORS = { new:'#6b7280', contacted:'#3b82f6', meeting:'#f59e0b', comarketing:'#8b5cf6', referral:'#10b981', partner:'#34d399' };
 
+// Analytics deep-link: a "segment" is a computed subset (predicates mirror the
+// Analytics cards exactly) so clicking e.g. "Hot, no next step" lands on only
+// those people, not the whole list. Cleared on any normal nav to Pipeline.
+let contactsSegment = null;
+let contactsSegNavPending = false;
+const CONTACT_SEGMENTS = {
+  hot_no_next: { label: 'Hot leads with no next step', test: c => ['new','contacted','meeting'].includes(c.stage || 'new') && c.heat_score === 'Hot' && (!c.next_follow_up_at || new Date(c.next_follow_up_at) <= new Date()) },
+  stale:       { label: 'Open leads untouched 14+ days', test: c => { if (!['new','contacted','meeting'].includes(c.stage || 'new')) return false; const ref = c.last_called || c.created_at; return !!ref && (Date.now() - new Date(ref).getTime() > 14 * 86400000); } },
+  heat_Hot:    { label: 'Hot leads',  test: c => c.heat_score === 'Hot' },
+  heat_Warm:   { label: 'Warm leads', test: c => c.heat_score === 'Warm' },
+  heat_Cold:   { label: 'Cold leads', test: c => c.heat_score !== 'Hot' && c.heat_score !== 'Warm' }
+};
+function openContactsSegment(key) {
+  if (!CONTACT_SEGMENTS[key]) return;
+  contactsSegment = key;
+  contactsSegNavPending = true;           // survive switchPanel's auto-clear
+  const s = document.getElementById('contact-search'); if (s) s.value = '';
+  const st = document.getElementById('contact-stage-filter'); if (st) st.value = '';
+  contactView = 'list';
+  document.getElementById('cv-list')?.classList.add('active');
+  document.getElementById('cv-board')?.classList.remove('active');
+  switchPanel('contacts');
+}
+function clearContactsSegment() { contactsSegment = null; renderContacts(); }
+
 async function loadContacts() {
   const { data: { session } } = await db.auth.getSession();
   if (!session) return;
@@ -3568,18 +3593,25 @@ async function suggestVisibleCities() {
 function renderContacts() {
   const search = (document.getElementById('contact-search')?.value || '').toLowerCase();
   const stage = document.getElementById('contact-stage-filter')?.value || '';
-  let rows = contactsCache;
+  let rows = Array.isArray(contactsCache) ? contactsCache : [];
+  const seg = contactsSegment && CONTACT_SEGMENTS[contactsSegment];
+  if (seg) rows = rows.filter(seg.test);
   if (search) rows = rows.filter(c => (c.name||'').toLowerCase().includes(search) || (c.company||'').toLowerCase().includes(search) || (c.phone||'').includes(search));
   if (stage) rows = rows.filter(c => c.stage === stage);
   rows = sortContacts(rows);
 
+  const banner = seg ? `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;border:1px solid var(--brand);background:var(--brand-light);border-radius:var(--radius-sm)">
+      <span style="font-size:13px;color:var(--text)">Showing <strong>${esc(seg.label)}</strong> · ${rows.length} ${rows.length === 1 ? 'person' : 'people'}</span>
+      <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px;margin-left:auto" onclick="clearContactsSegment()">✕ Show all contacts</button>
+    </div>` : '';
+
   if (contactView === 'board') {
-    document.getElementById('contacts-table').innerHTML = renderContactBoard(rows);
+    document.getElementById('contacts-table').innerHTML = banner + renderContactBoard(rows);
     return;
   }
 
   if (!rows.length) {
-    document.getElementById('contacts-table').innerHTML = '<p style="color:var(--text3);padding:20px;text-align:center">No contacts found.</p>';
+    document.getElementById('contacts-table').innerHTML = banner + '<p style="color:var(--text3);padding:20px;text-align:center">' + (seg ? 'No one matches this filter right now.' : 'No contacts found.') + '</p>';
     return;
   }
   const html = `<div class="table-card" style="overflow:auto">
@@ -3618,7 +3650,7 @@ function renderContacts() {
         </tr>`;
       }).join('')}</tbody>
     </table></div>`;
-  document.getElementById('contacts-table').innerHTML = html;
+  document.getElementById('contacts-table').innerHTML = banner + html;
 }
 
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
