@@ -96,13 +96,16 @@ export default async function handler(req, res) {
           headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
           body: JSON.stringify({
             model: 'claude-haiku-4-5-20251001',
-            max_tokens: 24,
-            messages: [{ role: 'user', content: `US real estate agent. Phone area code: ${area}${hint ? ' (commonly ' + hint + ')' : ''}.${ctx ? ' ' + ctx + '.' : ''} If the address names a city, use it; otherwise use the area code's primary metro. Reply with ONLY the single most likely city as "City, ST" (2-letter state). No other words.` }]
+            max_tokens: 16,
+            system: 'You output ONLY a US city formatted exactly as "City, ST" (two-letter state). Never ask questions, never apologize, never explain, never add extra words. If details are sparse, use the area code\'s primary metro.',
+            messages: [{ role: 'user', content: `Area code ${area}${hint ? ', primary metro ' + hint : ''}.${ctx ? ' ' + ctx + '.' : ''} Output the single most likely city as "City, ST".` }]
           })
         });
         const ad = await ar.json();
         const raw = (ad.content || []).map(b => b.text || '').join('').trim().replace(/^["']|["']$/g, '').split('\n')[0].slice(0, 60);
-        if (raw) suggested = raw;
+        // Only trust a clean "City, ST"; otherwise keep the deterministic area-code metro
+        // (guards against the model occasionally replying conversationally).
+        if (/^[A-Za-z][A-Za-z.'\- ]{1,28},\s*[A-Z]{2}$/.test(raw)) suggested = raw;
       } catch (e) { console.error('city_suggest AI error:', e.message); }
     }
     if (!suggested) return res.status(200).json({ city: null, status: 'unknown' });
