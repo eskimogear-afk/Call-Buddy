@@ -1836,15 +1836,8 @@ let timerInterval = null;
 let seconds = 0;
 let fullTranscript = '';
 
-const STRIPE_KEY = 'pk_test_51TdiCs2RgYWz496ckaoC48If1Jfq5sbU8PS8yciSzcEaLYjQB0HCtbYj7zcccIx9UFC12ExbzvC9gFIn6QJfnbBO00TpE7MDuG';
-const STRIPE_PRICE = 'price_1TeRFh2RgYWz496cuMTZVogj'; // legacy $29 (grandfathered cohort only)
-const STRIPE_PRICES = {
-  solo_monthly: 'PRICE_ID_SOLO_MONTHLY',
-  solo_annual:  'PRICE_ID_SOLO_ANNUAL',
-  pro_monthly:  'PRICE_ID_PRO_MONTHLY',
-  pro_annual:   'PRICE_ID_PRO_ANNUAL',
-  team_monthly: 'PRICE_ID_TEAM_MONTHLY'
-};
+// Checkout is server-side now (api/create-checkout-session.js). Price IDs and the
+// secret key live only in Vercel env — nothing Stripe-secret in the client.
 const PLANS = {
   free:       { label: 'Free',           minutes: 0,    calls: 25 },
   solo:       { label: 'Solo',           minutes: 1500 },
@@ -3254,28 +3247,31 @@ const TIER_DESC = {
 };
 async function handleStripe(tier) {
   tier = tier || 'solo_monthly';
-  const price = STRIPE_PRICES[tier];
-  if (!price || price.startsWith('PRICE_ID')) {
+  let seats;
+  if (tier === 'team_monthly') {
+    seats = parseInt(prompt('How many seats? (minimum 2)', '2') || '0', 10);
+    if (!seats || seats < 2) return;
+  }
+  // Falls back to emailing the founder if Stripe isn't fully configured yet,
+  // or if anything goes wrong starting checkout — never leaves the user stuck.
+  const emailFallback = () => {
     const em = currentUser?.email || '';
     window.location.href = 'mailto:damon@vistomortgage.com?subject=' + encodeURIComponent('Upgrade my PitchLog account — ' + (TIER_DESC[tier] || tier)) + '&body=' + encodeURIComponent('Please upgrade my account (' + em + ') to ' + (TIER_DESC[tier] || tier) + '.');
-    return;
-  }
-  let qty = 1;
-  if (tier === 'team_monthly') {
-    qty = parseInt(prompt('How many seats? (minimum 2)', '2') || '0', 10);
-    if (!qty || qty < 2) return;
-  }
+  };
   try {
-    const stripe = Stripe(STRIPE_KEY);
-    await stripe.redirectToCheckout({
-      lineItems: [{ price, quantity: qty }],
-      mode: 'subscription',
-      clientReferenceId: currentUser?.id,
-      customerEmail: currentUser?.email,
-      successUrl: window.location.origin + '?upgraded=true',
-      cancelUrl: window.location.origin
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) { emailFallback(); return; }
+    const r = await fetch('/api/create-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ tier, seats })
     });
-  } catch(e) { alert('Stripe error: ' + e.message); }
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.url) { window.location.href = d.url; return; }   // → Stripe Checkout
+    emailFallback();                                                // not configured / error
+  } catch (e) {
+    emailFallback();
+  }
 }
 
 function showUpgradeModal() { document.getElementById('upgrade-modal').classList.remove('hidden'); }
