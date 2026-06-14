@@ -3,6 +3,34 @@ import { createClient } from '@supabase/supabase-js';
 
 const ALLOWED_ORIGIN = 'https://call-buddy-omega.vercel.app';
 
+// Area code → likely metro. Anchors the AI city guess (esp. FL/TX markets) and
+// is the deterministic fallback if the AI call fails. Not exhaustive — the AI
+// fills the long tail.
+const AREA_CITY = {
+  // Florida
+  '305':'Miami, FL','786':'Miami, FL','954':'Fort Lauderdale, FL','754':'Fort Lauderdale, FL','561':'West Palm Beach, FL','407':'Orlando, FL','689':'Orlando, FL','321':'Orlando, FL','813':'Tampa, FL','727':'St. Petersburg, FL','941':'Sarasota, FL','239':'Fort Myers, FL','904':'Jacksonville, FL','850':'Tallahassee, FL','386':'Daytona Beach, FL','352':'Ocala, FL','863':'Lakeland, FL',
+  // Texas
+  '214':'Dallas, TX','469':'Dallas, TX','972':'Dallas, TX','945':'Dallas, TX','817':'Fort Worth, TX','682':'Fort Worth, TX','512':'Austin, TX','737':'Austin, TX','713':'Houston, TX','281':'Houston, TX','832':'Houston, TX','346':'Houston, TX','210':'San Antonio, TX','726':'San Antonio, TX','915':'El Paso, TX','806':'Lubbock, TX','325':'Abilene, TX','361':'Corpus Christi, TX','409':'Beaumont, TX','903':'Tyler, TX','430':'Tyler, TX','432':'Midland, TX','254':'Waco, TX','940':'Denton, TX','956':'McAllen, TX','979':'College Station, TX',
+  // Major metros
+  '212':'New York, NY','646':'New York, NY','332':'New York, NY','917':'New York, NY','718':'New York, NY','347':'New York, NY','929':'New York, NY',
+  '213':'Los Angeles, CA','323':'Los Angeles, CA','310':'Los Angeles, CA','424':'Los Angeles, CA','818':'Los Angeles, CA','747':'Los Angeles, CA','626':'Pasadena, CA','661':'Bakersfield, CA',
+  '415':'San Francisco, CA','628':'San Francisco, CA','510':'Oakland, CA','650':'San Mateo, CA','408':'San Jose, CA','669':'San Jose, CA','925':'Concord, CA','916':'Sacramento, CA','619':'San Diego, CA','858':'San Diego, CA','949':'Irvine, CA','714':'Anaheim, CA','951':'Riverside, CA','909':'San Bernardino, CA','805':'Oxnard, CA','559':'Fresno, CA',
+  '312':'Chicago, IL','773':'Chicago, IL','872':'Chicago, IL','847':'Chicago, IL','630':'Chicago, IL','708':'Chicago, IL',
+  '404':'Atlanta, GA','470':'Atlanta, GA','678':'Atlanta, GA','770':'Atlanta, GA',
+  '206':'Seattle, WA','425':'Seattle, WA','253':'Tacoma, WA','503':'Portland, OR','971':'Portland, OR',
+  '617':'Boston, MA','857':'Boston, MA','781':'Boston, MA',
+  '202':'Washington, DC','703':'Arlington, VA','571':'Arlington, VA','301':'Bethesda, MD','240':'Bethesda, MD',
+  '215':'Philadelphia, PA','267':'Philadelphia, PA','445':'Philadelphia, PA','412':'Pittsburgh, PA',
+  '480':'Phoenix, AZ','602':'Phoenix, AZ','623':'Phoenix, AZ','520':'Tucson, AZ',
+  '702':'Las Vegas, NV','725':'Las Vegas, NV','303':'Denver, CO','720':'Denver, CO','801':'Salt Lake City, UT','385':'Salt Lake City, UT',
+  '612':'Minneapolis, MN','651':'St. Paul, MN','763':'Minneapolis, MN','952':'Minneapolis, MN',
+  '313':'Detroit, MI','248':'Detroit, MI','734':'Ann Arbor, MI','586':'Warren, MI',
+  '216':'Cleveland, OH','614':'Columbus, OH','513':'Cincinnati, OH',
+  '615':'Nashville, TN','629':'Nashville, TN','901':'Memphis, TN',
+  '704':'Charlotte, NC','980':'Charlotte, NC','919':'Raleigh, NC','984':'Raleigh, NC','336':'Greensboro, NC',
+  '314':'St. Louis, MO','816':'Kansas City, MO','504':'New Orleans, LA','317':'Indianapolis, IN','414':'Milwaukee, WI',
+};
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -40,7 +68,47 @@ export default async function handler(req, res) {
     }
   } catch (e) { console.error('rate-limit check failed (allowing):', e.message); }
 
-  const { transcript, type, name, summary, painPoints, nextSteps, call_id, phone, force, question, lo_rates } = req.body || {};
+  const { transcript, type, name, summary, painPoints, nextSteps, call_id, phone, force, question, lo_rates, contact_id } = req.body || {};
+
+  /* ── City suggestion: guess an agent's city from area code + AI, for human verify ── */
+  if (type === 'city_suggest') {
+    if (!contact_id) return res.status(400).json({ error: 'contact_id required' });
+    const { data: c } = await supabase
+      .from('contacts')
+      .select('id, name, first_name, last_name, phone, company, brokerage, agent_type, address, city, city_suggested, city_status')
+      .eq('id', contact_id).eq('user_id', user.id).single();
+    if (!c) return res.status(404).json({ error: 'Contact not found' });
+    if (c.city_status === 'confirmed') return res.status(200).json({ city: c.city, status: 'confirmed' });
+    if (c.city_status === 'denied' && !force) return res.status(200).json({ city: null, status: 'denied' });
+    if (c.city_suggested && !force) return res.status(200).json({ city: c.city_suggested, status: 'suggested', cached: true });
+
+    const digits = String(c.phone || '').replace(/\D/g, '');
+    const ten = digits.length === 11 && digits[0] === '1' ? digits.slice(1) : digits;
+    const area = ten.slice(0, 3);
+    const hint = AREA_CITY[area] || '';
+    const nm = c.name || [c.first_name, c.last_name].filter(Boolean).join(' ') || '';
+    const ctx = [nm && ('Name: ' + nm), (c.brokerage || c.company) && ('Brokerage: ' + (c.brokerage || c.company)), c.agent_type && ('Type: ' + c.agent_type), c.address && ('Address: ' + c.address)].filter(Boolean).join('; ');
+    let suggested = hint; // deterministic fallback
+    if (area.length === 3) {
+      try {
+        const ar = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 24,
+            messages: [{ role: 'user', content: `US real estate agent. Phone area code: ${area}${hint ? ' (commonly ' + hint + ')' : ''}.${ctx ? ' ' + ctx + '.' : ''} If the address names a city, use it; otherwise use the area code's primary metro. Reply with ONLY the single most likely city as "City, ST" (2-letter state). No other words.` }]
+          })
+        });
+        const ad = await ar.json();
+        const raw = (ad.content || []).map(b => b.text || '').join('').trim().replace(/^["']|["']$/g, '').split('\n')[0].slice(0, 60);
+        if (raw) suggested = raw;
+      } catch (e) { console.error('city_suggest AI error:', e.message); }
+    }
+    if (!suggested) return res.status(200).json({ city: null, status: 'unknown' });
+    await supabase.from('contacts').update({ city_suggested: suggested, city_status: 'suggested' }).eq('id', c.id).eq('user_id', user.id);
+    return res.status(200).json({ city: suggested, status: 'suggested' });
+  }
 
   /* ── Prospect research: AI web-search brief on the realtor behind a number ── */
   if (type === 'research') {

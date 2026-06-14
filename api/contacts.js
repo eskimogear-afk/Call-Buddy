@@ -296,7 +296,8 @@ export default async function handler(req, res) {
       // call_count, timestamps, or any column not meant to be user-editable.
       const ALLOWED = ['name', 'first_name', 'last_name', 'phone', 'company', 'email',
         'stage', 'notes', 'heat_score', 'brokerage', 'agent_type',
-        'annual_transaction_volume', 'current_lender', 'last_closing_date'];
+        'annual_transaction_volume', 'current_lender', 'last_closing_date',
+        'city', 'city_status', 'address'];
       const updates = {};
       for (const k of ALLOWED) if (k in raw) updates[k] = raw[k];
       if (!Object.keys(updates).length) return res.status(400).json({ error: 'No updatable fields' });
