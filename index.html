@@ -3518,6 +3518,10 @@ function renderContactBoard(rows) {
 }
 
 const HEAT_RANK = { Hot: 0, Warm: 1, Cold: 2 };
+// Heat buckets for the "Hottest" grouped view. Order matches HEAT_RANK; anything
+// not Hot/Warm/Cold (e.g. a missing score) buckets as "Unrated" and sorts last.
+const HEAT_META = { Hot: { label: '🔥 Hot', color: '#dc2626' }, Warm: { label: '🟡 Warm', color: '#f59e0b' }, Cold: { label: '🔵 Cold', color: '#6b7280' }, Unrated: { label: '⚪ Unrated', color: '#9ca3af' } };
+const heatBucket = c => (c.heat_score && HEAT_META[c.heat_score]) ? c.heat_score : 'Unrated';
 function sortContacts(rows) {
   const sort = document.getElementById('contact-sort')?.value || 'recent';
   const t = v => (v ? new Date(v).getTime() : null);
@@ -3604,6 +3608,8 @@ function renderContacts() {
   if (search) rows = rows.filter(c => (c.name||'').toLowerCase().includes(search) || (c.company||'').toLowerCase().includes(search) || (c.phone||'').includes(search));
   if (stage) rows = rows.filter(c => c.stage === stage);
   rows = sortContacts(rows);
+  // When sorting by "Hottest", break the list into 🔥/🟡/🔵 sections with headers.
+  const grouped = (document.getElementById('contact-sort')?.value || 'recent') === 'heat';
 
   const banner = seg ? `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;border:1px solid var(--brand);background:var(--brand-light);border-radius:var(--radius-sm)">
       <span style="font-size:13px;color:var(--text)">Showing <strong>${esc(seg.label)}</strong> · ${rows.length} ${rows.length === 1 ? 'person' : 'people'}</span>
@@ -3632,12 +3638,22 @@ function renderContacts() {
         <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Next follow-up</th>
         <th style="padding:10px 14px"></th>
       </tr></thead>
-      <tbody>${rows.map(c => {
+      <tbody>${(() => {
+        const counts = {};
+        if (grouped) for (const c of rows) { const b = heatBucket(c); counts[b] = (counts[b] || 0) + 1; }
+        let out = '', curHeat = null;
+        for (const c of rows) {
+        if (grouped) {
+          const b = heatBucket(c);
+          if (b !== curHeat) { curHeat = b; const m = HEAT_META[b];
+            out += `<tr><td colspan="9" style="padding:9px 14px;background:var(--bg2);border-bottom:1px solid var(--border)"><span style="color:${m.color};font-weight:700;font-size:13px">${m.label}</span> <span style="color:var(--text3);font-size:12px">· ${counts[b]} ${counts[b] === 1 ? 'lead' : 'leads'}</span></td></tr>`;
+          }
+        }
         const heat = c.heat_score || 'Cold';
         const hc = heat === 'Hot' ? '#dc2626' : heat === 'Warm' ? '#f59e0b' : '#6b7280';
         const nfu = c.next_follow_up_at ? new Date(c.next_follow_up_at).toLocaleDateString() : '—';
         const stage = c.stage || 'new';
-        return `<tr style="border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+        out += `<tr style="border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
           <td style="padding:10px 14px;font-weight:500">${esc(displayName(c.name, c.phone))}</td>
           <td style="padding:10px 14px;color:var(--text2)">${esc(fmtPhone(c.phone)||'—')}</td>
           <td style="padding:10px 14px;color:var(--text2)">${esc(c.brokerage||c.company||'—')}${c.agent_type ? ` <span style="font-size:11px;color:var(--brand-mid)">· ${esc(c.agent_type)}</span>` : ''}${c.current_lender ? `<div style="font-size:11px;color:var(--text3)">Lender: ${esc(c.current_lender)}</div>` : ''}</td>
@@ -3653,7 +3669,9 @@ function renderContacts() {
             <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="deleteContact('${c.id}')">Delete</button>
           </td>
         </tr>`;
-      }).join('')}</tbody>
+        }
+        return out;
+      })()}</tbody>
     </table></div>`;
   document.getElementById('contacts-table').innerHTML = banner + html;
 }
