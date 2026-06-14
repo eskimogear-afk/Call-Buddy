@@ -1277,7 +1277,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <div id="panel-contacts" class="hidden">
         <div style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
           <div>
-            <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Contacts</h1>
+            <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Pipeline</h1>
             <p style="font-size:14px;color:var(--text2);margin-top:4px">Your prospect pipeline.</p>
           </div>
           <button class="btn btn-primary" onclick="openAddContactModal()">+ Add contact</button>
@@ -1297,7 +1297,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           </select>
           <div class="view-toggle">
             <button id="cv-list" class="active" onclick="setContactView('list')">List</button>
-            <button id="cv-board" onclick="setContactView('board')">Pipeline</button>
+            <button id="cv-board" onclick="setContactView('board')">Board</button>
           </div>
         </div>
         <div id="contacts-table"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div>
