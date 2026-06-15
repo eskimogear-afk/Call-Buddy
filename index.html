@@ -1219,6 +1219,11 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <button class="btn btn-outline" onclick="exportAll()">Export all to Excel</button>
           </div>
         </div>
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+          <input id="log-search" type="text" placeholder="Search calls — name, company, phone, or words from the conversation…" oninput="renderLog()"
+            style="flex:1;min-width:220px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+          <span id="log-search-count" style="font-size:13px;color:var(--text3)"></span>
+        </div>
         <div class="table-card"><div id="log-table"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div></div>
       </div>
 
@@ -2704,8 +2709,32 @@ function refreshDashboard() {
   });
 }
 
+// Everything a call can be searched by: who it was with (name/company/phone) +
+// what was actually said (transcript/summary/notes). Pending transcripts are
+// excluded so a placeholder never matches.
+function callHaystack(r) {
+  const phone = r.phone || r.to_number || r.from_number || '';
+  const tx = String(r.transcript || '');
+  return [
+    r.prospect_name, r.contacts && r.contacts.name,
+    r.company, r.contacts && r.contacts.company,
+    phone, String(phone).replace(/\D/g, ''),
+    tx.startsWith('PENDING:') ? '' : tx,
+    r.ai_summary, r.notes, r.next_steps, r.next_step, r.outcome
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
 function renderLog() {
-  document.getElementById('log-table').innerHTML = buildTable(records);
+  const q = (document.getElementById('log-search')?.value || '').trim().toLowerCase();
+  const recs = q ? records.filter(r => callHaystack(r).includes(q)) : records;
+  const el = document.getElementById('log-table');
+  if (q && !recs.length) {
+    el.innerHTML = `<div class="empty-state">No calls match “${esc(q)}”. Try a name, company, phone, or words from the conversation.</div>`;
+  } else {
+    el.innerHTML = buildTable(recs);
+  }
+  const cnt = document.getElementById('log-search-count');
+  if (cnt) cnt.textContent = q ? `${recs.length} of ${records.length}` : '';
   schedulePendingRefresh();
   updateRetryStuckButton();
 }
