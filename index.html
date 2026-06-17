@@ -2504,13 +2504,67 @@ function applyQuoteParams(p) {
   quoteFillBanner('✓ <strong>Pre-filled from the call:</strong> ' + filled.map(esc).join(' · ') + '. Review before quoting.' + conf + quotes, p.confidence === 'low' ? 'warn' : 'ok');
 }
 
-function followUpFromCall(contactId, name, phone) {
-  openAddFollowUpModal();
-  setTimeout(() => {
+let _fuFromCallBusy = false;
+async function followUpFromCall(contactId, name, phone) {
+  // A follow-up needs a contact (it's who the reminder texts), so resolve one from
+  // THIS call: the linked contact if any, else an existing contact matched by phone,
+  // else create a light contact from the call's number — so the user never has to
+  // hunt for or retype the person they were just on the phone with.
+  if (_fuFromCallBusy) return; // guard: a double-click must not create duplicate contacts
+  _fuFromCallBusy = true;
+  try {
+    let cid = contactId;
+    const last10 = String(phone || '').replace(/\D/g, '').slice(-10);
+    // Load the full contact list once if we don't have it. This lets us match by phone
+    // before creating AND ensures the modal's select is fully populated — which also
+    // stops openAddFollowUpModal's background reload from rebuilding (and de-selecting)
+    // the dropdown after we preselect. Needed even for linked calls, since the Call log
+    // never loads contacts on its own.
+    if (!contactsCache.length) {
+      try {
+        const { data: { session } } = await db.auth.getSession();
+        if (session) {
+          const r = await fetch('/api/contacts', { headers: { Authorization: 'Bearer ' + session.access_token } });
+          if (r.ok) contactsCache = await r.json();
+        }
+      } catch (e) { /* fall through */ }
+    }
+    // No linked contact → match an existing one by phone before creating a duplicate.
+    if (!cid && last10.length === 10) {
+      const match = contactsCache.find(c => String(c.phone || '').replace(/\D/g, '').slice(-10) === last10);
+      if (match) cid = match.id;
+    }
+    const realName = (name && name !== fmtPhone(phone)) ? name : '';
+    let createFailed = false;
+    // Still no contact → create one from the call so the follow-up has a target + number.
+    if (!cid && phone) {
+      try {
+        const { data: { session } } = await db.auth.getSession();
+        const r = await fetch('/api/contacts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+          body: JSON.stringify({ name: realName, phone })
+        });
+        if (r.ok) { const c = await r.json(); if (c && c.id) { cid = c.id; if (!contactsCache.some(x => x.id === c.id)) contactsCache.push(c); } }
+        else createFailed = true;
+      } catch (e) { createFailed = true; }
+    }
+    // Linked/matched contact not in the cached list (e.g. above the fetch window) → add a
+    // lightweight stub so the <option> exists and the preselect sticks.
+    if (cid && !contactsCache.some(x => x.id === cid)) {
+      contactsCache.push({ id: cid, name: realName || 'Contact', phone });
+    }
+    openAddFollowUpModal();
     const sel = document.getElementById('fu-contact-select');
-    if (contactId && sel) sel.value = contactId;
-    document.getElementById('fu-message').value = `Hi ${name && name !== phone ? name.split(' ')[0] : 'there'}, great speaking with you! Let me know if any questions came up — happy to help.`;
-  }, 150);
+    if (sel && cid) sel.value = cid;
+    document.getElementById('fu-message').value = `Hi ${realName ? realName.split(' ')[0] : 'there'}, great speaking with you! Let me know if any questions came up — happy to help.`;
+    if (!cid && createFailed) {
+      const al = document.getElementById('add-followup-alert');
+      if (al) { al.textContent = "Couldn't auto-add this caller — pick a contact below, or add them first."; al.classList.remove('hidden'); }
+    }
+  } finally {
+    _fuFromCallBusy = false;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════
