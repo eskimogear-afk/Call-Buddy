@@ -2127,10 +2127,11 @@ function startRec() {
     document.getElementById('rec-sub').textContent = 'Stop when your call ends.';
     document.getElementById('rec-timer').style.display = 'block';
     document.getElementById('rec-wave').style.display = 'flex';
-    document.getElementById('live-tx-wrap').classList.remove('hidden');
+    // Live transcript display + AI co-pilot disabled to conserve credits. The mic still
+    // captures speech (recognition keeps running above) into fullTranscript, so the
+    // post-call card still fills in — we just don't show the live transcript or fire the
+    // every-3.5s live-assist model call. Re-enable by restoring these three lines.
     document.getElementById('consent-chip')?.classList.remove('hidden');
-    document.getElementById('copilot-toggle-row').style.display = 'flex';
-    startLiveAssist();
     timerInterval = setInterval(() => {
       seconds++;
       const m = Math.floor(seconds / 60), s = seconds % 60;

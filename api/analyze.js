@@ -307,6 +307,10 @@ ${emailTranscript || '(no transcript available — write a brief, generic but wa
     // stash recipient email to return after the model call
     req._recipientEmail = recipientEmail;
   } else if (type === 'live_assist') {
+    // DISABLED to conserve credits — the live co-pilot fired a model call every ~3.5s
+    // during a call. Return empty so any client (incl. a stale tab) gets nothing and
+    // spends nothing. Delete this return to re-enable.
+    return res.status(200).json({ say_now: '', objection: null, tip: '' });
     // Real-time in-call co-pilot: reads the rolling LIVE transcript (both sides,
     // captured by the speaker mic) and tells the LO what to say next. Fast model.
     const t = String(transcript || '').trim();
