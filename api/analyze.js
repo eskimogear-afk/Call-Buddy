@@ -115,6 +115,11 @@ export default async function handler(req, res) {
 
   /* ── Prospect research: AI web-search brief on the realtor behind a number ── */
   if (type === 'research') {
+    // DISABLED to conserve Anthropic credits. Prospect research is the most expensive
+    // feature by far (premium model + up to 6 live web searches per prospect). This guard
+    // guarantees no research call hits the API even from a stale client. To re-enable,
+    // delete this single return.
+    return res.status(403).json({ error: 'AI prospect research is turned off to conserve credits.' });
     if (!phone) return res.status(400).json({ error: 'phone required' });
     const digits = String(phone).replace(/\D/g, '');
     const ten = digits.length === 11 && digits[0] === '1' ? digits.slice(1) : digits;

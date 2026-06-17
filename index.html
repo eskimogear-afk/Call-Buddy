@@ -1026,7 +1026,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <button id="btn-hangup" onclick="hangUp()"
               style="display:none;height:40px;padding:0 22px;background:var(--danger);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13.5px;font-family:inherit">Hang Up</button>
             <button id="btn-research" onclick="researchProspect()" title="AI web research on this prospect"
-              style="height:40px;padding:0 16px;background:var(--bg2);color:var(--text2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-weight:600;font-size:13.5px;font-family:inherit">🔍 Research</button>
+              style="display:none;height:40px;padding:0 16px;background:var(--bg2);color:var(--text2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-weight:600;font-size:13.5px;font-family:inherit">🔍 Research</button>
           </div>
           <div id="dialer-localtime" style="font-size:12px;margin-top:8px;color:var(--text3)"></div>
           <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
@@ -4899,11 +4899,9 @@ function refreshResearch() {
     .catch(e => { panel.innerHTML = '<div style="font-size:13px;color:var(--text2)">🔍 ' + esc(e.message) + '</div>'; });
 }
 
-// Auto-research while the phone is ringing so the brief is ready during the call
-window.addEventListener('cb:call-started', e => {
-  const n = e.detail?.number;
-  if (n) researchProspect(n);
-});
+// Auto-research on call start is DISABLED to conserve AI credits — it was firing a
+// premium-model, 6-web-search brief on every new number dialed. Re-enable by restoring
+// the cb:call-started -> researchProspect(n) listener (and the backend guard + button).
 
 /* ── Calendar ── */
 let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
