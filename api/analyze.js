@@ -556,6 +556,18 @@ ${transcript}`;
     }
   } catch (err) {
     console.error('Analyze error:', err);
-    console.error('analyze err:', err); return res.status(500).json({ error: 'Analysis failed' });
+    // Tell apart "the AI service itself is unavailable" (out of credits, rate-limited,
+    // overloaded, or a key problem) from an actual bug, so the UI shows something legible
+    // instead of a blank "analysis failed". The credit-balance error comes back as a 400
+    // whose message contains "credit balance", so match on the message too — not just status.
+    const status = err && (err.status || err.statusCode);
+    const m = String((err && (err.message || (err.error && err.error.message))) || '').toLowerCase();
+    const unavailable =
+      status === 429 || status === 529 || status === 401 || status === 403 ||
+      /credit balance|too low|quota|rate.?limit|overloaded|insufficient|billing|payment required/.test(m);
+    if (unavailable) {
+      return res.status(503).json({ error: 'AI is temporarily unavailable — please try again shortly.', code: 'ai_unavailable' });
+    }
+    return res.status(500).json({ error: 'Analysis failed' });
   }
 }
