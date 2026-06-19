@@ -3683,6 +3683,17 @@ async function suggestVisibleCities() {
   }
 }
 
+// Jump from a Pipeline prospect to their calls in the Call log, where each call can be
+// opened and its recording played. Filters the Call log by the prospect's phone (falls
+// back to name) — reusing the log search so playback works with no extra UI.
+function openContactCalls(phone, name) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  const q = digits.length >= 7 ? digits : (name || '');
+  const s = document.getElementById('log-search');
+  if (s) s.value = q;
+  switchPanel('log'); // switchPanel('log') re-runs renderLog(), which reads log-search
+}
+
 function renderContacts() {
   const search = (document.getElementById('contact-search')?.value || '').toLowerCase();
   const stage = document.getElementById('contact-stage-filter')?.value || '';
@@ -3744,7 +3755,9 @@ function renderContacts() {
           <td style="padding:10px 14px">${cityCell(c)}</td>
           <td style="padding:10px 14px"><span style="background:${STAGE_COLORS[stage]}22;color:${STAGE_COLORS[stage]};font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px">${STAGE_LABELS[stage]||stage}</span></td>
           <td style="padding:10px 14px"><span style="color:${hc};font-weight:600;font-size:13px">${heat}</span></td>
-          <td style="padding:10px 14px;color:var(--text2)">${c.call_count||0}</td>
+          <td style="padding:10px 14px;color:var(--text2)">${(c.call_count||0) > 0
+            ? `<button class="btn btn-ghost" style="font-size:12px;padding:3px 9px;color:var(--brand-mid)" title="Open this prospect's calls to listen to the recordings" onclick="openContactCalls('${escAttr(c.phone||'')}','${escAttr(displayName(c.name, c.phone))}')">▶ ${c.call_count}</button>`
+            : '0'}</td>
           <td style="padding:10px 14px;color:var(--text2);font-size:13px">${nfu}</td>
           <td style="padding:10px 14px">
             <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="draftEmailForContact('${c.id}','${escAttr(displayName(c.name, c.phone))}')">✉️ Email</button>
