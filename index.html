@@ -1016,7 +1016,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             No dedicated caller ID set — calls will use the account default number.
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <input id="dialer-number" type="tel" placeholder="+1 (555) 000-0000" oninput="updateDialerLocalTime()"
+            <input id="dialer-number" type="tel" placeholder="+1 (555) 000-0000" oninput="updateDialerLocalTime();checkDialerHistory()"
               style="flex:1;min-width:180px;height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-family:inherit"
               onfocus="this.style.borderColor='var(--brand)';this.style.boxShadow='0 0 0 3px rgba(3,105,161,.12)';this.style.background='var(--bg3)'"
               onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none';this.style.background='var(--bg2)'"/>
@@ -1028,6 +1028,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <button id="btn-research" onclick="researchProspect()" title="AI web research on this prospect"
               style="display:none;height:40px;padding:0 16px;background:var(--bg2);color:var(--text2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-weight:600;font-size:13.5px;font-family:inherit">🔍 Research</button>
           </div>
+          <div id="dialer-history" style="display:none;margin-top:8px"></div>
           <div id="dialer-localtime" style="font-size:12px;margin-top:8px;color:var(--text3)"></div>
           <div style="display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap">
             <div id="dialer-status" style="font-size:12.5px;color:var(--text2);flex:1">Initializing...</div>
@@ -3891,6 +3892,40 @@ function updateDialerLocalTime() {
   const within = chk.ok;
   el.textContent = (within ? '🕐 ' : '⛔ ') + 'Their local time: ' + chk.label + (within ? ' · OK to call' : ' · outside 8am–9pm');
   el.style.color = within ? 'var(--text3)' : 'var(--danger)';
+}
+
+// As the user types a number, surface whether they've called/saved this person before.
+function checkDialerHistory() {
+  const el = document.getElementById('dialer-history');
+  if (!el) return;
+  const digits = (document.getElementById('dialer-number')?.value || '').replace(/\D/g, '');
+  if (digits.length < 7) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const key = digits.slice(-10);
+  const l10 = p => String(p || '').replace(/\D/g, '').slice(-10);
+  const prior = (Array.isArray(records) ? records : []).filter(r => l10(r.to_number) === key || l10(r.from_number) === key || l10(r.phone) === key);
+  const contact = (Array.isArray(contactsCache) ? contactsCache : []).find(c => l10(c.phone) === key);
+  el.style.display = 'block';
+  if (!prior.length && !contact) {
+    el.innerHTML = `<div style="font-size:12.5px;color:var(--text3);padding:8px 12px;border:1px dashed var(--border);border-radius:8px">✨ New number — no prior calls on record.</div>`;
+    return;
+  }
+  const name = contact ? esc(displayName(contact.name, contact.phone)) : '';
+  const n = prior.length;
+  let lastWhen = '';
+  if (n) {
+    const latest = prior.reduce((a, b) => new Date(a.created_at) > new Date(b.created_at) ? a : b);
+    lastWhen = new Date(latest.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  const headline = `${name ? name + ' — ' : ''}${n ? `you've called this number ${n} time${n > 1 ? 's' : ''}` : 'already in your pipeline'}`;
+  const sub = n ? `Last call: ${lastWhen}` : 'No calls logged yet';
+  el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;font-size:13px;padding:9px 12px;border:1px solid var(--brand);background:var(--brand-light);border-radius:8px">
+    <span style="font-size:16px">📞</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:600;color:var(--text)">${headline}</div>
+      <div style="font-size:12px;color:var(--text2)">${sub}</div>
+    </div>
+    ${n ? `<button class="btn btn-ghost" style="font-size:12px;padding:4px 10px;color:var(--brand-mid)" onclick="openContactCalls('${escAttr(contact ? (contact.phone || '') : digits)}','${escAttr(name || '')}')">▶ View calls</button>` : ''}
+  </div>`;
 }
 
 // Prefer a real name; fall back to the phone number rather than "Unknown"
