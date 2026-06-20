@@ -7,9 +7,32 @@ Supabase and **texts you within seconds** so you can call back first.
 
 > **Exit criterion:** form submit → Supabase row → 🔥 text on your phone in <10 sec.
 
+## 🚀 Launch fast — edit ONE file: `config.js`
+
+All the visitor-facing values live in **`config.js`**. Paste your real values
+and the whole page updates (every call button, the footer NMLS line, analytics,
+and SEO structured data). Leave a value as its placeholder and that piece just
+stays a placeholder.
+
+```js
+phoneDisplay: '(407) 555-1234',     phoneE164: '+14075551234',
+companyNmls:  '1234567',            states:    'Florida',
+domain:       'https://dscrflorida.com',
+ga4: 'G-XXXXXXXXXX',  metaPixel: '123456789012345',  // analytics turn ON when set
+```
+
+**Go-live checklist (≈10 min once you have the values):**
+1. `config.js` — phone, company NMLS, states, domain, GA4/Pixel IDs.
+2. `index.html` `<head>` — set the real domain in the `og:*` tags + GSC
+   verification token (social/Google crawlers read these statically).
+3. Footer disclaimer wording — paste Visto's approved text (replaces the
+   `[DISCLAIMER PLACEHOLDER]`). **Phase 0 blocker.**
+4. Reviews section — swap the SAMPLE reviews for real Google reviews.
+5. Vercel env vars (see `.env.example`) + run `db/schema.sql` in Supabase.
+
 ## Stack
 
-- **Front end:** static HTML/CSS/JS (`index.html`, `styles.css`, `app.js`) — no build step.
+- **Front end:** static HTML/CSS/JS (`index.html`, `styles.css`, `app.js`, `config.js`) — no build step.
 - **Backend:** Vercel serverless functions in `/api`.
   - `POST /api/lead` — validate → insert into `mortgage_leads` → instant Twilio text.
   - `GET /api/rent-estimate?address=` — RentCast proxy (key stays server-side).
@@ -88,6 +111,19 @@ This page ships with **placeholder** compliance text. Before advertising:
 
 Damon's NMLS **#2291737** is already in the page. The company NMLS and disclaimer
 are the only blocking blanks.
+
+## Realtor prospecting (`tools/`)
+
+`tools/new-realtors.mjs` turns the FL DBPR licensee download into a call sheet of
+newly licensed agents in your counties (newest first, with a Google phone-lookup
+link per row). See `tools/new-realtor-prospecting-toolkit.md` for the full
+workflow + a list of recruiting brokerages. Build referral partners → they send
+you investor clients.
+
+```bash
+node tools/new-realtors.mjs ./dbpr_real_estate.csv --days 60 \
+  --counties "ORANGE,OSCEOLA,SEMINOLE,LAKE,POLK"
+```
 
 ## Notes
 

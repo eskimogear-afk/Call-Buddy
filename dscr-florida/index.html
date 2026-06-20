@@ -23,31 +23,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 
-  <!-- ===================== ANALYTICS (placeholders) ===================== -->
-  <!-- TODO(GA4): replace G-XXXXXXX with your GA4 Measurement ID, then uncomment.
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXX"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-XXXXXXX');
-  </script>
-  -->
-  <!-- TODO(Plausible): privacy-friendly alternative to GA4. Use ONE of the two.
-  <script defer data-domain="YOUR-DOMAIN.com" src="https://plausible.io/js/script.js"></script>
-  -->
-  <!-- TODO(Meta Pixel): replace META_PIXEL_ID. Builds a retargeting audience from day 1.
-  <script>
-    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
-    document,'script','https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', 'META_PIXEL_ID');
-    fbq('track', 'PageView');
-  </script>
-  -->
-  <!-- =================================================================== -->
+  <!-- Favicon (inline SVG — gold "D" mark on navy) -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a1430'/%3E%3Ctext x='32' y='44' font-family='Georgia,serif' font-size='38' font-weight='700' fill='%23f0b429' text-anchor='middle'%3ED%3C/text%3E%3C/svg%3E" />
+
+  <!-- Phone, NMLS, analytics & structured data are all set in /config.js -->
+  <!-- (Analytics turn on automatically when you paste an ID there.) -->
 </head>
 <body>
   <!-- Global film-grain + vignette overlays for cinematic texture -->
@@ -61,10 +41,9 @@
         <span class="brand-mark">DSCR</span>
         <span class="brand-text">Florida Investor Loans</span>
       </a>
-      <a href="tel:+15555555555" class="header-phone" data-cta="header-call">
+      <a href="tel:+15555555555" class="header-phone js-call" data-cta="header-call">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.7 21 3 13.3 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .8-.2 1l-2.3 2.2z"/></svg>
-        <!-- TODO(PHONE): replace with your tracking number -->
-        <span>(555) 555-5555</span>
+        <span class="js-phone">(555) 555-5555</span>
       </a>
     </div>
   </header>
@@ -141,7 +120,7 @@
         </p>
         <div class="hero-cta">
           <a href="#calculator" class="btn btn-primary" data-cta="hero-calculate">See if I qualify →</a>
-          <a href="tel:+15555555555" class="btn btn-ghost" data-cta="hero-call">Call now: (555) 555-5555</a>
+          <a href="tel:+15555555555" class="btn btn-ghost js-call" data-cta="hero-call">Call now: <span class="js-phone">(555) 555-5555</span></a>
         </div>
         <ul class="hero-trust">
           <li>Close in 2–3 weeks</li>
@@ -473,13 +452,13 @@
              any state-license language. DO NOT advertise live until signed off. -->
         <p>
           Damon, Mortgage Loan Originator, NMLS&nbsp;#2291737 · Visto Mortgage,
-          Company NMLS&nbsp;#[COMPANY_NMLS]. Equal Housing Lender.
+          Company NMLS&nbsp;#<span class="js-company-nmls">[COMPANY_NMLS]</span>. Equal Housing Lender.
         </p>
         <p class="disclaimer">
           [DISCLAIMER PLACEHOLDER — insert Visto-approved wording.] This is not a
           commitment to lend. All loans subject to underwriting approval. Terms and
           conditions apply. Rates and availability subject to change. Licensed in
-          [STATES]. NMLS Consumer Access: www.nmlsconsumeraccess.org.
+          <span class="js-states">[STATES]</span>. NMLS Consumer Access: www.nmlsconsumeraccess.org.
         </p>
         <p class="copyright">© <span id="year"></span> All rights reserved.</p>
       </div>
@@ -487,8 +466,9 @@
   </footer>
 
   <!-- ===== Sticky mobile call bar ===== -->
-  <a href="tel:+15555555555" class="sticky-call" data-cta="sticky-call">📞 Tap to call — (555) 555-5555</a>
+  <a href="tel:+15555555555" class="sticky-call js-call" data-cta="sticky-call">📞 Tap to call — <span class="js-phone">(555) 555-5555</span></a>
 
+  <script src="/config.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
