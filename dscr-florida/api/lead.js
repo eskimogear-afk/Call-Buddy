@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import twilio from 'twilio';
+import crypto from 'node:crypto';
 
 // POST /api/lead
 // Public lead-capture endpoint for the DSCR landing page.
@@ -93,7 +94,63 @@ export default async function handler(req, res) {
     console.error('Lead notification text failed:', err)
   );
 
+  // Server-side Meta Conversions API "Lead" event (for Facebook/IG ads).
+  // Deduplicated with the browser Pixel via event_id. Never blocks the save.
+  await sendMetaCapi(lead, body, req).catch((err) =>
+    console.error('Meta CAPI failed:', err)
+  );
+
   return res.status(201).json({ ok: true, id: saved.id });
+}
+
+// ---- Meta Conversions API (Facebook/Instagram ads) ----
+function sha256(v) {
+  return crypto.createHash('sha256').update(String(v).trim().toLowerCase()).digest('hex');
+}
+function normPhone(p) {
+  let d = String(p).replace(/\D/g, '');
+  if (d.length === 10) d = '1' + d; // assume US
+  return d;
+}
+async function sendMetaCapi(lead, body, req) {
+  const pid = process.env.META_PIXEL_ID;
+  const token = process.env.META_CONVERSIONS_TOKEN;
+  if (!pid || !token) return; // not configured → skip silently
+
+  const user_data = { client_user_agent: req.headers['user-agent'] || '' };
+  if (lead.email) user_data.em = [sha256(lead.email)];
+  if (lead.phone) user_data.ph = [sha256(normPhone(lead.phone))];
+  if (lead.city) user_data.ct = [sha256(lead.city.replace(/\s+/g, ''))];
+  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  if (ip) user_data.client_ip_address = ip;
+  if (body.fbp) user_data.fbp = body.fbp;
+  if (body.fbc) user_data.fbc = body.fbc;
+
+  const payload = {
+    data: [{
+      event_name: 'Lead',
+      event_time: Math.floor(Date.now() / 1000),
+      event_id: clean(body.event_id, 100) || undefined,
+      action_source: 'website',
+      event_source_url: clean(body.event_source_url, 500) || undefined,
+      user_data,
+      custom_data: {
+        value: 1, currency: 'USD',
+        content_name: lead.loan_purpose || 'DSCR inquiry',
+      },
+    }],
+  };
+
+  const url = `https://graph.facebook.com/v19.0/${pid}/events?access_token=${encodeURIComponent(token)}`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    console.error('Meta CAPI non-200:', r.status, t.slice(0, 300));
+  }
 }
 
 async function sendNotificationText(lead) {

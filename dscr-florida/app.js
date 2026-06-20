@@ -14,11 +14,23 @@
     try { if (window.gtag) window.gtag('event', event, params || {}); } catch (e) {}
     try { if (window.fbq) window.fbq('trackCustom', event, params || {}); } catch (e) {}
   }
+  // Meta standard event (optimizable in Ads Manager). eventID enables
+  // client+server (CAPI) deduplication.
+  function fbStd(name, params, eventID) {
+    try { if (window.fbq) window.fbq('track', name, params || {}, eventID ? { eventID: eventID } : undefined); } catch (e) {}
+  }
+  function getCookie(n) {
+    var m = document.cookie.match('(^|;)\\s*' + n + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+  function newEventId() { return 'lead.' + Date.now() + '.' + Math.random().toString(36).slice(2, 10); }
 
-  // CTA click tracking (delegated)
+  // CTA click tracking (delegated) + Meta "Contact" on any call button
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-cta]');
-    if (el) track('cta_click', { cta: el.getAttribute('data-cta') });
+    if (!el) return;
+    track('cta_click', { cta: el.getAttribute('data-cta') });
+    if (el.classList.contains('js-call')) fbStd('Contact', { content_name: 'phone_call' });
   });
 
   // Footer year
@@ -158,6 +170,8 @@
   // ---- Calculator CTA hands values to the form ----
   var calcCta = $('calc-cta');
   if (calcCta) calcCta.addEventListener('click', function () {
+    // Mid-funnel intent signal for ad optimization
+    fbStd('ViewContent', { content_name: 'DSCR Qualifier', value: lastDscr || 0, currency: 'USD' });
     var form = $('lead-form');
     if (!form) return;
     if (addr && addr.value) form.elements['property_address'].value = addr.value;
@@ -196,6 +210,17 @@
       var original = submitBtn.textContent;
       submitBtn.textContent = 'Sending…';
 
+      // Meta dedup: same event_id fires client-side (Pixel) and server-side (CAPI)
+      var eventId = newEventId();
+      data.event_id = eventId;
+      data.fbp = getCookie('_fbp');
+      data.fbc = getCookie('_fbc');
+      data.event_source_url = location.href;
+
+      // Fire the Pixel Lead now so it isn't lost if the user navigates away
+      fbStd('Lead', { value: 1, currency: 'USD' }, eventId);
+      track('lead', { value: 1, currency: 'USD' });
+
       fetch('/api/lead', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -206,8 +231,6 @@
           if (!res.ok) throw new Error(res.j && res.j.error || 'Submission failed');
           setStatus("Got it! I'll reach out shortly — usually within 5 minutes during business hours.", 'ok');
           form.reset();
-          track('lead', { value: 1, currency: 'USD' });
-          try { if (window.fbq) window.fbq('track', 'Lead'); } catch (e) {}
         })
         .catch(function (err) {
           setStatus('Something went wrong — please call me directly and I\'ll take care of you.', 'err');
