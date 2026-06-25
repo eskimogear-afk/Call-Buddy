@@ -1976,6 +1976,29 @@ async function loadRecords() {
   } catch(e) { console.warn('Records load error:', e); records = []; }
 }
 
+// Safety net: backfill any calls Twilio recorded but the webhook didn't save, so a
+// flaky recording callback never costs us a call. Runs server-side off the user's JWT.
+let reconcileTimer = null;
+async function reconcileCalls() {
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) return;
+    const r = await fetch('/api/twilio-recording?reconcile=1', { method: 'POST', headers: { Authorization: 'Bearer ' + session.access_token } });
+    const d = await r.json().catch(() => ({}));
+    if (d && d.inserted > 0) {
+      await loadRecords();
+      const log = document.getElementById('panel-log');
+      if (log && !log.classList.contains('hidden')) renderLog();
+      if (!document.getElementById('panel-dashboard')?.classList.contains('hidden')) refreshDashboard();
+    }
+  } catch (e) { /* silent — best effort */ }
+}
+function startReconcilePolling() {
+  if (reconcileTimer) clearInterval(reconcileTimer);
+  setTimeout(reconcileCalls, 8000);
+  reconcileTimer = setInterval(reconcileCalls, 120000);
+}
+
 /* ═══════════════════════════════════════════════════════
    APP ENTRY
 ═══════════════════════════════════════════════════════ */
@@ -2007,6 +2030,7 @@ async function enterApp() {
   loadUsage();
   loadROI();
   startReminderPolling();
+  startReconcilePolling();
   maybeShowWelcome();
   // Surface any AI-suggested follow-ups awaiting review (e.g. from calls
   // that finished analyzing while the app was closed)
@@ -2037,7 +2061,7 @@ function switchPanel(p) {
   document.getElementById('nav-' + p)?.classList.add('active');
   if (p === 'dashboard') refreshDashboard();
   if (p === 'analytics') renderAnalytics();
-  if (p === 'log') renderLog();
+  if (p === 'log') { reconcileCalls(); renderLog(); }
   if (p === 'contacts') { if (!contactsSegNavPending) contactsSegment = null; contactsSegNavPending = false; loadContacts(); }
   if (p === 'followups') loadFollowUps();
   if (p === 'power') { pdRender(); loadTeamLists(); }

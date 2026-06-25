@@ -60,6 +60,84 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, request_id: reqId });
   }
 
+  // ── Reconcile: backfill any calls Twilio recorded today that the recording webhook
+  //    didn't save (it can drop callbacks under burst dialing). Authenticated by the
+  //    user's JWT (not a Twilio signature). The app calls this periodically while open,
+  //    so missed calls self-heal within a couple minutes regardless of webhook flakiness.
+  if (req.query.reconcile === '1') {
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    if (!token) return res.status(401).json({ error: 'Not signed in' });
+    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    const { data: { user } = {}, error: authErr } = await sb.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ error: 'Invalid session' });
+    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) return res.status(200).json({ inserted: 0 });
+
+    const acct = process.env.TWILIO_ACCOUNT_SID;
+    const twAuth = 'Basic ' + Buffer.from(`${acct}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+    const twBase = `https://api.twilio.com/2010-04-01/Accounts/${acct}`;
+    const today = new Date().toISOString().slice(0, 10);
+    const last10 = p => String(p || '').replace(/\D/g, '').slice(-10);
+    try {
+      const [recsR, callsR] = await Promise.all([
+        fetch(`${twBase}/Recordings.json?DateCreated=${today}&PageSize=200`, { headers: { Authorization: twAuth } }),
+        fetch(`${twBase}/Calls.json?StartTime=${today}&PageSize=300`, { headers: { Authorization: twAuth } })
+      ]);
+      const recs = (await recsR.json()).recordings || [];
+      const calls = (await callsR.json()).calls || [];
+      if (!recs.length) return res.status(200).json({ inserted: 0 });
+
+      const toByParent = {}, callFrom = {}, callTo = {};
+      for (const c of calls) {
+        callFrom[c.sid] = c.from || '';
+        callTo[c.sid] = c.to || '';
+        if (c.direction === 'outbound-dial' && c.parent_call_sid) toByParent[c.parent_call_sid] = c.to;
+      }
+      const { data: existing } = await sb.from('calls').select('call_sid, recording_sid').eq('user_id', user.id).gte('created_at', today);
+      const haveCall = new Set((existing || []).map(r => r.call_sid).filter(Boolean));
+      const haveRec = new Set((existing || []).map(r => r.recording_sid).filter(Boolean));
+      const { data: prof } = await sb.from('profiles').select('twilio_phone_number').eq('id', user.id).single();
+      const fromNum = prof?.twilio_phone_number || '';
+      const { data: contacts } = await sb.from('contacts').select('id, phone').eq('user_id', user.id).not('phone', 'is', null);
+      const cmap = {};
+      for (const c of (contacts || [])) { const k = last10(c.phone); if (k) cmap[k] = c.id; }
+
+      const rows = [];
+      for (const r of recs) {
+        if (haveCall.has(r.call_sid) || haveRec.has(r.sid)) continue;
+        // Attribute each recording to the user who actually placed/received it, so a
+        // shared Twilio account never leaks one user's calls into another's log.
+        const legFrom = callFrom[r.call_sid] || '';
+        let to;
+        if (legFrom.startsWith('client:')) {
+          if (legFrom.slice(7) !== user.id) continue;       // another user's outbound call
+          to = toByParent[r.call_sid] || '';
+        } else if (fromNum && last10(callTo[r.call_sid]) === last10(fromNum)) {
+          to = legFrom;                                      // inbound to this user's number; contact = the caller
+        } else {
+          continue;                                          // not this user's call
+        }
+        rows.push({
+          call_sid: r.call_sid, recording_sid: r.sid,
+          recording_url: `${twBase}/Recordings/${r.sid}.mp3`,
+          from_number: fromNum, to_number: to,
+          duration: parseInt(r.duration) || 0,
+          transcript: 'PENDING:unknown', notes: '',
+          heat_score: null, sentiment: null, next_step: '',
+          contact_id: cmap[last10(to)] || null, user_id: user.id,
+          created_at: r.date_created ? new Date(r.date_created).toISOString() : new Date().toISOString()
+        });
+      }
+      if (rows.length) {
+        const { error: insErr } = await sb.from('calls').insert(rows);
+        if (insErr) { console.error('reconcile insert error:', insErr); return res.status(200).json({ inserted: 0 }); }
+      }
+      return res.status(200).json({ inserted: rows.length });
+    } catch (e) {
+      console.error('reconcile error:', e.message);
+      return res.status(200).json({ inserted: 0 });
+    }
+  }
+
   // Validate Twilio signature against the URL exactly as requested — req.url preserves
   // the original encoding (Twilio normalizes %3A back to ':' etc., so rebuilding the
   // query string with URLSearchParams produces a different string and fails validation)
