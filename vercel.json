@@ -1,4 +1,8 @@
 {
+  "functions": {
+    "api/twilio-recording.js": { "maxDuration": 60 },
+    "api/assemblyai-webhook.js": { "maxDuration": 60 }
+  },
   "crons": [
     { "path": "/api/process-follow-ups", "schedule": "0 9 * * *" }
   ],

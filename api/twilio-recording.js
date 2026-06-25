@@ -93,14 +93,42 @@ export default async function handler(req, res) {
   const To = req.query.to || req.body.To || null;
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-  // Always insert the call record, even if transcription fails
-  let transcriptPlaceholder = 'PENDING:unknown';
-  let transcriptId = null;
-
   const recordingBase = process.env.TWILIO_WEBHOOK_BASE_URL
     ? process.env.TWILIO_WEBHOOK_BASE_URL.replace(/\/$/, '')
     : `https://${req.headers.host}`;
   const audioUrl = `${RecordingUrl}.mp3`;
+
+  // Save the call row FIRST — BEFORE the slow work (downloading the recording and
+  // starting transcription). Under burst dialing those steps can run several seconds
+  // each and the function can time out; doing them before the insert meant the whole
+  // call was silently lost. Now the row always lands; we patch in the transcript
+  // pointer afterward. If the function dies mid-transcription, the row still exists
+  // with the recording and is recoverable via Re-transcribe.
+  let callRowId = null;
+  try {
+    const { data: inserted, error: insertErr } = await supabase.from('calls').insert({
+      call_sid: CallSid,
+      recording_sid: RecordingSid,
+      recording_url: audioUrl,
+      from_number: From,
+      to_number: To,
+      duration: parseInt(RecordingDuration) || 0,
+      transcript: 'PENDING:unknown',
+      notes: '',
+      heat_score: null,
+      sentiment: null,
+      next_step: '',
+      contact_id: null,
+      user_id: userId
+    }).select('id').single();
+    if (insertErr) console.error('Call insert error:', insertErr);
+    else callRowId = inserted?.id || null;
+  } catch (dbErr) {
+    console.error('DB insert error:', dbErr);
+  }
+
+  let transcriptPlaceholder = 'PENDING:unknown';
+  let transcriptId = null;
 
   // Download the recording from Twilio once (used by whichever STT engine runs)
   let audioBuffer = null;
@@ -169,26 +197,18 @@ export default async function handler(req, res) {
     }
   }
 
-  // Always insert the call record regardless of transcription success
-  try {
-    const { error: insertErr } = await supabase.from('calls').insert({
-      call_sid: CallSid,
-      recording_sid: RecordingSid,
-      recording_url: audioUrl,
-      from_number: From,
-      to_number: To,
-      duration: parseInt(RecordingDuration) || 0,
-      transcript: transcriptPlaceholder,
-      notes: transcriptId ? '' : 'Transcription could not be started',
-      heat_score: null,
-      sentiment: null,
-      next_step: '',
-      contact_id: null,
-      user_id: userId
-    });
-    if (insertErr) console.error('Call insert error:', insertErr);
-  } catch (dbErr) {
-    console.error('DB insert error:', dbErr);
+  // Patch the transcript pointer onto the row we saved up front, so the Deepgram /
+  // AssemblyAI callback can find it by its PENDING:* marker. The row already exists,
+  // so even if everything above this point failed, the call is not lost.
+  if (callRowId) {
+    try {
+      await supabase.from('calls').update({
+        transcript: transcriptPlaceholder,
+        notes: transcriptId ? '' : 'Transcription could not be started'
+      }).eq('id', callRowId);
+    } catch (e) {
+      console.error('transcript pointer update failed:', e.message);
+    }
   }
 
   res.status(200).json({ status: transcriptId ? 'pending' : 'saved_no_transcript', transcriptId });
