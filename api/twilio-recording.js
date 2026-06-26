@@ -116,9 +116,11 @@ export default async function handler(req, res) {
         else dialsInserted = dialRows.length;
       }
 
-      const { data: existing } = await sb.from('calls').select('call_sid, recording_sid').eq('user_id', user.id).gte('created_at', today);
+      const { data: existing } = await sb.from('calls').select('call_sid, recording_sid, duration').eq('user_id', user.id).gte('created_at', today);
       const haveCall = new Set((existing || []).map(r => r.call_sid).filter(Boolean));
       const haveRec = new Set((existing || []).map(r => r.recording_sid).filter(Boolean));
+      const durByRec = {};
+      for (const r of (existing || [])) { if (r.recording_sid) durByRec[r.recording_sid] = r.duration; }
       const { data: prof } = await sb.from('profiles').select('twilio_phone_number').eq('id', user.id).single();
       const fromNum = prof?.twilio_phone_number || '';
       const { data: contacts } = await sb.from('contacts').select('id, phone').eq('user_id', user.id).not('phone', 'is', null);
@@ -126,8 +128,15 @@ export default async function handler(req, res) {
       for (const c of (contacts || [])) { const k = last10(c.phone); if (k) cmap[k] = c.id; }
 
       const rows = [];
+      const durFixes = [];
       for (const r of recs) {
-        if (haveCall.has(r.call_sid) || haveRec.has(r.sid)) continue;
+        const realDur = parseInt(r.duration) || 0;   // the recording resource's duration is authoritative
+        if (haveCall.has(r.call_sid) || haveRec.has(r.sid)) {
+          // Already saved — but the webhook's RecordingDuration callback is unreliable
+          // (can be -1 for dual-channel), so heal the stored duration from the real one.
+          if (haveRec.has(r.sid) && realDur > 0 && durByRec[r.sid] !== realDur) durFixes.push({ rsid: r.sid, dur: realDur });
+          continue;
+        }
         // Attribute each recording to the user who actually placed/received it, so a
         // shared Twilio account never leaks one user's calls into another's log.
         const legFrom = callFrom[r.call_sid] || '';
@@ -144,18 +153,21 @@ export default async function handler(req, res) {
           call_sid: r.call_sid, recording_sid: r.sid,
           recording_url: `${twBase}/Recordings/${r.sid}.mp3`,
           from_number: fromNum, to_number: to,
-          duration: parseInt(r.duration) || 0,
+          duration: realDur,
           transcript: 'PENDING:unknown', notes: '',
           heat_score: null, sentiment: null, next_step: '',
           contact_id: cmap[last10(to)] || null, user_id: user.id,
           created_at: r.date_created ? new Date(r.date_created).toISOString() : new Date().toISOString()
         });
       }
+      for (const f of durFixes) {
+        await sb.from('calls').update({ duration: f.dur }).eq('recording_sid', f.rsid).eq('user_id', user.id);
+      }
       if (rows.length) {
         const { error: insErr } = await sb.from('calls').insert(rows);
         if (insErr) { console.error('reconcile insert error:', insErr); return res.status(200).json({ inserted: 0 }); }
       }
-      return res.status(200).json({ inserted: rows.length, dials: dialsInserted });
+      return res.status(200).json({ inserted: rows.length, dials: dialsInserted, fixed: durFixes.length });
     } catch (e) {
       console.error('reconcile error:', e.message);
       return res.status(200).json({ inserted: 0 });
@@ -214,7 +226,7 @@ export default async function handler(req, res) {
       recording_url: audioUrl,
       from_number: From,
       to_number: To,
-      duration: parseInt(RecordingDuration) || 0,
+      duration: Math.max(0, parseInt(RecordingDuration) || 0),
       transcript: 'PENDING:unknown',
       notes: '',
       heat_score: null,
