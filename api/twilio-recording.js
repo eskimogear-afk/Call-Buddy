@@ -84,7 +84,6 @@ export default async function handler(req, res) {
       ]);
       const recs = (await recsR.json()).recordings || [];
       const calls = (await callsR.json()).calls || [];
-      if (!recs.length) return res.status(200).json({ inserted: 0 });
 
       const toByParent = {}, callFrom = {}, callTo = {};
       for (const c of calls) {
@@ -92,6 +91,31 @@ export default async function handler(req, res) {
         callTo[c.sid] = c.to || '';
         if (c.direction === 'outbound-dial' && c.parent_call_sid) toByParent[c.parent_call_sid] = c.to;
       }
+
+      // ── Count every DIAL (answered or not), not just recorded calls. Each outbound-dial
+      //    leg whose parent client is THIS user is one dial. Dedup by call_sid. ──
+      const { data: existingDials } = await sb.from('dials').select('call_sid').eq('user_id', user.id).gte('created_at', today);
+      const haveDial = new Set((existingDials || []).map(d => d.call_sid).filter(Boolean));
+      const dialRows = [];
+      for (const c of calls) {
+        if (c.direction !== 'outbound-dial' || !c.sid || haveDial.has(c.sid)) continue;
+        const parentFrom = callFrom[c.parent_call_sid] || '';
+        if (!parentFrom.startsWith('client:') || parentFrom.slice(7) !== user.id) continue;
+        dialRows.push({
+          user_id: user.id,
+          phone: c.to || '',
+          answered: (parseInt(c.duration) || 0) > 0,
+          call_sid: c.sid,
+          created_at: c.start_time ? new Date(c.start_time).toISOString() : new Date().toISOString()
+        });
+      }
+      let dialsInserted = 0;
+      if (dialRows.length) {
+        const { error: dErr } = await sb.from('dials').insert(dialRows);
+        if (dErr) console.error('reconcile dials insert error:', dErr.message);
+        else dialsInserted = dialRows.length;
+      }
+
       const { data: existing } = await sb.from('calls').select('call_sid, recording_sid').eq('user_id', user.id).gte('created_at', today);
       const haveCall = new Set((existing || []).map(r => r.call_sid).filter(Boolean));
       const haveRec = new Set((existing || []).map(r => r.recording_sid).filter(Boolean));
@@ -131,7 +155,7 @@ export default async function handler(req, res) {
         const { error: insErr } = await sb.from('calls').insert(rows);
         if (insErr) { console.error('reconcile insert error:', insErr); return res.status(200).json({ inserted: 0 }); }
       }
-      return res.status(200).json({ inserted: rows.length });
+      return res.status(200).json({ inserted: rows.length, dials: dialsInserted });
     } catch (e) {
       console.error('reconcile error:', e.message);
       return res.status(200).json({ inserted: 0 });

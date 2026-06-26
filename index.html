@@ -994,6 +994,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         </div>
         <div id="roi-panel" class="hidden" style="margin-bottom:20px"></div>
         <div class="stats-grid">
+          <div class="sb-item sb-sky"><div class="sb-lbl">Dials today</div><div class="sb-val num" id="st-dials-today">-</div><div class="sb-sub" id="st-dials-sub"></div></div>
           <div class="sb-item sb-blue"><div class="sb-lbl">Calls</div><div class="sb-val num" id="st-total">-</div></div>
           <div class="sb-item sb-red"><div class="sb-lbl">Hot</div><div class="sb-val num" id="st-int">-</div></div>
           <div class="sb-item sb-amber"><div class="sb-lbl">Warm</div><div class="sb-val num" id="st-cb">-</div></div>
@@ -2755,6 +2756,19 @@ function refreshDashboard() {
       document.getElementById('st-quality-sub').textContent = `${pos} positive · ${neu} neutral · ${neg} negative`;
     }
   }
+
+  // Dials today — every dial placed (answered or not), from the dials table.
+  (async () => {
+    const el = document.getElementById('st-dials-today');
+    if (!el || !currentUser) return;
+    try {
+      const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
+      const { data: dt } = await db.from('dials').select('answered').gte('created_at', startToday.toISOString()).limit(2000);
+      el.textContent = (dt?.length || 0);
+      const sub = document.getElementById('st-dials-sub');
+      if (sub) sub.textContent = dt?.length ? `${dt.filter(x => x.answered).length} answered` : '';
+    } catch (e) { el.textContent = '—'; }
+  })();
 
   // Pickup rate: answered dials / total dials, rolling 7 days
   (async () => {
