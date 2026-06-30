@@ -482,7 +482,9 @@ ${transcript}`;
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      // Premium model only for the quality-sensitive, customer-facing outputs (coaching
+      // read + email drafts); everything else (extraction/utility) uses the cheap model.
+      model: ['coach', 'email'].includes(type) ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001',
       max_tokens: 1000,
       system: [{ type: 'text', text: 'You are an expert sales call analyst for mortgage professionals. Be precise and concise.', cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: prompt }]
