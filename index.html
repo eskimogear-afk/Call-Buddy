@@ -2747,6 +2747,124 @@ function fmtTalk(sec) {
   return h ? h + 'h ' + m + 'm' : m + 'm';
 }
 
+// ── Analytics panel: stats + 3 Chart.js charts. Each block is independently
+//    try/caught so one failure never blanks the rest (and never touches dialing). ──
+let anChartDaily = null, anChartHour = null, anChartOutcomes = null;
+function changeDialGoal() {
+  const cur = Number(localStorage.getItem('dialGoal')) || 50;
+  const v = prompt('Daily dial goal:', cur);
+  const n = parseInt(v, 10);
+  if (n && n > 0) { localStorage.setItem('dialGoal', n); renderAnalytics(); }
+}
+async function renderAnalytics() {
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  const recs = Array.isArray(records) ? records : [];
+  const cts = Array.isArray(contactsCache) ? contactsCache : [];
+  const now = Date.now();
+  const secsOf = r => Number(r.duration_seconds || r.duration || 0);
+
+  try { // Pipeline heat chips
+    const counts = { Hot: 0, Warm: 0, Cold: 0 };
+    cts.forEach(c => { if (counts[c.heat_score] != null) counts[c.heat_score]++; });
+    const heatEl = document.getElementById('an-heat');
+    if (heatEl) heatEl.innerHTML = [['Hot', '#dc2626'], ['Warm', '#f59e0b'], ['Cold', '#6b7280']]
+      .map(([k, col]) => `<span style="font-size:12px;font-weight:600;color:${col};background:${col}1f;padding:2px 9px;border-radius:99px">${counts[k]} ${k}</span>`).join('');
+  } catch (e) { }
+
+  try { // Going stale + Hot-no-next
+    const stale = cts.filter(c => ['new', 'contacted', 'meeting'].includes(c.stage || 'new') && (() => { const ref = c.last_called || c.created_at; return ref && (now - new Date(ref).getTime() > 14 * 86400000); })()).length;
+    set('an-stale', stale);
+    set('an-hotnonext', cts.filter(c => c.heat_score === 'Hot' && !c.next_follow_up_at).length);
+  } catch (e) { }
+
+  try { // Interested per convo (7d)
+    const wk = recs.filter(r => now - new Date(r.created_at).getTime() < 7 * 86400000);
+    const convos = wk.filter(r => secsOf(r) > 30).length;
+    const interested = wk.filter(r => r.outcome === 'Interested' || r.heat_score === 'Hot').length;
+    set('an-interested', convos ? Math.round(interested / convos * 100) + '%' : '—');
+    set('an-interested-sub', convos ? `${interested} interested · ${convos} convos` : 'No 30s+ calls this week');
+  } catch (e) { }
+
+  try { // Outcome mix doughnut (30d, from in-memory calls)
+    const since30 = now - 30 * 86400000;
+    const o30 = recs.filter(r => new Date(r.created_at).getTime() >= since30 && r.outcome);
+    const order = ['Interested', 'Callback', 'Not interested', 'Voicemail', 'No answer'];
+    const ctx = document.getElementById('chart-outcomes');
+    if (ctx && window.Chart) {
+      if (anChartOutcomes) anChartOutcomes.destroy();
+      anChartOutcomes = new Chart(ctx, {
+        type: 'doughnut',
+        data: { labels: order, datasets: [{ data: order.map(o => o30.filter(r => r.outcome === o).length), backgroundColor: ['#16a34a', '#f59e0b', '#dc2626', '#6366f1', '#9ca3af'] }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }
+      });
+    }
+  } catch (e) { console.warn('outcomes chart', e); }
+
+  try { // Dials: today + pickup + per-day chart + best-hour chart
+    if (!currentUser) return;
+    const { data: dials } = await db.from('dials').select('answered, created_at').gte('created_at', new Date(now - 31 * 86400000).toISOString()).limit(8000);
+    const D = dials || [];
+    const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
+    const todayD = D.filter(d => new Date(d.created_at) >= startToday);
+    set('an-dials', todayD.length);
+    const goal = Number(localStorage.getItem('dialGoal')) || 50;
+    const bar = document.getElementById('an-goal-bar'); if (bar) bar.style.width = Math.min(100, Math.round(todayD.length / goal * 100)) + '%';
+    set('an-goal-lbl', `goal ${goal}`);
+    const wk = D.filter(d => now - new Date(d.created_at).getTime() < 7 * 86400000);
+    const picked = wk.filter(d => d.answered).length;
+    set('an-connect', wk.length ? Math.round(picked / wk.length * 100) + '%' : '—');
+    set('an-connect-sub', wk.length ? `${picked} of ${wk.length} answered` : 'Tracks from your next dial');
+
+    try { // Dials per day (14d)
+      const days = [];
+      for (let i = 13; i >= 0; i--) { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i); days.push(d); }
+      const data = days.map(d => { const nd = new Date(d); nd.setDate(nd.getDate() + 1); return D.filter(x => { const t = new Date(x.created_at); return t >= d && t < nd; }).length; });
+      const ctx = document.getElementById('chart-daily');
+      if (ctx && window.Chart) {
+        if (anChartDaily) anChartDaily.destroy();
+        anChartDaily = new Chart(ctx, {
+          type: 'bar',
+          data: { labels: days.map(d => d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })), datasets: [{ label: 'Dials', data, backgroundColor: '#6366f1', borderRadius: 4 }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        });
+      }
+      set('an-daily-note', `Averaging ${Math.round(data.reduce((a, b) => a + b, 0) / 14)} dials/day over the last 2 weeks.`);
+    } catch (e) { console.warn('daily chart', e); }
+
+    try { // Best hour to call (pickup% by hour, 30d)
+      const byHour = Array.from({ length: 24 }, () => ({ t: 0, a: 0 }));
+      D.forEach(d => { const h = new Date(d.created_at).getHours(); byHour[h].t++; if (d.answered) byHour[h].a++; });
+      const labels = [], rates = [];
+      for (let h = 7; h <= 20; h++) { labels.push(((h % 12) || 12) + (h < 12 ? 'a' : 'p')); rates.push(byHour[h].t >= 3 ? Math.round(byHour[h].a / byHour[h].t * 100) : 0); }
+      const ctx = document.getElementById('chart-hour');
+      if (ctx && window.Chart) {
+        if (anChartHour) anChartHour.destroy();
+        anChartHour = new Chart(ctx, {
+          type: 'bar',
+          data: { labels, datasets: [{ label: 'Pickup %', data: rates, backgroundColor: '#16a34a', borderRadius: 4 }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } } }
+        });
+      }
+      let best = -1, bestRate = -1;
+      for (let h = 7; h <= 20; h++) { if (byHour[h].t >= 5 && byHour[h].a / byHour[h].t > bestRate) { bestRate = byHour[h].a / byHour[h].t; best = h; } }
+      set('an-hour-note', best >= 0 ? `Your pickup rate peaks around ${((best % 12) || 12) + (best < 12 ? 'am' : 'pm')} (${Math.round(bestRate * 100)}% answered) — dial then.` : 'Not enough dials yet to spot your best hour.');
+    } catch (e) { console.warn('hour chart', e); }
+
+    try { // Follow-ups due today
+      const endToday = new Date(); endToday.setHours(23, 59, 59, 999);
+      const { data: fu } = await db.from('follow_ups').select('id').eq('status', 'pending').lte('scheduled_at', endToday.toISOString()).limit(500);
+      set('an-due', (fu || []).length);
+    } catch (e) { }
+
+    try { // SMS reply rate
+      const { data: msgs } = await db.from('messages').select('direction').limit(3000);
+      const M = msgs || [], out = M.filter(m => m.direction === 'outbound').length, inb = M.filter(m => m.direction === 'inbound').length;
+      set('an-sms', out ? Math.round(inb / out * 100) + '%' : '—');
+      const sub = document.getElementById('an-sms-sub'); if (sub) sub.textContent = out ? `${inb} replies · ${out} sent` : 'No texts sent yet';
+    } catch (e) { }
+  } catch (e) { console.warn('analytics dials', e); }
+}
+
 function refreshDashboard() {
   document.getElementById('st-total').textContent = records.length;
   const now = Date.now();
