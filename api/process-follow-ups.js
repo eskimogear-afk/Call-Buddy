@@ -165,7 +165,48 @@ export default async function handler(req, res) {
       } catch (e) { console.error('Overage billing error:', e); }
     }
 
-    return res.status(200).json({ ok: true, processed: dueFollowUps?.length || 0, monthlyReset, overageBilled, ...results });
+    // ── Daily reconciliation backstop: any call Twilio recorded but the webhook never
+    //    saved (mainly inbound calls that arrived while the app was closed). The in-app
+    //    reconcile covers active sessions; this catches the rest once a day. ──
+    let reconciled = 0;
+    try {
+      const since = new Date(Date.now() - 2 * 86400000);
+      const [recs, calls] = await Promise.all([
+        client.recordings.list({ dateCreatedAfter: since, limit: 500 }),
+        client.calls.list({ startTimeAfter: since, limit: 800 })
+      ]);
+      const callBySid = {}, toByParent = {};
+      for (const c of calls) { callBySid[c.sid] = c; if (c.parentCallSid && c.to) toByParent[c.parentCallSid] = c.to; }
+      const l10 = x => String(x || '').replace(/\D/g, '').slice(-10);
+      const { data: profs } = await supabase.from('profiles').select('id, twilio_phone_number').not('twilio_phone_number', 'is', null);
+      const userByNumber = {};
+      (profs || []).forEach(p => { const d = l10(p.twilio_phone_number); if (d) userByNumber[d] = p.id; });
+      if (recs.length) {
+        const { data: existing } = await supabase.from('calls').select('call_sid, recording_sid').gte('created_at', since.toISOString());
+        const haveCall = new Set((existing || []).map(r => r.call_sid).filter(Boolean));
+        const haveRec = new Set((existing || []).map(r => r.recording_sid).filter(Boolean));
+        const rows = [];
+        for (const r of recs) {
+          if (haveCall.has(r.callSid) || haveRec.has(r.sid)) continue;
+          const leg = callBySid[r.callSid];
+          let uid = null, to = '';
+          if (leg && String(leg.from || '').startsWith('client:')) { uid = leg.from.slice(7); to = toByParent[r.callSid] || leg.to || ''; }
+          else if (leg) { uid = userByNumber[l10(leg.to)]; to = leg.from || ''; } // inbound: owner of the dialed number; contact = caller
+          if (!uid) continue;
+          rows.push({
+            call_sid: r.callSid, recording_sid: r.sid,
+            recording_url: `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Recordings/${r.sid}.mp3`,
+            from_number: '', to_number: to, duration: parseInt(r.duration) || 0,
+            transcript: 'PENDING:unknown', notes: '', heat_score: null, sentiment: null, next_step: '',
+            contact_id: null, user_id: uid,
+            created_at: r.dateCreated ? new Date(r.dateCreated).toISOString() : new Date().toISOString()
+          });
+        }
+        if (rows.length) { const { error: insErr } = await supabase.from('calls').insert(rows); if (insErr) console.error('cron reconcile insert:', insErr.message); else reconciled = rows.length; }
+      }
+    } catch (e) { console.error('cron reconcile error:', e.message); }
+
+    return res.status(200).json({ ok: true, processed: dueFollowUps?.length || 0, monthlyReset, overageBilled, reconciled, ...results });
   } catch (err) {
     console.error('Process follow-ups error:', err);
     return res.status(500).json({ error: 'Processing error' });
