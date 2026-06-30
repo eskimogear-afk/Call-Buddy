@@ -2296,6 +2296,21 @@ async function deleteRecord(id) {
   } catch(e) { alert('Error deleting: ' + e.message); }
 }
 
+// One-tap call disposition: set (or clear, on re-tap) the call's outcome. Updates the
+// button group in place for instant feedback (no full re-render), saves optimistically.
+async function setCallOutcome(id, outcome, btn) {
+  const rec = records.find(r => r.id === id);
+  if (!rec) return;
+  const next = (rec.outcome === outcome) ? null : outcome;
+  rec.outcome = next;
+  const card = btn ? btn.closest('.call-card') : document.getElementById('cc-' + id);
+  if (card) card.querySelectorAll('[data-oc]').forEach(b => { b.className = 'btn ' + (b.getAttribute('data-oc') === next ? 'btn-primary' : 'btn-outline'); });
+  refreshDashboard();
+  try {
+    await db.from('calls').update({ outcome: next }).eq('id', id).eq('user_id', currentUser.id);
+  } catch (e) { /* optimistic — local state already updated */ }
+}
+
 async function clearAllRecords() {
   if (!confirm('Delete ALL call records? This cannot be undone.')) return;
   try {
@@ -2390,6 +2405,12 @@ function buildTable(recs) {
         ${transcript ? (idx === 0
           ? `<div class="cc-field" style="margin-bottom:6px"><b>Transcript</b></div><div class="cc-transcript">${esc(transcript)}</div>`
           : `<div class="cc-field" style="margin-bottom:6px"><b>Transcript</b></div><div class="cc-transcript" data-lazy="1"><span style="color:var(--text3)">Expand to load transcript…</span></div>`) : ''}
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text3);margin-bottom:6px">MARK OUTCOME</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${['No answer','Voicemail','Callback','Interested','Not interested'].map(o => `<button class="btn ${r.outcome===o?'btn-primary':'btn-outline'}" data-oc="${escAttr(o)}" style="font-size:11.5px;padding:4px 11px" onclick="event.stopPropagation();setCallOutcome('${r.id}','${escAttr(o)}',this)">${o}</button>`).join('')}
+          </div>
+        </div>
         <div class="cc-actions">
           ${phone && !isDNC(phone) ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="callAgain('${escAttr(phone)}')">📞 Call again</button>` : ''}
           ${phone ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="followUpFromCall('${r.contact_id || ''}','${escAttr(display)}','${escAttr(phone)}')">⏰ Schedule follow-up</button>` : ''}
