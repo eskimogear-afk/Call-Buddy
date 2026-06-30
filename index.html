@@ -2376,7 +2376,7 @@ function buildTable(recs) {
           <div class="cc-sub">${company}${hasRealName && phone ? esc(fmtPhone(phone)) + ' · ' : ''}${when}</div>
           ${summary ? `<div class="cc-summary">${esc(summary)}</div>` : ''}
         </div>
-        <div class="cc-right"><span class="cc-chevron">▼</span></div>
+        <div class="cc-right">${phone ? `<button onclick="event.stopPropagation();followUpFromCall('${r.contact_id || ''}','${escAttr(display)}','${escAttr(phone)}')" title="Schedule a follow-up with this person" style="font-size:12px;padding:5px 10px;margin-right:8px;background:var(--brand-light);color:var(--brand-mid);border:1px solid var(--brand);border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;white-space:nowrap">⏰ Follow up</button>` : ''}<span class="cc-chevron">▼</span></div>
       </div>
       <div class="cc-detail">
         <div class="cc-detail-grid">
