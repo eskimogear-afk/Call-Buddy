@@ -929,6 +929,9 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <button class="sidebar-item active" id="nav-dashboard" onclick="switchPanel('dashboard')">
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard
       </button>
+      <button class="sidebar-item" id="nav-callnext" onclick="switchPanel('callnext')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/></svg>Call next
+      </button>
       <button class="sidebar-item" id="nav-analytics" onclick="switchPanel('analytics')">
         <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Analytics
       </button>
@@ -1049,6 +1052,15 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           </div>
           <div id="dash-table"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div>
         </div>
+      </div>
+
+      <!-- Call next -->
+      <div id="panel-callnext" class="hidden">
+        <div style="margin-bottom:20px">
+          <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">🎯 Call next</h1>
+          <p style="font-size:14px;color:var(--text2);margin-top:4px">Your prioritized list — overdue follow-ups, hot leads, and people who didn't pick up. Work top to bottom.</p>
+        </div>
+        <div id="callnext-list"><div class="page-spinner"><div class="spinner spinner-dark"></div> Building your queue...</div></div>
       </div>
 
       <!-- Analytics -->
@@ -2056,12 +2068,13 @@ function showView(v) {
 }
 
 function switchPanel(p) {
-  ['dashboard','analytics','recorder','log','settings','contacts','followups','power','inbox','calendar','pricing','partner'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
+  ['dashboard','callnext','analytics','recorder','log','settings','contacts','followups','power','inbox','calendar','pricing','partner'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
   document.getElementById('panel-' + p).classList.remove('hidden');
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
   document.getElementById('nav-' + p)?.classList.add('active');
   if (p === 'dashboard') refreshDashboard();
   if (p === 'analytics') renderAnalytics();
+  if (p === 'callnext') renderCallNext();
   if (p === 'log') { reconcileCalls(); renderLog(); }
   if (p === 'contacts') { if (!contactsSegNavPending) contactsSegment = null; contactsSegNavPending = false; loadContacts(); }
   if (p === 'followups') loadFollowUps();
@@ -2473,7 +2486,7 @@ async function playRecording(callId, btn) {
 function callAgain(phone) {
   switchPanel('dashboard');
   const input = document.getElementById('dialer-number');
-  if (input) { input.value = phone; input.focus(); }
+  if (input) { input.value = phone; input.focus(); updateDialerLocalTime(); checkDialerHistory(); }
 }
 
 // Jump to the Pricing tool from a call card, pre-filling who the quote is for
@@ -2863,6 +2876,65 @@ async function renderAnalytics() {
       const sub = document.getElementById('an-sms-sub'); if (sub) sub.textContent = out ? `${inb} replies · ${out} sent` : 'No texts sent yet';
     } catch (e) { }
   } catch (e) { console.warn('analytics dials', e); }
+}
+
+// ── Call next: a prioritized "who to dial" queue — overdue/today follow-ups, hot
+//    leads with no next step, warm leads going cold, and recent missed connects. ──
+async function renderCallNext() {
+  const el = document.getElementById('callnext-list');
+  if (!el) return;
+  const now = Date.now();
+  if (!Array.isArray(contactsCache) || !contactsCache.length) {
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      if (session) { const r = await fetch('/api/contacts', { headers: { Authorization: 'Bearer ' + session.access_token } }); if (r.ok) contactsCache = await r.json(); }
+    } catch (e) { }
+  }
+  const cts = Array.isArray(contactsCache) ? contactsCache : [];
+  const recs = Array.isArray(records) ? records : [];
+  const last10 = p => String(p || '').replace(/\D/g, '').slice(-10);
+  const byPhone = {};
+  const add = (phone, name, contactId, reason, tier) => {
+    const k = last10(phone); if (k.length < 10) return;
+    if (byPhone[k] && byPhone[k].tier <= tier) return; // keep the higher-priority reason
+    byPhone[k] = { phone, name, contactId, reason, tier };
+  };
+  try { // Tier 1/2: overdue + due-today follow-ups
+    if (currentUser) {
+      const endToday = new Date(); endToday.setHours(23, 59, 59, 999);
+      const { data: fus } = await db.from('follow_ups')
+        .select('scheduled_at, contacts(id, name, phone)')
+        .eq('status', 'pending').lte('scheduled_at', endToday.toISOString())
+        .order('scheduled_at', { ascending: true }).limit(300);
+      (fus || []).forEach(f => {
+        const c = f.contacts; if (!c || !c.phone) return;
+        const overdue = new Date(f.scheduled_at).getTime() < now;
+        add(c.phone, c.name, c.id, overdue ? 'Overdue follow-up' : 'Follow-up due today', overdue ? 1 : 2);
+      });
+    }
+  } catch (e) { }
+  // Tier 3: hot leads with no follow-up scheduled
+  cts.filter(c => c.heat_score === 'Hot' && !c.next_follow_up_at && c.phone).forEach(c => add(c.phone, c.name, c.id, 'Hot lead — no follow-up set', 3));
+  // Tier 4: warm leads going cold (untouched 7+ days)
+  cts.filter(c => c.heat_score === 'Warm' && c.phone && (() => { const ref = c.last_called || c.created_at; return ref && now - new Date(ref).getTime() > 7 * 86400000; })()).forEach(c => add(c.phone, c.name, c.id, 'Warm lead going cold', 4));
+  // Tier 5: recent missed connects (No answer / Voicemail, last 3 days)
+  recs.filter(r => ['No answer', 'Voicemail'].includes(r.outcome) && now - new Date(r.created_at).getTime() < 3 * 86400000)
+    .forEach(r => add(r.to_number || r.from_number, r.contacts && r.contacts.name, r.contact_id, "Didn't pick up — try again", 5));
+
+  const items = Object.values(byPhone).sort((a, b) => a.tier - b.tier).slice(0, 80);
+  const TC = { 1: 'var(--danger)', 2: '#f59e0b', 3: 'var(--danger)', 4: '#f59e0b', 5: 'var(--text3)' };
+  if (!items.length) { el.innerHTML = '<div class="empty-state" style="padding:34px;text-align:center;color:var(--text3)">🎉 Nothing urgent to call right now. Dial fresh leads from your Pipeline.</div>'; return; }
+  el.innerHTML = `<div class="table-card" style="overflow:hidden">` + items.map(it => {
+    const nm = displayName(it.name, it.phone);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600">${esc(nm)}</div>
+        <div style="font-size:12px;color:var(--text2)">${esc(fmtPhone(it.phone))} · <span style="color:${TC[it.tier]};font-weight:600">${esc(it.reason)}</span></div>
+      </div>
+      <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="callAgain('${escAttr(it.phone)}')">📞 Call</button>
+      ${it.contactId ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 11px" title="Schedule a follow-up" onclick="openContactFollowUp('${it.contactId}','${escAttr(nm)}')">⏰</button>` : ''}
+    </div>`;
+  }).join('') + `</div>`;
 }
 
 function refreshDashboard() {
