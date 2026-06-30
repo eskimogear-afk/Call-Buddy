@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- TODO: replace YOUR-DOMAIN.com with your live domain. Add Phase 2 content
-     pages (DSCR requirements, Airbnb/STR, BRRRR, city pages) here as you publish. -->
+<!-- TODO: replace YOUR-DOMAIN.com with your live domain. Add new Phase 2 content
+     pages (BRRRR, DSCR vs conventional, bank statement, city pages) here as you publish. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://YOUR-DOMAIN.com/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://YOUR-DOMAIN.com/dscr-loan-requirements-florida</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://YOUR-DOMAIN.com/dscr-loans-airbnb-orlando</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
   </url>
 </urlset>
