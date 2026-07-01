@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# TODO: replace YOUR-DOMAIN.com with your live domain
+Sitemap: https://YOUR-DOMAIN.com/sitemap.xml
