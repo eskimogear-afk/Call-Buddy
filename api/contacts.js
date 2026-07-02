@@ -138,28 +138,17 @@ export default async function handler(req, res) {
       if (key.length < 10) return res.status(400).json({ error: 'Enter a full 10-digit number' });
       const e164 = '+1' + key;
       const nat = '(' + key.slice(0, 3) + ') ' + key.slice(3, 6) + '-' + key.slice(6);
+      const fast = req.query.fast === '1';          // inbound screen-pop: skip CNAM when we already know the caller
 
-      // 1) Twilio caller-ID (CNAM) + line-type intelligence
-      let cnam = null, caller_type = null, line_type = null, carrier = null, national_format = null;
-      if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-        try {
-          const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
-          const lr = await fetch(`https://lookups.twilio.com/v2/PhoneNumbers/${e164}?Fields=caller_name,line_type_intelligence`, { headers: { Authorization: `Basic ${auth}` } });
-          if (lr.ok) {
-            const ld = await lr.json();
-            national_format = ld.national_format || null;
-            if (ld.caller_name) { cnam = ld.caller_name.caller_name || null; caller_type = ld.caller_name.caller_type || null; }
-            if (ld.line_type_intelligence) { line_type = ld.line_type_intelligence.type || null; carrier = ld.line_type_intelligence.carrier_name || null; }
-          }
-        } catch (e) { console.error('lookup CNAM error:', e.message); }
-      }
-
-      // 2) Match against the user's own contacts (phone stored E.164 → ilike on the 10-digit key)
+      // 1) Match against the user's own contacts first. Phones are stored E.164
+      //    (+1XXXXXXXXXX); anchor the match to the END of the value ('%'+key, not
+      //    '%'+key+'%') so a 10-digit key can't false-positive as a substring of a
+      //    longer stored value (extension / international / pasted blob).
       let match = null;
       try {
         const { data: cs } = await supabase.from('contacts')
           .select('name,company,phone,city,city_suggested,city_status')
-          .eq('user_id', user.id).ilike('phone', '%' + key + '%').limit(1);
+          .eq('user_id', user.id).ilike('phone', '%' + key).limit(1);
         if (cs && cs.length) {
           const c = cs[0];
           match = { source: 'contact', name: c.name || '', company: c.company || '',
@@ -167,7 +156,7 @@ export default async function handler(req, res) {
         }
       } catch (e) { /* non-fatal */ }
 
-      // 3) Match against saved lead lists (team_lists jsonb → scan leads by 10-digit key)
+      // 2) Match against saved lead lists (team_lists jsonb → scan leads by 10-digit key)
       if (!match) {
         try {
           const { data: prof } = await supabase.from('profiles').select('team_owner_id').eq('id', user.id).single();
@@ -182,6 +171,23 @@ export default async function handler(req, res) {
             }
           }
         } catch (e) { /* non-fatal */ }
+      }
+
+      // 3) Twilio caller-ID (CNAM) + line-type intelligence. Skipped when we already
+      //    have a CRM match AND the caller asked for a fast lookup (fast=1) — saves
+      //    ~0.5s of latency and ~1.5¢ per known inbound caller on the screen-pop.
+      let cnam = null, caller_type = null, line_type = null, carrier = null, national_format = null;
+      if ((!match || !fast) && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+        try {
+          const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+          const lr = await fetch(`https://lookups.twilio.com/v2/PhoneNumbers/${e164}?Fields=caller_name,line_type_intelligence`, { headers: { Authorization: `Basic ${auth}` } });
+          if (lr.ok) {
+            const ld = await lr.json();
+            national_format = ld.national_format || null;
+            if (ld.caller_name) { cnam = ld.caller_name.caller_name || null; caller_type = ld.caller_name.caller_type || null; }
+            if (ld.line_type_intelligence) { line_type = ld.line_type_intelligence.type || null; carrier = ld.line_type_intelligence.carrier_name || null; }
+          }
+        } catch (e) { console.error('lookup CNAM error:', e.message); }
       }
 
       return res.status(200).json({ phone: e164, national_format: national_format || nat, cnam, caller_type, line_type, carrier, match });

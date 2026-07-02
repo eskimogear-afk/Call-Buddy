@@ -39,6 +39,8 @@ async function initTwilioDevice() {
       const from = call.parameters.From || 'Unknown';
       currentCall = call;
       setStatus('📞 Incoming call: ' + from);
+      // Auto caller-ID screen-pop (handled in the app): identify who's calling
+      try { window.dispatchEvent(new CustomEvent('cb:incoming-call', { detail: { from, call } })); } catch (e) {}
 
       const c = document.getElementById('btn-call');
       const h = document.getElementById('btn-hangup');
@@ -57,10 +59,13 @@ async function initTwilioDevice() {
         setStatus('📞 Connected: ' + from);
         if (c) c.style.display = 'none';
         if (h) { h.textContent = 'Hang Up'; h.onclick = hangUp; }
+        try { window.dispatchEvent(new CustomEvent('cb:incoming-answered')); } catch (e) {}
       });
-      call.on('disconnect', () => { restoreDialerUI(); endCallUI(); });
-      call.on('cancel', () => { restoreDialerUI(); currentCall = null; setStatus('Missed call: ' + from); });
-      call.on('reject', () => { restoreDialerUI(); currentCall = null; });
+      call.on('disconnect', () => { restoreDialerUI(); endCallUI(); try { window.dispatchEvent(new CustomEvent('cb:incoming-cleared')); } catch (e) {} });
+      call.on('cancel', () => { restoreDialerUI(); currentCall = null; setStatus('Missed call: ' + from); try { window.dispatchEvent(new CustomEvent('cb:incoming-cleared')); } catch (e) {} });
+      call.on('reject', () => { restoreDialerUI(); currentCall = null; try { window.dispatchEvent(new CustomEvent('cb:incoming-cleared')); } catch (e) {} });
+      // Mirror the outbound path: an errored incoming call must also clear the screen-pop
+      call.on('error', (err) => { console.error('Incoming call error:', err); restoreDialerUI(); currentCall = null; setStatus('🔴 ' + (err.message || 'Call error')); try { window.dispatchEvent(new CustomEvent('cb:incoming-cleared')); } catch (e) {} });
     });
     twilioDevice.on('registering', () => setStatus('Registering...'));
     twilioDevice.on('unregistered', () => setStatus('⚪ Offline'));

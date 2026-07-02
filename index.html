@@ -4202,8 +4202,22 @@ function checkDialerHistory() {
   </div>${lookupBtn}`;
 }
 
-// Caller-ID lookup: pulls the Twilio caller-name (CNAM) + line type for the
-// number in the dialer and cross-checks it against contacts + saved lead lists.
+// Caller-ID lookup: pulls the Twilio caller-name (CNAM) + line type for a number
+// and cross-checks it against contacts + saved lead lists. Shared by the manual
+// dialer button and the automatic incoming-call screen-pop. Pass {fast:true} to
+// skip the paid CNAM call when the number already matches a contact/lead.
+async function fetchCallerId(rawNumber, opts = {}) {
+  const key = String(rawNumber || '').replace(/\D/g, '').slice(-10);
+  if (key.length < 10) throw new Error('Need a full 10-digit number');
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) throw new Error('Please sign in');
+  const r = await fetch('/api/contacts?resource=lookup&phone=' + encodeURIComponent(key) + (opts.fast ? '&fast=1' : ''),
+    { headers: { Authorization: 'Bearer ' + session.access_token } });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || 'Lookup failed');
+  return d;
+}
+
 async function lookupNumber() {
   const el = document.getElementById('dialer-history');
   if (!el) return;
@@ -4217,12 +4231,7 @@ async function lookupNumber() {
   el.style.display = 'block';
   el.innerHTML = `<div style="font-size:12.5px;color:var(--text3);padding:9px 12px;border:1px solid var(--border);border-radius:8px">🔎 Looking up (${key.slice(0, 3)}) ${key.slice(3, 6)}-${key.slice(6)}…</div>`;
   try {
-    const { data: { session } } = await db.auth.getSession();
-    if (!session) throw new Error('Please sign in');
-    const r = await fetch('/api/contacts?resource=lookup&phone=' + encodeURIComponent(key), { headers: { Authorization: 'Bearer ' + session.access_token } });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || 'Lookup failed');
-    renderLookupResult(d);
+    renderLookupResult(await fetchCallerId(digits));
   } catch (e) {
     el.innerHTML = `<div style="font-size:12.5px;color:var(--danger);padding:9px 12px;border:1px solid var(--border);border-radius:8px">Lookup failed: ${esc(e.message || 'error')}</div>`;
   }
@@ -4262,6 +4271,122 @@ function renderLookupResult(d) {
     ${matchHtml}
   </div>`;
 }
+
+/* ═══════════════════════════════════════════════════════
+   INCOMING-CALL SCREEN-POP
+   When a call rings the browser (Twilio Voice SDK 'incoming'
+   event in dialer.js), auto-identify the caller — Twilio
+   caller-ID + a match against contacts / saved lead lists —
+   and show a global Answer/Decline banner. Driven by events
+   dispatched from dialer.js so telephony stays decoupled.
+═══════════════════════════════════════════════════════ */
+let _incomingCall = null;      // the Twilio Call object for the ringing call
+let _incomingPopEl = null;     // the banner element (created on first use)
+let _incomingPopReq = 0;       // guards against a stale lookup filling a newer pop
+
+function _ipEl() {
+  if (_incomingPopEl) return _incomingPopEl;
+  if (!document.getElementById('ip-style')) {
+    const st = document.createElement('style');
+    st.id = 'ip-style';
+    st.textContent = '@keyframes ipRing{0%,100%{transform:rotate(0)}15%{transform:rotate(-14deg)}30%{transform:rotate(14deg)}45%{transform:rotate(-10deg)}60%{transform:rotate(10deg)}75%{transform:rotate(-6deg)}}.ip-ring{display:inline-block;animation:ipRing 1s ease-in-out infinite;transform-origin:50% 10%}';
+    document.head.appendChild(st);
+  }
+  const el = document.createElement('div');
+  el.id = 'incoming-pop';
+  el.style.cssText = 'position:fixed;top:18px;left:50%;z-index:100000;width:min(94vw,380px);' +
+    'background:var(--bg2);border:1px solid var(--brand);border-radius:14px;' +
+    'box-shadow:0 18px 60px rgba(0,0,0,.55);padding:15px 17px;' +
+    'opacity:0;transform:translateX(-50%) translateY(-14px);' +
+    'transition:opacity .18s ease,transform .18s ease;pointer-events:none';
+  document.body.appendChild(el);
+  return (_incomingPopEl = el);
+}
+
+function _ipActionsHtml() {
+  return `<div style="display:flex;gap:9px;margin-top:13px">
+    <button id="ip-answer" style="flex:1;padding:11px;border:none;border-radius:9px;background:#16a34a;color:#fff;font-weight:700;font-size:14px;cursor:pointer">✅ Answer</button>
+    <button id="ip-decline" style="flex:1;padding:11px;border:1px solid var(--border);border-radius:9px;background:transparent;color:var(--text2);font-weight:600;font-size:14px;cursor:pointer">Decline</button>
+  </div>`;
+}
+
+function dismissIncomingPop() {
+  _incomingCall = null;
+  _incomingPopReq++;
+  if (!_incomingPopEl) return;
+  _incomingPopEl.style.opacity = '0';
+  _incomingPopEl.style.transform = 'translateX(-50%) translateY(-14px)';
+  _incomingPopEl.style.pointerEvents = 'none';
+}
+
+function showIncomingPop(from) {
+  const el = _ipEl();
+  const key = String(from || '').replace(/\D/g, '').slice(-10);
+  const nat = key.length === 10 ? `(${key.slice(0, 3)}) ${key.slice(3, 6)}-${key.slice(6)}` : (from || 'Unknown caller');
+  const reqId = ++_incomingPopReq;
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:var(--brand-mid);letter-spacing:.05em;text-transform:uppercase">
+      <span class="ip-ring">📞</span> <span id="ip-hdr">Incoming call</span>
+    </div>
+    <div id="ip-title" style="font-size:19px;font-weight:800;color:var(--text);margin-top:7px;line-height:1.15;word-break:break-word">${esc(nat)}</div>
+    <div id="ip-sub" style="font-size:12.5px;color:var(--text3);margin-top:2px;overflow-wrap:anywhere">Identifying caller…</div>
+    <div id="ip-body" style="font-size:12.5px;color:var(--text2);margin-top:8px;line-height:1.55;overflow-wrap:anywhere"></div>
+    <div id="ip-actions">${_ipActionsHtml()}</div>`;
+  el.style.opacity = '1';
+  el.style.transform = 'translateX(-50%) translateY(0)';
+  el.style.pointerEvents = 'auto';
+  const a = document.getElementById('ip-answer'), d = document.getElementById('ip-decline');
+  if (a) a.onclick = () => { try { _incomingCall && _incomingCall.accept(); } catch (e) { dismissIncomingPop(); } };
+  if (d) d.onclick = () => { try { _incomingCall && _incomingCall.reject(); } catch (e) {} dismissIncomingPop(); };
+  // Fast lookup: known contacts/leads resolve instantly (no paid CNAM call)
+  fetchCallerId(from, { fast: true })
+    .then(res => { if (reqId === _incomingPopReq) fillIncomingPop(res, nat); })
+    .catch(() => { if (reqId === _incomingPopReq) { const s = document.getElementById('ip-sub'); if (s) s.textContent = 'Incoming call'; } });
+}
+
+function fillIncomingPop(d, nat) {
+  const m = d.match;
+  const tEl = document.getElementById('ip-title');
+  if (tEl) tEl.textContent = (m && m.name) || d.cnam || d.national_format || nat;
+  const lineBits = [d.line_type, d.carrier].filter(Boolean).map(esc).join(', ');
+  const sEl = document.getElementById('ip-sub');
+  if (sEl) sEl.innerHTML = `${esc(d.national_format || nat)}${lineBits ? ' · ' + lineBits : ''}`;
+  const bEl = document.getElementById('ip-body');
+  if (!bEl) return;
+  if (m && m.source === 'lead') {
+    bEl.innerHTML = `⭐ In your lead list${m.list ? ' “' + esc(m.list) + '”' : ''}` +
+      (m.company ? '<br>🏢 ' + esc(m.company) : '') +
+      (m.property ? '<br>🏠 ' + esc(m.property) : '') +
+      (m.loan ? '<br>💰 ' + esc(m.loan) : '');
+  } else if (m && m.source === 'contact') {
+    bEl.innerHTML = `⭐ Already a contact${m.company ? ' · ' + esc(m.company) : ''}${m.city ? ' · ' + esc(m.city) : ''}`;
+  } else if (d.cnam) {
+    bEl.innerHTML = `Caller ID: <b>${esc(d.cnam)}</b>${d.caller_type ? ' · ' + esc(String(d.caller_type).toLowerCase()) : ''}<br><span style="color:var(--text3)">Not in your contacts or lead lists yet.</span>`;
+  } else {
+    bEl.innerHTML = `<span style="color:var(--text3)">Not in your contacts or lead lists.</span>`;
+  }
+}
+
+// Once answered, keep the caller identity on screen but swap to a Hang-up control.
+function setIncomingAnswered() {
+  _incomingPopReq++;   // invalidate any in-flight lookup so a late CNAM result can't rewrite the answered banner
+  if (!_incomingPopEl) return;
+  const hdr = document.getElementById('ip-hdr');
+  if (hdr) hdr.textContent = 'On call';
+  const act = document.getElementById('ip-actions');
+  if (act) {
+    act.innerHTML = `<button id="ip-hangup" style="width:100%;padding:11px;border:none;border-radius:9px;background:#dc2626;color:#fff;font-weight:700;font-size:14px;cursor:pointer;margin-top:13px">Hang up</button>`;
+    const hb = document.getElementById('ip-hangup');
+    if (hb) hb.onclick = () => { try { if (typeof hangUp === 'function') hangUp(); } catch (e) {} };
+  }
+}
+
+window.addEventListener('cb:incoming-call', (e) => {
+  _incomingCall = (e.detail && e.detail.call) || null;
+  showIncomingPop((e.detail && e.detail.from) || '');
+});
+window.addEventListener('cb:incoming-answered', () => setIncomingAnswered());
+window.addEventListener('cb:incoming-cleared', () => dismissIncomingPop());
 
 // Prefer a real name; fall back to the phone number rather than "Unknown"
 function displayName(name, phone) {
