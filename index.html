@@ -1393,6 +1393,12 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           </div>
         </div>
 
+        <div id="pd-now" style="display:none;margin:14px 0;padding:16px 18px;border:1px solid var(--brand);background:var(--brand-light);border-radius:12px">
+          <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--brand-mid);margin-bottom:6px">📞 NOW CALLING</div>
+          <div id="pd-now-name" style="font-size:19px;font-weight:700"></div>
+          <div id="pd-now-sub" style="font-size:13px;color:var(--text2);margin-top:3px"></div>
+          <div id="pd-now-addr" style="font-size:13.5px;color:var(--text);margin-top:9px;line-height:1.65"></div>
+        </div>
         <div id="pd-queue"></div>
       </div>
 
@@ -5427,6 +5433,20 @@ function pdRender() {
       ${l.status === 'hours' ? '<span style="color:var(--warm);font-weight:600;font-size:12px">Outside calling hours</span>' : ''}
       ${l.status === 'scrub' ? '<span style="color:var(--danger);font-weight:600;font-size:12px">DNC / litigator</span>' : ''}
     </div>`).join('')}</div>`;
+
+  // Now-calling card: surface the current lead's full info while the call is live.
+  const nowEl = document.getElementById('pd-now');
+  if (nowEl) {
+    const cur = pdCurrentIdx >= 0 ? pdQueue[pdCurrentIdx] : null;
+    if (cur && cur.status === 'calling') {
+      nowEl.style.display = 'block';
+      document.getElementById('pd-now-name').textContent = displayName(cur.name, cur.phone);
+      document.getElementById('pd-now-sub').textContent = [fmtPhone(cur.phone), cur.company].filter(Boolean).join('  ·  ');
+      document.getElementById('pd-now-addr').innerHTML = [cur.property && ('🏠 <strong>' + esc(cur.property) + '</strong>'), cur.mailing && ('✉️ ' + esc(cur.mailing)), cur.loan && ('💰 ' + esc(cur.loan))].filter(Boolean).join('<br>');
+    } else {
+      nowEl.style.display = 'none';
+    }
+  }
 }
 
 let pdAwaitNext = false;
