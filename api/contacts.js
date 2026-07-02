@@ -128,6 +128,65 @@ export default async function handler(req, res) {
       return res.status(200).send(buf);
     }
 
+    // ── Caller-ID lookup (resource=lookup&phone=<number>). Returns the Twilio
+    //    caller-name (CNAM) + line type for any number, and cross-checks it
+    //    against the user's own contacts and saved lead lists so they can see
+    //    "who is this" before dialing or on a callback. Folded in here to stay
+    //    within Vercel's 12-function limit. ──
+    if (req.query.resource === 'lookup' && req.method === 'GET') {
+      const key = dncKey(req.query.phone);          // 10-digit US match key
+      if (key.length < 10) return res.status(400).json({ error: 'Enter a full 10-digit number' });
+      const e164 = '+1' + key;
+      const nat = '(' + key.slice(0, 3) + ') ' + key.slice(3, 6) + '-' + key.slice(6);
+
+      // 1) Twilio caller-ID (CNAM) + line-type intelligence
+      let cnam = null, caller_type = null, line_type = null, carrier = null, national_format = null;
+      if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+        try {
+          const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+          const lr = await fetch(`https://lookups.twilio.com/v2/PhoneNumbers/${e164}?Fields=caller_name,line_type_intelligence`, { headers: { Authorization: `Basic ${auth}` } });
+          if (lr.ok) {
+            const ld = await lr.json();
+            national_format = ld.national_format || null;
+            if (ld.caller_name) { cnam = ld.caller_name.caller_name || null; caller_type = ld.caller_name.caller_type || null; }
+            if (ld.line_type_intelligence) { line_type = ld.line_type_intelligence.type || null; carrier = ld.line_type_intelligence.carrier_name || null; }
+          }
+        } catch (e) { console.error('lookup CNAM error:', e.message); }
+      }
+
+      // 2) Match against the user's own contacts (phone stored E.164 → ilike on the 10-digit key)
+      let match = null;
+      try {
+        const { data: cs } = await supabase.from('contacts')
+          .select('name,company,phone,city,city_suggested,city_status')
+          .eq('user_id', user.id).ilike('phone', '%' + key + '%').limit(1);
+        if (cs && cs.length) {
+          const c = cs[0];
+          match = { source: 'contact', name: c.name || '', company: c.company || '',
+            city: (c.city_status === 'confirmed' && c.city) ? c.city : (c.city_suggested || c.city || '') };
+        }
+      } catch (e) { /* non-fatal */ }
+
+      // 3) Match against saved lead lists (team_lists jsonb → scan leads by 10-digit key)
+      if (!match) {
+        try {
+          const { data: prof } = await supabase.from('profiles').select('team_owner_id').eq('id', user.id).single();
+          const root = (prof && prof.team_owner_id) || user.id;
+          const { data: lists } = await supabase.from('team_lists').select('name,leads').eq('team_root', root);
+          for (const tl of (lists || [])) {
+            const hit = (Array.isArray(tl.leads) ? tl.leads : []).find(l => dncKey(l && l.phone) === key);
+            if (hit) {
+              match = { source: 'lead', list: tl.name || '', name: hit.name || '', company: hit.company || '',
+                property: hit.property || '', mailing: hit.mailing || '', loan: hit.loan || '' };
+              break;
+            }
+          }
+        } catch (e) { /* non-fatal */ }
+      }
+
+      return res.status(200).json({ phone: e164, national_format: national_format || nat, cnam, caller_type, line_type, carrier, match });
+    }
+
     // ── Real-time DNC / state / litigator scrub (resource=scrub).
     //    Proxies to a scrub provider so the API key stays server-side. Inert
     //    (configured:false) until SCRUB_API_USER/SCRUB_API_PASS env vars are
