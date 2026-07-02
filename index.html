@@ -3284,13 +3284,31 @@ async function loadTeamLists() {
     teamListsCache = data || [];
     const sel = document.getElementById('pd-team-lists');
     if (sel) sel.innerHTML = '<option value="">Shared lists…</option>' + teamListsCache.map(l => `<option value="${l.id}">${esc(l.name)} (${(l.leads || []).length})</option>`).join('');
+    // Auto-heal: an already-loaded dialing list may predate newer fields (property /
+    // mailing / loan). Backfill them from a saved list that has them, matched by phone,
+    // so the user never has to re-load to see the richer info.
+    if (pdQueue.length && pdQueue.some(l => !l.property && !l.loan)) {
+      const l10 = p => String(p || '').replace(/\D/g, '').slice(-10);
+      const rich = {};
+      teamListsCache.forEach(tl => (tl.leads || []).forEach(x => {
+        const k = l10(x.phone);
+        if (k && (x.property || x.mailing || x.loan) && !rich[k]) rich[k] = x;
+      }));
+      let healed = 0;
+      pdQueue.forEach(l => {
+        if (l.property || l.loan) return;
+        const m = rich[l10(l.phone)];
+        if (m) { l.property = m.property || ''; l.mailing = m.mailing || ''; l.loan = m.loan || ''; healed++; }
+      });
+      if (healed) { pdSave(); pdRender(); }
+    }
   } catch (e) { console.warn('team lists load failed', e); }
 }
 async function shareCurrentList() {
   if (!pdQueue.length) { alert('Load a list first, then share it.'); return; }
   const name = prompt('Name this shared list:', 'Leads · ' + new Date().toLocaleDateString());
   if (!name) return;
-  const leads = pdQueue.map(l => ({ phone: l.phone, name: l.name || '', company: l.company || '', status: 'pending' }));
+  const leads = pdQueue.map(l => ({ phone: l.phone, name: l.name || '', company: l.company || '', property: l.property || '', mailing: l.mailing || '', loan: l.loan || '', status: 'pending' }));
   try {
     const { error } = await db.from('team_lists').insert({ team_root: teamRoot(), created_by: currentUser.id, name, leads });
     if (error) throw error;
