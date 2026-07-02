@@ -5310,7 +5310,9 @@ function pdHandleFile(ev) {
       const nameKey = keys.find(k => /^name$|full.?name|contact|agent/i.test(k));
       const firstKey = keys.find(k => /first/i.test(k));
       const lastKey = keys.find(k => /last/i.test(k));
-      const companyKey = keys.find(k => /company|brokerage|office|business/i.test(k));
+      const companyKey = keys.find(k => /company|brokerage|office|business|borrower/i.test(k));
+      const propKey = keys.find(k => /property.?addr|prop.?addr|subject.?prop|collateral/i.test(k));
+      const mailKey = keys.find(k => /mail.?addr/i.test(k)) || keys.find(k => /^address$|address$/i.test(k) && k !== propKey);
 
       const parsed = rows.map(r => {
         const name = nameKey ? String(r[nameKey]).trim()
@@ -5320,6 +5322,8 @@ function pdHandleFile(ev) {
           name: name || '',
           phone,
           company: companyKey ? String(r[companyKey]).trim() : '',
+          property: propKey ? String(r[propKey]).trim() : '',
+          mailing: mailKey ? String(r[mailKey]).trim() : '',
           // Scrub against the Do Not Call list at import time
           status: isDNC(phone) ? 'dnc' : 'pending'
         };
@@ -5413,9 +5417,10 @@ function pdRender() {
   queueEl.innerHTML = `<div class="table-card">${pdQueue.map((l, i) => `
     <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);font-size:13px;${l.status === 'calling' ? 'background:var(--brand-light)' : ''}">
       <span style="font-size:15px">${statusIcon[l.status] || '⚪'}</span>
-      <strong style="min-width:140px">${esc(displayName(l.name, l.phone))}</strong>
-      <span style="color:var(--text2)">${esc(fmtPhone(l.phone))}</span>
-      <span style="color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.company || '')}</span>
+      <div style="flex:1;min-width:0" title="${esc([l.company, l.property && ('Property: ' + l.property), l.mailing && ('Mailing: ' + l.mailing)].filter(Boolean).join(' | '))}">
+        <div><strong>${esc(displayName(l.name, l.phone))}</strong> <span style="color:var(--text2)">${esc(fmtPhone(l.phone))}</span></div>
+        <div style="font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.property ? '🏠 ' + esc(l.property) : ''}${l.property && (l.company || l.mailing) ? '  ·  ' : ''}${esc(l.company || '')}${l.mailing ? '  ·  ✉️ ' + esc(l.mailing) : ''}</div>
+      </div>
       ${l.status === 'pending' ? `<button class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="pdDialOne(${i})">Call now</button>` : ''}
       ${l.status === 'calling' ? '<span style="color:var(--brand);font-weight:600;font-size:12px">On call…</span>' : ''}
       ${l.status === 'dnc' ? '<span style="color:var(--danger);font-weight:600;font-size:12px">Do Not Call</span>' : ''}
