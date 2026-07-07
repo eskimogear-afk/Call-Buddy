@@ -2760,9 +2760,11 @@ function copyEmail(btn) {
   });
 }
 
-// Share a call: builds a clean text summary (who, when, outcome, AI summary,
-// next step) and opens the native share sheet on mobile → falls back to copying
-// to the clipboard on desktop. No recording/PII is exposed via any public link.
+// Share a call: builds a clean summary (who, when, outcome, AI summary, next
+// step) plus a secure, expiring link to the recording, then opens the native
+// share sheet on mobile → falls back to copying to the clipboard on desktop.
+// The recording link is a signed 30-day token — no login needed to listen, and
+// Twilio credentials are never exposed.
 async function shareCall(id, btn) {
   const r = (Array.isArray(records) ? records : []).find(x => String(x.id) === String(id));
   if (!r) { alert('Call not found — try refreshing the call log.'); return; }
@@ -2774,15 +2776,34 @@ async function shareCall(id, btn) {
   const summary = r.ai_summary || r.notes || '';
   const next = r.next_steps || r.next_step || '';
   const meta = [when, dur, r.outcome].filter(Boolean).join(' · ');
-  const lines = [`📞 Call with ${display}`];
-  if (phone && display !== fmtPhone(phone)) lines.push(fmtPhone(phone));
-  if (meta) lines.push(meta);
-  if (summary) lines.push('', 'Summary:', summary);
-  if (next) lines.push('', 'Next step:', next);
-  const text = lines.join('\n');
+
+  // Mint a shareable recording link if this call has a recording
+  let recUrl = '';
+  if (r.recording_url) {
+    const orig = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = '⏳ Preparing link…'; btn.disabled = true; }
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      const resp = await fetch('/api/contacts?resource=share-link&id=' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + session.access_token } });
+      const j = await resp.json();
+      if (resp.ok && j.url) recUrl = j.url;
+    } catch (e) { /* fall back to summary-only */ }
+    if (btn) { btn.textContent = orig; btn.disabled = false; }
+  }
+
+  const head = [`📞 Call with ${display}`];
+  if (phone && display !== fmtPhone(phone)) head.push(fmtPhone(phone));
+  if (meta) head.push(meta);
+  if (recUrl) head.push('🎧 Listen to the recording (link expires in 30 days):', recUrl);
+  const body = [];
+  if (summary) body.push('', 'Summary:', summary);
+  if (next) body.push('', 'Next step:', next);
+  const text = head.concat(body).join('\n');
   const title = `Call with ${display}`;
+
+  const shareData = recUrl ? { title, text, url: recUrl } : { title, text };
   if (navigator.share) {
-    try { await navigator.share({ title, text }); return; }
+    try { await navigator.share(shareData); return; }
     catch (e) { if (e && e.name === 'AbortError') return; /* otherwise fall through to clipboard */ }
   }
   try {

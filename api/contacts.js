@@ -1,4 +1,28 @@
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
+
+// Signed, expiring share tokens for call recordings. HMAC keeps them unforgeable
+// without a DB table; SUPABASE_SERVICE_KEY is a high-entropy server-only secret.
+function makeShareToken(callId, expMs) {
+  const payload = `${callId}.${expMs}`;
+  const sig = crypto.createHmac('sha256', process.env.SUPABASE_SERVICE_KEY || '').update(payload).digest('base64url');
+  return Buffer.from(payload).toString('base64url') + '.' + sig;
+}
+function readShareToken(token) {
+  const dot = String(token || '').lastIndexOf('.');
+  if (dot < 1) return null;
+  const b64 = token.slice(0, dot), sig = token.slice(dot + 1);
+  let payload;
+  try { payload = Buffer.from(b64, 'base64url').toString('utf8'); } catch (e) { return null; }
+  const expected = crypto.createHmac('sha256', process.env.SUPABASE_SERVICE_KEY || '').update(payload).digest('base64url');
+  const a = Buffer.from(sig), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  const i = payload.indexOf('.');
+  if (i < 1) return null;
+  const callId = payload.slice(0, i), expMs = Number(payload.slice(i + 1));
+  if (!callId || !expMs) return null;
+  return { callId, expMs };
+}
 
 // Scrub a batch of numbers against federal DNC + state DNC + litigators via
 // the configured provider. Returns [{ phone, reasons:[...] }] for bad numbers.
@@ -42,6 +66,29 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // ── PUBLIC: play a shared call recording via a signed, expiring token
+  //    (resource=play&t=<token>). No login required — the token itself proves
+  //    authorization. Streams the audio with server-side Twilio auth so the
+  //    credentials and the raw Twilio URL are never exposed. ──
+  if (req.query.resource === 'play' && req.method === 'GET') {
+    const parsed = readShareToken(req.query.t);
+    if (!parsed) return res.status(403).send('This link is invalid.');
+    if (Date.now() > parsed.expMs) return res.status(410).send('This share link has expired.');
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) return res.status(500).send('Not configured');
+    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    const { data: call } = await sb.from('calls').select('recording_url').eq('id', parsed.callId).single();
+    if (!call?.recording_url) return res.status(404).send('Recording not found.');
+    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) return res.status(500).send('Not configured');
+    const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+    const tw = await fetch(call.recording_url, { headers: { Authorization: `Basic ${auth}` } });
+    if (!tw.ok) return res.status(502).send('Recording is unavailable.');
+    const buf = Buffer.from(await tw.arrayBuffer());
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Disposition', 'inline; filename="call-recording.mp3"');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    return res.status(200).send(buf);
+  }
 
   // ── PUBLIC: live mortgage-rate drivers from FRED (no auth — shown on the
   //    marketing site). Cached at the edge so we don't hammer FRED. ──
@@ -126,6 +173,22 @@ export default async function handler(req, res) {
       res.setHeader('Content-Type', 'audio/mpeg');
       res.setHeader('Cache-Control', 'private, max-age=3600');
       return res.status(200).send(buf);
+    }
+
+    // ── Mint a shareable recording link (resource=share-link&id=<callId>).
+    //    Proves the caller owns the call, then returns a public /play URL signed
+    //    with a 30-day HMAC token. Anyone with the link can listen until it
+    //    expires — no login, no Twilio creds exposed. ──
+    if (req.query.resource === 'share-link' && req.method === 'GET') {
+      const { id } = req.query;
+      if (!id) return res.status(400).json({ error: 'id required' });
+      const { data: call } = await supabase
+        .from('calls').select('recording_url').eq('id', id).eq('user_id', user.id).single();
+      if (!call?.recording_url) return res.status(404).json({ error: 'No recording for this call' });
+      const expMs = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+      const token = makeShareToken(id, expMs);
+      const url = `https://call-buddy-omega.vercel.app/api/contacts?resource=play&t=${token}`;
+      return res.status(200).json({ url, expires_at: expMs });
     }
 
     // ── Caller-ID lookup (resource=lookup&phone=<number>). Returns the Twilio
