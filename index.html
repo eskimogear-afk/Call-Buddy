@@ -2433,6 +2433,7 @@ function buildTable(recs) {
         <div class="cc-actions">
           ${phone && !isDNC(phone) ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="callAgain('${escAttr(phone)}')">📞 Call again</button>` : ''}
           ${phone ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="followUpFromCall('${r.contact_id || ''}','${escAttr(display)}','${escAttr(phone)}')">⏰ Schedule follow-up</button>` : ''}
+          <button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="event.stopPropagation();shareCall('${r.id}', this)" title="Share this call's summary — opens your share sheet on mobile, copies to clipboard on desktop">🔗 Share</button>
           ${pending && r.recording_url ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="retranscribeCall('${r.id}', this)">🔁 Re-transcribe</button>` : ''}
           ${!pending && (transcript || r.notes) ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="openCoach('${r.id}','${escAttr(display)}')">🧠 Ask Claude</button>` : ''}
           ${!pending ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="draftEmail('${r.id}','${escAttr(display)}')">✉️ Draft email</button>` : ''}
@@ -2757,6 +2758,39 @@ function copyEmail(btn) {
     c.classList.remove('hidden');
     setTimeout(() => c.classList.add('hidden'), 2000);
   });
+}
+
+// Share a call: builds a clean text summary (who, when, outcome, AI summary,
+// next step) and opens the native share sheet on mobile → falls back to copying
+// to the clipboard on desktop. No recording/PII is exposed via any public link.
+async function shareCall(id, btn) {
+  const r = (Array.isArray(records) ? records : []).find(x => String(x.id) === String(id));
+  if (!r) { alert('Call not found — try refreshing the call log.'); return; }
+  const name = r.prospect_name || (r.contacts && isRealNameUi(r.contacts.name) ? r.contacts.name : '') || '';
+  const phone = r.phone || r.to_number || r.from_number || '';
+  const display = displayName(name, phone);
+  const when = new Date(r.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const dur = (r.duration_seconds || r.duration) ? fmtDuration(r.duration_seconds || r.duration) : '';
+  const summary = r.ai_summary || r.notes || '';
+  const next = r.next_steps || r.next_step || '';
+  const meta = [when, dur, r.outcome].filter(Boolean).join(' · ');
+  const lines = [`📞 Call with ${display}`];
+  if (phone && display !== fmtPhone(phone)) lines.push(fmtPhone(phone));
+  if (meta) lines.push(meta);
+  if (summary) lines.push('', 'Summary:', summary);
+  if (next) lines.push('', 'Next step:', next);
+  const text = lines.join('\n');
+  const title = `Call with ${display}`;
+  if (navigator.share) {
+    try { await navigator.share({ title, text }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; /* otherwise fall through to clipboard */ }
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    if (btn) { const o = btn.textContent; btn.textContent = '✓ Copied!'; setTimeout(() => { btn.textContent = o; }, 1800); }
+  } catch (e) {
+    window.prompt('Copy this call summary:', text);
+  }
 }
 
 function fmtTalk(sec) {
