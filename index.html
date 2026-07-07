@@ -2496,6 +2496,41 @@ function callAgain(phone) {
   if (input) { input.value = phone; input.focus(); updateDialerLocalTime(); checkDialerHistory(); }
 }
 
+// Most recent recorded call with a given phone (from the loaded call log), or null.
+function lastRecordedCall(phone) {
+  const key = String(phone || '').replace(/\D/g, '').slice(-10);
+  if (key.length < 10) return null;
+  const l10 = p => String(p || '').replace(/\D/g, '').slice(-10);
+  const hits = (Array.isArray(records) ? records : [])
+    .filter(r => r.recording_url && (l10(r.phone) === key || l10(r.to_number) === key || l10(r.from_number) === key))
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  return hits[0] || null;
+}
+
+// Play a specific call's recording inline (used on the follow-up list).
+async function playLastCall(callId, btn) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  btn.disabled = true; btn.textContent = '⏳ Loading…';
+  try {
+    const r = await fetch('/api/contacts?resource=recording&id=' + encodeURIComponent(callId), {
+      headers: { Authorization: 'Bearer ' + session.access_token }
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.error || 'Recording unavailable (' + r.status + ')');
+    }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const wrap = document.getElementById('fu-rec-' + callId);
+    if (wrap) wrap.innerHTML = '<audio controls autoplay src="' + url + '" style="width:100%;max-width:420px;height:38px"></audio>';
+    btn.disabled = false; btn.textContent = '▶ Last call';
+  } catch (e) {
+    btn.disabled = false; btn.textContent = '▶ Last call';
+    alert('Could not load recording: ' + e.message + '\n\n(Recordings can take a few seconds to be ready right after a call.)');
+  }
+}
+
 // Jump to the Pricing tool from a call card, pre-filling who the quote is for
 function quoteFillBanner(html, tone) {
   const el = document.getElementById('quote-fill-banner');
@@ -4701,6 +4736,7 @@ function renderFollowUps() {
     const overdue = f.status === 'pending' && scheduled < now;
     const sent = f.status === 'sent';
     const contact = f.contacts;
+    const lastCall = lastRecordedCall(contact?.phone);
     return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px 20px;margin-bottom:10px;display:flex;gap:14px;align-items:flex-start">
       <div style="flex:1">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
@@ -4713,8 +4749,10 @@ function renderFollowUps() {
         ${f.title ? `<div style="font-size:13.5px;font-weight:600;margin-bottom:2px">${esc(f.title)}</div>` : ''}
         <div style="font-size:13px;color:var(--text2);margin-bottom:6px">${esc(f.message||'')}</div>
         <div style="font-size:12px;color:var(--text3)">Scheduled: ${scheduled.toLocaleString()}${sent && f.sent_at ? ' · Sent: ' + new Date(f.sent_at).toLocaleString() : ''}</div>
+        ${lastCall ? `<div id="fu-rec-${lastCall.id}" style="margin-top:8px"></div>` : ''}
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
+      <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+        ${lastCall ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 12px" onclick="playLastCall('${lastCall.id}', this)" title="Play the last recorded call with them">▶ Last call</button>` : ''}
         ${!sent && f.type === 'sms' ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="sendFollowUpNow('${f.id}')">Send now</button>` : ''}
         ${!sent ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 12px" onclick='openFollowUpModal(${JSON.stringify(f).replace(/'/g, "&#39;")}, "edit")'>Edit</button>` : ''}
         <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="deleteFollowUp('${f.id}')">✕</button>
