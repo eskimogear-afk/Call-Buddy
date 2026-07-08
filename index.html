@@ -3176,12 +3176,19 @@ function renderDailyCalls() {
     const display = displayName(nm, phone);
     const d = durOf(r);
     const time = new Date(r.created_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-    return `<div onclick="jumpToCall('${r.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid var(--border);cursor:pointer;font-size:13px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
-      <span style="width:20px;color:var(--text3);font-weight:700;text-align:right;font-variant-numeric:tabular-nums">${i + 1}</span>
-      <span style="flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(display)}</span>
-      ${r.outcome ? badge(r.outcome) : ''}
-      <span style="color:var(--text3);font-size:12px">${time}</span>
-      <span style="font-weight:700;font-variant-numeric:tabular-nums;min-width:56px;text-align:right">${d ? fmtDuration(d) : '—'}</span>
+    const playBtn = r.recording_url
+      ? `<button onclick="event.stopPropagation();playDailyCall('${r.id}', this)" title="Listen to this call" style="flex-shrink:0;font-size:12px;padding:4px 11px;border:1px solid var(--brand);background:var(--brand-light);color:var(--brand-mid);border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit">▶ Play</button>`
+      : '';
+    return `<div style="border-top:1px solid var(--border)">
+      <div onclick="jumpToCall('${r.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;font-size:13px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+        <span style="width:20px;color:var(--text3);font-weight:700;text-align:right;font-variant-numeric:tabular-nums">${i + 1}</span>
+        <span style="flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(display)}</span>
+        ${r.outcome ? badge(r.outcome) : ''}
+        <span style="color:var(--text3);font-size:12px">${time}</span>
+        <span style="font-weight:700;font-variant-numeric:tabular-nums;min-width:52px;text-align:right">${d ? fmtDuration(d) : '—'}</span>
+        ${playBtn}
+      </div>
+      <div id="dl-rec-${r.id}" style="padding:0 14px 6px 44px"></div>
     </div>`;
   }).join('');
   el.style.display = 'block';
@@ -3192,6 +3199,28 @@ function renderDailyCalls() {
     </div>
     ${rows}
   </div>`;
+}
+
+// Stream a call recording (owner-only proxy) into a slot element and autoplay.
+async function streamRecordingInto(callId, slotEl, btn, label) {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    const r = await fetch('/api/contacts?resource=recording&id=' + encodeURIComponent(callId), { headers: { Authorization: 'Bearer ' + session.access_token } });
+    if (!r.ok) { const dd = await r.json().catch(() => ({})); throw new Error(dd.error || ('Recording unavailable (' + r.status + ')')); }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    if (slotEl) slotEl.innerHTML = '<audio controls autoplay src="' + url + '" style="width:100%;max-width:420px;height:38px;margin-top:4px"></audio>';
+  } catch (e) {
+    alert('Could not load recording: ' + e.message + '\n\n(Recordings can take a few seconds to be ready right after a call.)');
+  }
+  if (btn) { btn.disabled = false; btn.textContent = label || '▶ Play'; }
+}
+
+// Play a ranked "Today's calls" recording inline, right on its row.
+function playDailyCall(callId, btn) {
+  streamRecordingInto(callId, document.getElementById('dl-rec-' + callId), btn, '▶ Play');
 }
 
 // Expand a specific call in the log below and scroll it into view.
