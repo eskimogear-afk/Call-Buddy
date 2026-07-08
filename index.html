@@ -1238,6 +1238,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             style="flex:1;min-width:220px;padding:9px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
           <span id="log-search-count" style="font-size:13px;color:var(--text3)"></span>
         </div>
+        <div id="daily-calls" style="display:none"></div>
         <div class="table-card"><div id="log-table"><div class="page-spinner"><div class="spinner spinner-dark"></div> Loading...</div></div></div>
       </div>
 
@@ -3136,8 +3137,63 @@ function renderLog() {
   }
   const cnt = document.getElementById('log-search-count');
   if (cnt) cnt.textContent = q ? `${recs.length} of ${records.length}` : '';
+  renderDailyCalls();
   schedulePendingRefresh();
   updateRetryStuckButton();
+}
+
+// "Today's calls" summary — every call made today, longest length to shortest.
+// Sits above the full log and is independent of the search box.
+function renderDailyCalls() {
+  const el = document.getElementById('daily-calls');
+  if (!el) return;
+  const now = new Date();
+  const isToday = d => { const x = new Date(d); return x.getFullYear() === now.getFullYear() && x.getMonth() === now.getMonth() && x.getDate() === now.getDate(); };
+  const durOf = r => (r.duration_seconds || r.duration || 0);
+  const today = (Array.isArray(records) ? records : [])
+    .filter(r => r.created_at && isToday(r.created_at))
+    .sort((a, b) => durOf(b) - durOf(a));
+  if (!today.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const totalSec = today.reduce((s, r) => s + durOf(r), 0);
+  const rows = today.map((r, i) => {
+    const nm = r.prospect_name || (r.contacts && isRealNameUi(r.contacts.name) ? r.contacts.name : '') || '';
+    const phone = r.phone || r.to_number || r.from_number || '';
+    const display = displayName(nm, phone);
+    const d = durOf(r);
+    const time = new Date(r.created_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    return `<div onclick="jumpToCall('${r.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid var(--border);cursor:pointer;font-size:13px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+      <span style="width:20px;color:var(--text3);font-weight:700;text-align:right;font-variant-numeric:tabular-nums">${i + 1}</span>
+      <span style="flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(display)}</span>
+      ${r.outcome ? badge(r.outcome) : ''}
+      <span style="color:var(--text3);font-size:12px">${time}</span>
+      <span style="font-weight:700;font-variant-numeric:tabular-nums;min-width:56px;text-align:right">${d ? fmtDuration(d) : '—'}</span>
+    </div>`;
+  }).join('');
+  el.style.display = 'block';
+  el.innerHTML = `<div class="table-card" style="margin-bottom:16px;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;background:var(--bg2)">
+      <div style="font-weight:700;font-size:14px">📅 Today's calls · longest to shortest</div>
+      <div style="font-size:12.5px;color:var(--text2);white-space:nowrap">${today.length} call${today.length > 1 ? 's' : ''}${totalSec ? ' · ' + fmtDuration(totalSec) + ' talk time' : ''}</div>
+    </div>
+    ${rows}
+  </div>`;
+}
+
+// Expand a specific call in the log below and scroll it into view.
+function jumpToCall(id) {
+  let card = document.getElementById('cc-' + id);
+  if (!card) {
+    // The call may be hidden by an active search — clear it and try once more.
+    const s = document.getElementById('log-search');
+    if (s && s.value) { s.value = ''; renderLog(); card = document.getElementById('cc-' + id); }
+    if (!card) return;
+  }
+  card.classList.add('open');
+  if (typeof fillLazyTranscript === 'function') fillLazyTranscript(id);
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.style.transition = 'box-shadow .25s';
+  card.style.boxShadow = '0 0 0 2px var(--brand)';
+  setTimeout(() => { card.style.boxShadow = ''; }, 1400);
 }
 
 // ── Re-transcribe: recover calls whose transcription never finished ──
