@@ -1863,6 +1863,7 @@ document.addEventListener('DOMContentLoaded', applyThemeIcon);
 let currentUser = null;
 let userProfile = null;
 let records = [];
+let _landedOnce = false;  // route to the dashboard on first login only — re-auth on tab refocus must not yank the user off their current panel
 let isRecording = false;
 let mediaRecorder = null;
 let recognition = null;
@@ -1901,6 +1902,7 @@ window.FREE_LIMIT = 25;
         enterApp();
       } else if (event === 'SIGNED_OUT') {
         currentUser = null; userProfile = null; records = [];
+        _landedOnce = false;   // next login should route to the dashboard again
         showView('landing');
         setNavLoggedOut();
       }
@@ -1965,6 +1967,7 @@ async function handleAuth() {
       currentUser = result.data.user;
       await loadProfile();
       enterApp();
+      switchPanel('dashboard');   // an explicit login/signup always lands on the dashboard, never a stale panel
       if (authMode === 'signup') {
         setTimeout(() => {
           const tip = document.createElement('div');
@@ -2032,6 +2035,10 @@ function startReconcilePolling() {
 ═══════════════════════════════════════════════════════ */
 async function enterApp() {
   showView('app');
+  // Land on the dashboard the first time we enter per session; on later re-auth
+  // events (e.g. Supabase re-firing SIGNED_IN on tab refocus) leave the user on
+  // whatever panel they're currently using instead of bouncing them.
+  if (!_landedOnce) { _landedOnce = true; switchPanel('dashboard'); }
   setNavLoggedIn();
   initRecognition();
   initTwilioDevice();
