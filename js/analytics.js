@@ -45,8 +45,9 @@ async function renderAnalytics() {
   let dials = [];
   try {
     const since = new Date(Date.now() - 30 * AN_DAY).toISOString();
-    const { data } = await db.from('dials').select('created_at, answered').gte('created_at', since).limit(5000);
-    dials = data || [];
+    dials = (typeof fetchAllDials === 'function')
+      ? await fetchAllDials(since, 'created_at, answered')
+      : ((await db.from('dials').select('created_at, answered').gte('created_at', since).limit(5000)).data || []);
   } catch (e) { dials = []; }
 
   const empty = document.getElementById('analytics-empty');

@@ -2007,6 +2007,23 @@ async function loadRecords() {
   } catch(e) { console.warn('Records load error:', e); records = []; }
 }
 
+// Fetch ALL rows from the dials table for a window, paging past Supabase's
+// 1000-rows-per-request cap so dial counts/charts reflect the true total
+// (a single request silently tops out at 1000 no matter the .limit()).
+async function fetchAllDials(sinceISO, cols) {
+  const out = [];
+  const page = 1000;
+  for (let from = 0; from < 100000; from += page) {
+    let q = db.from('dials').select(cols || 'answered, created_at');
+    if (sinceISO) q = q.gte('created_at', sinceISO);
+    const { data, error } = await q.order('created_at', { ascending: true }).range(from, from + page - 1);
+    if (error || !data || !data.length) break;
+    out.push(...data);
+    if (data.length < page) break;
+  }
+  return out;
+}
+
 // Safety net: backfill any calls Twilio recorded but the webhook didn't save, so a
 // flaky recording callback never costs us a call. Runs server-side off the user's JWT.
 let reconcileTimer = null;
@@ -2927,7 +2944,7 @@ async function renderAnalytics() {
 
   try { // Dials: today + pickup + per-day chart + best-hour chart
     if (!currentUser) return;
-    const { data: dials } = await db.from('dials').select('answered, created_at').gte('created_at', new Date(now - 31 * 86400000).toISOString()).limit(8000);
+    const dials = await fetchAllDials(new Date(now - 31 * 86400000).toISOString(), 'answered, created_at');
     const D = dials || [];
     const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
     const todayD = D.filter(d => new Date(d.created_at) >= startToday);
@@ -3086,7 +3103,7 @@ function refreshDashboard() {
     if (!el || !currentUser) return;
     try {
       const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
-      const { data: dt } = await db.from('dials').select('answered').gte('created_at', startToday.toISOString()).limit(2000);
+      const dt = await fetchAllDials(startToday.toISOString(), 'answered');
       el.textContent = (dt?.length || 0);
       const sub = document.getElementById('st-dials-sub');
       if (sub) sub.textContent = dt?.length ? `${dt.filter(x => x.answered).length} answered` : '';
@@ -3099,7 +3116,7 @@ function refreshDashboard() {
     if (!pEl || !currentUser) return;
     try {
       const since = new Date(now - 7 * 86400000).toISOString();
-      const { data: dialRows } = await db.from('dials').select('answered').gte('created_at', since).limit(2000);
+      const dialRows = await fetchAllDials(since, 'answered');
       if (!dialRows?.length) {
         pEl.textContent = '—';
         document.getElementById('st-pickup-sub').textContent = 'Tracks from your next dial';
