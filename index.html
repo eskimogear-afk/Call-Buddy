@@ -2001,9 +2001,20 @@ async function loadProfile() {
 
 async function loadRecords() {
   try {
-    const { data, error } = await db.from('calls').select('*, contacts(name, first_name, last_name, company, email)').eq('user_id', currentUser.id).order('created_at', { ascending: false });
-    if (error) throw error;
-    records = data || [];
+    // Page past Supabase's 1000-rows-per-request cap so the full call history
+    // loads (a single request silently tops out at 1000 no matter the query).
+    const cols = '*, contacts(name, first_name, last_name, company, email)';
+    const page = 1000; const out = [];
+    for (let from = 0; from < 100000; from += page) {
+      const { data, error } = await db.from('calls').select(cols)
+        .eq('user_id', currentUser.id).order('created_at', { ascending: false })
+        .range(from, from + page - 1);
+      if (error) throw error;
+      if (!data || !data.length) break;
+      out.push(...data);
+      if (data.length < page) break;
+    }
+    records = out;
   } catch(e) { console.warn('Records load error:', e); records = []; }
 }
 
