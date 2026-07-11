@@ -4186,6 +4186,31 @@ function openContactCalls(phone, name) {
   switchPanel('log'); // switchPanel('log') re-runs renderLog(), which reads log-search
 }
 
+// "Going cold" radar for a pipeline row: combines the next-follow-up state with
+// days-since-last-touch so an MLO can see at a glance who needs attention today
+// and who is quietly dying. Open leads (new/contacted/meeting) with no next step
+// get escalated as they age; scheduled follow-ups show due-today / overdue.
+function touchStatusCell(c) {
+  const DAY = 86400000, now = Date.now();
+  const open = ['new', 'contacted', 'meeting'].includes(c.stage || 'new');
+  const lastRef = c.last_called || c.created_at;
+  const daysSince = lastRef ? Math.floor((now - new Date(lastRef).getTime()) / DAY) : null;
+  const ago = daysSince === null ? '' : daysSince <= 0 ? 'today' : daysSince === 1 ? '1d ago' : `${daysSince}d ago`;
+  const pill = (bg, col, txt) => `<span style="background:${bg};color:${col};font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:99px;white-space:nowrap">${txt}</span>`;
+  const sub = t => `<div style="font-size:11px;color:var(--text3);margin-top:3px">${t}</div>`;
+  if (c.next_follow_up_at) {
+    const fu = new Date(c.next_follow_up_at);
+    const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
+    const endToday = new Date(startToday.getTime() + DAY);
+    if (fu < startToday) return pill('rgba(220,38,38,.15)', '#f87171', '🔴 Overdue') + sub('was ' + fu.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+    if (fu < endToday) return pill('rgba(245,158,11,.18)', '#f59e0b', '🟡 Due today');
+    return `<span style="font-size:12.5px;color:var(--text2)">→ ${fu.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>`;
+  }
+  if (open && daysSince !== null && daysSince > 14) return pill('rgba(220,38,38,.15)', '#f87171', `🔴 Cold · ${ago}`) + sub('no next step');
+  if (open && daysSince !== null && daysSince > 7) return pill('rgba(245,158,11,.18)', '#f59e0b', `🟡 ${ago}`) + sub('no next step');
+  return `<span style="font-size:12.5px;color:var(--text3)">${ago || '—'}</span>`;
+}
+
 function renderContacts() {
   const search = (document.getElementById('contact-search')?.value || '').toLowerCase();
   const stage = document.getElementById('contact-stage-filter')?.value || '';
@@ -4222,7 +4247,7 @@ function renderContacts() {
         <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Stage</th>
         <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Heat</th>
         <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Calls</th>
-        <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Next follow-up</th>
+        <th style="text-align:left;padding:10px 14px;color:var(--text2);font-weight:500">Follow-up · last touch</th>
         <th style="padding:10px 14px"></th>
       </tr></thead>
       <tbody>${(() => {
@@ -4238,7 +4263,6 @@ function renderContacts() {
         }
         const heat = c.heat_score || 'Cold';
         const hc = heat === 'Hot' ? '#dc2626' : heat === 'Warm' ? '#f59e0b' : '#6b7280';
-        const nfu = c.next_follow_up_at ? new Date(c.next_follow_up_at).toLocaleDateString() : '—';
         const stage = c.stage || 'new';
         out += `<tr style="border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
           <td style="padding:10px 14px;font-weight:500">${esc(displayName(c.name, c.phone))}</td>
@@ -4250,7 +4274,7 @@ function renderContacts() {
           <td style="padding:10px 14px;color:var(--text2)">${(c.call_count||0) > 0
             ? `<button class="btn btn-ghost" style="font-size:12px;padding:3px 9px;color:var(--brand-mid)" title="Open this prospect's calls to listen to the recordings" onclick="openContactCalls('${escAttr(c.phone||'')}','${escAttr(displayName(c.name, c.phone))}')">▶ ${c.call_count}</button>`
             : '0'}</td>
-          <td style="padding:10px 14px;color:var(--text2);font-size:13px">${nfu}</td>
+          <td style="padding:10px 14px;color:var(--text2);font-size:13px">${touchStatusCell(c)}</td>
           <td style="padding:10px 14px">
             <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="draftEmailForContact('${c.id}','${escAttr(displayName(c.name, c.phone))}')">✉️ Email</button>
             <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="openContactFollowUp('${c.id}','${escAttr(displayName(c.name, c.phone))}')">Follow-up</button>
