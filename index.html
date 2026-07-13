@@ -1266,6 +1266,12 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           </div>
         </div>
         <div class="settings-section">
+          <h3>Google Calendar</h3>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Get your PitchLog meetings &amp; follow-ups onto your phone's calendar. Subscribe once and they sync automatically (Google refreshes subscribed calendars on its own schedule — allow a few hours). Every follow-up also has a one-tap <strong>📅 Add to Google Calendar</strong> button on the Follow-ups screen for instant adds.</p>
+          <button class="btn btn-primary" style="font-size:13px;padding:8px 16px" onclick="showCalendarFeed(this)">🔗 Get my calendar subscribe link</button>
+          <div id="cal-feed-box" style="display:none;margin-top:14px"></div>
+        </div>
+        <div class="settings-section">
           <h3>Recording &amp; consent</h3>
           <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Call-recording laws vary by state — many need only your consent, but some (including <strong>Florida</strong> and California) require everyone on the call to consent. The professional fix is a one-line disclosure up front.</p>
           <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13.5px;line-height:1.55">
@@ -4899,6 +4905,53 @@ async function updateFollowUpsBadge() {
   } catch (e) {}
 }
 
+// Build a pre-filled Google Calendar event URL for a follow-up/meeting (no setup).
+function gcalUrlFor(f) {
+  const start = new Date(f.scheduled_at);
+  const isMeeting = f.type === 'meeting' || f.type === 'in_person';
+  const end = new Date(start.getTime() + (isMeeting ? 30 : 15) * 60000);
+  const stamp = d => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const name = f.contacts ? displayName(f.contacts.name, f.contacts.phone) : '';
+  const title = f.title || (isMeeting ? 'Meeting with ' + name : 'Follow up with ' + name) || 'PitchLog follow-up';
+  const details = [f.message, name && ('Contact: ' + name), f.contacts?.phone && ('Phone: ' + fmtPhone(f.contacts.phone)), '— via PitchLog'].filter(Boolean).join('\n');
+  const p = new URLSearchParams({ action: 'TEMPLATE', text: title, dates: `${stamp(start)}/${stamp(end)}`, details });
+  return 'https://calendar.google.com/calendar/render?' + p.toString();
+}
+function addToGoogleCal(id) {
+  const f = (followUpsCache || []).concat(suggestedCache || []).find(x => x.id === id);
+  if (!f) { alert('Follow-up not found — refresh and try again.'); return; }
+  window.open(gcalUrlFor(f), '_blank', 'noopener');
+}
+
+// Mint + reveal the personal calendar-subscribe link (Settings → Google Calendar).
+async function showCalendarFeed(btn) {
+  const box = document.getElementById('cal-feed-box');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generating…'; }
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) throw new Error('Please sign in');
+    const r = await fetch('/api/contacts?resource=cal-feed', { headers: { Authorization: 'Bearer ' + session.access_token } });
+    const d = await r.json();
+    if (!r.ok || !d.url) throw new Error(d.error || 'Could not generate link');
+    const addUrl = 'https://calendar.google.com/calendar/r?cid=' + encodeURIComponent(d.webcal || d.url);
+    box.style.display = 'block';
+    box.innerHTML = `<div style="padding:14px;border:1px solid var(--border);background:var(--bg2);border-radius:var(--radius-sm)">
+      <a href="${escAttr(addUrl)}" target="_blank" rel="noopener" class="btn btn-primary" style="font-size:13px;padding:8px 16px;text-decoration:none;display:inline-block">＋ Add to Google Calendar</a>
+      <div style="font-size:12.5px;color:var(--text2);margin-top:12px">Or copy this subscribe URL and add it manually (Google Calendar → <em>Other calendars ＋ → From URL</em>). Works for Apple Calendar &amp; Outlook too.</div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input id="cal-feed-url" readonly value="${escAttr(d.url)}" style="flex:1;min-width:0;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--bg);color:var(--text2)">
+        <button class="btn btn-outline" style="font-size:12px;padding:8px 12px" onclick="navigator.clipboard.writeText(document.getElementById('cal-feed-url').value); const o=this.textContent; this.textContent='✓ Copied'; setTimeout(()=>this.textContent=o,1500)">Copy</button>
+      </div>
+      <div style="font-size:11.5px;color:var(--text3);margin-top:10px">Private to you — don't share it. Shows meetings &amp; follow-ups from the last 30 days onward.</div>
+    </div>`;
+    if (btn) btn.style.display = 'none';
+  } catch (e) {
+    box.style.display = 'block';
+    box.innerHTML = `<div style="font-size:13px;color:var(--danger)">Couldn't generate the link: ${esc(e.message || 'error')}</div>`;
+    if (btn) { btn.disabled = false; btn.textContent = '🔗 Get my calendar subscribe link'; }
+  }
+}
+
 function renderFollowUps() {
   const list = followUpsCache;
   // AI suggestions awaiting review — always pinned on top
@@ -4947,6 +5000,7 @@ function renderFollowUps() {
         ${lastCall ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 12px" onclick="playLastCall('${lastCall.id}', this)" title="Play the last recorded call with them">▶ Last call</button>` : ''}
         ${!sent && f.type === 'sms' ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="sendFollowUpNow('${f.id}')">Send now</button>` : ''}
         ${!sent ? `<button class="btn btn-outline" style="font-size:12px;padding:6px 12px" onclick='openFollowUpModal(${JSON.stringify(f).replace(/'/g, "&#39;")}, "edit")'>Edit</button>` : ''}
+        <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" title="Add this to Google Calendar" onclick="addToGoogleCal('${f.id}')">📅 Google Cal</button>
         <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="deleteFollowUp('${f.id}')">✕</button>
       </div>
     </div>`;

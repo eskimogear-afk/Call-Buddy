@@ -90,6 +90,43 @@ export default async function handler(req, res) {
     return res.status(200).send(buf);
   }
 
+  // ── PUBLIC: iCalendar feed of the user's meetings/follow-ups (resource=ical&t=<token>).
+  //    Subscribe to this URL in Google/Apple/Outlook Calendar to see PitchLog
+  //    follow-ups automatically. Token = signed user-id (readShareToken), 1-yr expiry. ──
+  if (req.query.resource === 'ical' && req.method === 'GET') {
+    const parsed = readShareToken(req.query.t);
+    if (!parsed) return res.status(403).send('Invalid calendar link.');
+    if (Date.now() > parsed.expMs) return res.status(410).send('This calendar link has expired.');
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) return res.status(500).send('Not configured');
+    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+    const since = new Date(Date.now() - 30 * 86400000).toISOString();
+    const { data: fus } = await sb.from('follow_ups')
+      .select('id, type, title, message, scheduled_at, status, contacts(name, phone)')
+      .eq('user_id', parsed.callId).neq('status', 'suggested').gte('scheduled_at', since)
+      .order('scheduled_at', { ascending: true }).limit(2000);
+    const esc = s => String(s || '').replace(/([,;\\])/g, '\\$1').replace(/\r?\n/g, '\\n');
+    const stamp = d => new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    const dtstamp = stamp(Date.now());
+    const out = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//PitchLog//Follow-ups//EN', 'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH', 'X-WR-CALNAME:PitchLog Follow-ups', 'X-WR-TIMEZONE:UTC', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H'];
+    for (const f of (fus || [])) {
+      const start = new Date(f.scheduled_at);
+      const isMeeting = f.type === 'meeting' || f.type === 'in_person';
+      const end = new Date(start.getTime() + (isMeeting ? 30 : 15) * 60000);
+      const name = (f.contacts && (f.contacts.name || f.contacts.phone)) || '';
+      const title = f.title || ((isMeeting ? 'Meeting with ' : 'Follow up with ') + name) || 'PitchLog follow-up';
+      const desc = [f.message, name && ('Contact: ' + name), f.contacts && f.contacts.phone && ('Phone: ' + f.contacts.phone)].filter(Boolean).join('\n');
+      out.push('BEGIN:VEVENT', `UID:pitchlog-fu-${f.id}@call-buddy-omega.vercel.app`, `DTSTAMP:${dtstamp}`,
+        `DTSTART:${stamp(start)}`, `DTEND:${stamp(end)}`, `SUMMARY:${esc(title)}`,
+        `DESCRIPTION:${esc(desc)}`, 'BEGIN:VALARM', 'TRIGGER:-PT30M', 'ACTION:DISPLAY', 'DESCRIPTION:Reminder', 'END:VALARM', 'END:VEVENT');
+    }
+    out.push('END:VCALENDAR');
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', 'inline; filename="pitchlog.ics"');
+    res.setHeader('Cache-Control', 'public, max-age=900');
+    return res.status(200).send(out.join('\r\n'));
+  }
+
   // ── PUBLIC: live mortgage-rate drivers from FRED (no auth — shown on the
   //    marketing site). Cached at the edge so we don't hammer FRED. ──
   if (req.query.resource === 'rates') {
@@ -189,6 +226,16 @@ export default async function handler(req, res) {
       const token = makeShareToken(id, expMs);
       const url = `https://call-buddy-omega.vercel.app/api/contacts?resource=play&t=${token}`;
       return res.status(200).json({ url, expires_at: expMs });
+    }
+
+    // ── Mint a personal calendar-subscribe link (resource=cal-feed). Returns a
+    //    signed 1-year iCal URL the user pastes into Google/Apple/Outlook to see
+    //    their PitchLog follow-ups. Token encodes the user id via readShareToken. ──
+    if (req.query.resource === 'cal-feed' && req.method === 'GET') {
+      const expMs = Date.now() + 365 * 24 * 60 * 60 * 1000; // 1 year
+      const token = makeShareToken(user.id, expMs);
+      const https = `https://call-buddy-omega.vercel.app/api/contacts?resource=ical&t=${token}`;
+      return res.status(200).json({ url: https, webcal: https.replace(/^https:/, 'webcal:'), expires_at: expMs });
     }
 
     // ── Caller-ID lookup (resource=lookup&phone=<number>). Returns the Twilio
