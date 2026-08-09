@@ -69,6 +69,7 @@ async function renderAnalytics() {
 
   const today = vol.filter(v => v.t >= startToday);
   anSet('an-dials', today.length);
+  renderNumberHealth(dials);
   const goal = dialGoal();
   const bar = document.getElementById('an-goal-bar');
   if (bar) bar.style.width = Math.min(100, Math.round(today.length / goal * 100)) + '%';
@@ -360,4 +361,61 @@ function anRenderWindowFunnels() {
       ).join('')}</div>
     </div>`;
   }).join('');
+}
+
+// Number-health monitor: uses pickup rate as a free, real-time proxy for carrier
+// "Spam Likely" flagging — a sharp drop in answer rate is the earliest sign a
+// number is getting labeled. Compares the last 7 days to the prior ~3-week
+// baseline per dialing number. (Attributes to from_number when tracked, else the
+// profile's active number.)
+function renderNumberHealth(dials) {
+  const el = document.getElementById('number-health');
+  if (!el) return;
+  const DAY = 86400000, now = Date.now();
+  const primary = (window.userProfile && window.userProfile.twilio_phone_number) || '';
+  // group dials by the number that placed them (from_number if present, else primary)
+  const groups = {};
+  for (const d of (dials || [])) {
+    const num = d.from_number || primary || 'your number';
+    (groups[num] = groups[num] || []).push(d);
+  }
+  if (!Object.keys(groups).length) { el.innerHTML = ''; return; }
+  const rate = arr => arr.length ? arr.filter(d => d.answered).length / arr.length : null;
+  const pct = r => r === null ? '—' : Math.round(r * 100) + '%';
+  const fmtN = n => /\d{10}/.test(String(n).replace(/\D/g, '')) ? '(' + String(n).replace(/\D/g, '').slice(-10).replace(/(\d{3})(\d{3})(\d{4})/, '$1) $2-$3') : (n || 'Your number');
+  const cards = Object.keys(groups).map(num => {
+    const arr = groups[num];
+    const recent = arr.filter(d => now - new Date(d.created_at).getTime() < 7 * DAY);
+    const base = arr.filter(d => { const a = now - new Date(d.created_at).getTime(); return a >= 7 * DAY && a < 30 * DAY; });
+    const rRate = rate(recent), bRate = rate(base);
+    let status, color, msg;
+    if (recent.length < 15) {
+      status = 'Gathering data'; color = '#6b7280';
+      msg = `Health needs ~15+ calls in the last 7 days from this number (has ${recent.length}). Keep dialing.`;
+    } else {
+      const rp = (rRate || 0) * 100;
+      if (rp < 8 || (bRate && rRate < bRate * 0.55)) {
+        status = '⚠️ Likely flagged'; color = '#dc2626';
+        msg = 'Pickup dropped sharply — this number may be labeled “Spam Likely.” Re-register it with Free Caller Registry and rest it a few days (dial from your other number meanwhile).';
+      } else if (bRate && rRate < bRate * 0.8) {
+        status = '🟡 Watch'; color = '#f59e0b';
+        msg = 'Pickup is trending down. Spread volume across your other number(s) and keep an eye on it.';
+      } else {
+        status = '🟢 Healthy'; color = '#16a34a';
+        msg = 'Pickup rate is holding steady — this number looks good.';
+      }
+    }
+    return `<div style="border:1px solid var(--border);border-left:4px solid ${color};border-radius:var(--radius-sm);padding:13px 16px;background:var(--bg2);margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="font-weight:700;font-size:14px">📡 ${fmtN(num)}</div>
+        <div style="font-weight:700;font-size:13px;color:${color}">${status}</div>
+      </div>
+      <div style="display:flex;gap:22px;margin-top:8px;font-size:12.5px;color:var(--text2)">
+        <div>Pickup, last 7d: <b style="color:var(--text)">${pct(rRate)}</b> <span style="color:var(--text3)">· ${recent.length} calls</span></div>
+        <div>Baseline: <b style="color:var(--text)">${pct(bRate)}</b></div>
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-top:8px;line-height:1.5">${msg}</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = `<div style="font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text3);margin-bottom:8px">NUMBER HEALTH · SPAM-RISK MONITOR</div>${cards}`;
 }
