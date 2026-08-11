@@ -126,8 +126,11 @@ function renderCallerIdSelect() {
   const sel = document.getElementById('callerid-select');
   if (!sel) return;
   const nums = window.myTwilioNumbers || [];
-  sel.innerHTML = '<option value="auto">🔀 Auto — match area code</option>' +
-    nums.map(n => `<option value="${n.phone}">${fmtCid(n.phone)}${n.name && /boca/i.test(n.name) ? ' · Boca' : ''}</option>`).join('');
+  sel.innerHTML = '<option value="auto">🔀 Auto — local area code</option>' +
+    nums.map(n => {
+      const region = String(n.name || '').split('—').pop().trim().replace(/\s*\(\d+\)\s*$/, '').trim();
+      return `<option value="${n.phone}">${fmtCid(n.phone)}${region ? ' · ' + region : ''}</option>`;
+    }).join('');
   const mode = window.callerIdMode || 'auto';
   sel.value = (mode === 'auto' || nums.some(n => n.phone === mode)) ? mode : 'auto';
   updateCallerIdIndicator();
@@ -139,14 +142,21 @@ function setCallerIdMode(v) {
   updateCallerIdIndicator();
 }
 
+// Overlay area codes that cover the SAME metro — a number in any of these is
+// "local" to a lead in any other (e.g. a 786 number is local to a 305 lead).
+const CID_REGIONS = [['305', '786'], ['754', '954'], ['239', '941'], ['561'], ['772'], ['407', '321', '689'], ['813', '727']];
+function _cidSameRegion(a, b) { return a === b || CID_REGIONS.some(g => g.includes(a) && g.includes(b)); }
+
 function pickCallerId(leadNumber) {
   const primary = (window.userProfile && window.userProfile.twilio_phone_number) || '';
   const mode = window.callerIdMode || 'auto';
   if (mode && mode !== 'auto' && /^\+?\d/.test(mode)) return mode;   // locked to a specific number
   const ac = s => String(s || '').replace(/\D/g, '').slice(-10, -7);  // area code = first 3 of last 10 digits
   const leadAC = ac(leadNumber);
-  const match = (window.myTwilioNumbers || []).map(n => n.phone || n).find(p => ac(p) === leadAC);
-  return match || primary || '';
+  const owned = (window.myTwilioNumbers || []).map(n => n.phone || n);
+  return owned.find(p => ac(p) === leadAC)            // exact area code
+    || owned.find(p => _cidSameRegion(ac(p), leadAC)) // same metro (overlay)
+    || primary || '';
 }
 
 function updateCallerIdIndicator() {
