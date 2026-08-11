@@ -417,5 +417,5 @@ function renderNumberHealth(dials) {
       <div style="font-size:12px;color:var(--text3);margin-top:8px;line-height:1.5">${msg}</div>
     </div>`;
   }).join('');
-  el.innerHTML = `<div style="font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text3);margin-bottom:8px">NUMBER HEALTH · SPAM-RISK MONITOR</div>${cards}`;
+  el.innerHTML = `<div style="font-size:12px;font-weight:800;letter-spacing:.3px;color:var(--text2);margin-bottom:8px">📡 AM I FLAGGED AS SPAM? <span style="font-weight:600;color:var(--text3)">· number health</span></div>${cards}`;
 }
