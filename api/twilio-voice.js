@@ -194,6 +194,11 @@ export default async function handler(req, res) {
     }
   }
 
+  // Local-presence: honor the client-selected caller ID (must be a US number this
+  // account owns — Twilio rejects an unowned caller ID, so this can't spoof).
+  const reqCid = String(req.body.Cid || '').trim();
+  if (/^\+1\d{10}$/.test(reqCid)) callerId = reqCid;
+
   // Recording status callbacks don't include From/To/CallDuration — pass them via query params
   const cbParams = new URLSearchParams({
     user_id: userId || '',

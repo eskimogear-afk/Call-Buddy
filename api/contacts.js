@@ -238,6 +238,19 @@ export default async function handler(req, res) {
       return res.status(200).json({ url: https, webcal: https.replace(/^https:/, 'webcal:'), expires_at: expMs });
     }
 
+    // ── Owned Twilio numbers (resource=numbers) — powers local-presence dialing:
+    //    the client picks the caller ID whose area code matches the lead. ──
+    if (req.query.resource === 'numbers' && req.method === 'GET') {
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) return res.status(200).json({ numbers: [] });
+      try {
+        const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+        const tw = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/IncomingPhoneNumbers.json?PageSize=50`, { headers: { Authorization: `Basic ${auth}` } });
+        const d = await tw.json();
+        const numbers = (d.incoming_phone_numbers || []).map(n => ({ phone: n.phone_number, name: n.friendly_name }));
+        return res.status(200).json({ numbers });
+      } catch (e) { return res.status(200).json({ numbers: [] }); }
+    }
+
     // ── Caller-ID lookup (resource=lookup&phone=<number>). Returns the Twilio
     //    caller-name (CNAM) + line type for any number, and cross-checks it
     //    against the user's own contacts and saved lead lists so they can see

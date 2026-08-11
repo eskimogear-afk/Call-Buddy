@@ -1022,7 +1022,10 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
               <span style="width:26px;height:26px;border-radius:7px;background:var(--brand-light);color:var(--brand);display:inline-flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.79 19.79 19.79 0 01.12 1.18 2 2 0 012.11 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></span>
               Dialer
             </h3>
-            <span id="dialer-caller-id" style="font-size:12px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);padding:3px 12px;border-radius:99px"></span>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <select id="callerid-select" onchange="setCallerIdMode(this.value)" title="Which of your numbers to call from" style="font-size:12px;padding:4px 9px;border-radius:99px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-family:inherit;cursor:pointer"><option value="auto">🔀 Auto — match area code</option></select>
+              <span id="dialer-caller-id" style="font-size:12px;color:var(--text2);background:var(--bg2);border:1px solid var(--border);padding:3px 12px;border-radius:99px"></span>
+            </div>
           </div>
           <div id="dialer-setup-warning" style="display:none;padding:10px 14px;background:var(--cold-bg);border:1px solid var(--brand);border-radius:8px;color:var(--brand-mid);font-size:13px;margin-bottom:10px;">
             No dedicated caller ID set — calls will use the account default number.
@@ -4418,6 +4421,7 @@ function updateDialerLocalTime() {
 
 // As the user types a number, surface whether they've called/saved this person before.
 function checkDialerHistory() {
+  if (typeof updateCallerIdIndicator === 'function') updateCallerIdIndicator();
   const el = document.getElementById('dialer-history');
   if (!el) return;
   const digits = (document.getElementById('dialer-number')?.value || '').replace(/\D/g, '');

@@ -87,6 +87,7 @@ async function initTwilioDevice() {
     });
 
     await twilioDevice.register();
+    loadMyNumbers();
   } catch (err) {
     console.error('Dialer init error:', err);
     setStatus('⚠️ ' + (err.message || 'Dialer unavailable'));
@@ -101,6 +102,62 @@ async function retryDialer() {
   twilioDevice = null;
   currentCall = null;
   await initTwilioDevice();
+}
+
+/* ── Local-presence caller ID: choose which of your numbers a call goes from ──
+   'auto' matches the lead's area code to one of your numbers (falls back to your
+   primary); or lock it to a specific number. Twilio enforces number ownership. */
+window.callerIdMode = (function () { try { return localStorage.getItem('cidMode') || 'auto'; } catch (e) { return 'auto'; } })();
+
+async function loadMyNumbers() {
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) return;
+    const r = await fetch('/api/contacts?resource=numbers', { headers: { Authorization: 'Bearer ' + session.access_token } });
+    const d = await r.json();
+    window.myTwilioNumbers = d.numbers || [];
+    renderCallerIdSelect();
+  } catch (e) { /* non-fatal — falls back to primary caller ID */ }
+}
+
+function fmtCid(p) { const t = String(p || '').replace(/\D/g, '').slice(-10); return t.length === 10 ? '(' + t.slice(0, 3) + ') ' + t.slice(3, 6) + '-' + t.slice(6) : (p || ''); }
+
+function renderCallerIdSelect() {
+  const sel = document.getElementById('callerid-select');
+  if (!sel) return;
+  const nums = window.myTwilioNumbers || [];
+  sel.innerHTML = '<option value="auto">🔀 Auto — match area code</option>' +
+    nums.map(n => `<option value="${n.phone}">${fmtCid(n.phone)}${n.name && /boca/i.test(n.name) ? ' · Boca' : ''}</option>`).join('');
+  const mode = window.callerIdMode || 'auto';
+  sel.value = (mode === 'auto' || nums.some(n => n.phone === mode)) ? mode : 'auto';
+  updateCallerIdIndicator();
+}
+
+function setCallerIdMode(v) {
+  window.callerIdMode = v;
+  try { localStorage.setItem('cidMode', v); } catch (e) {}
+  updateCallerIdIndicator();
+}
+
+function pickCallerId(leadNumber) {
+  const primary = (window.userProfile && window.userProfile.twilio_phone_number) || '';
+  const mode = window.callerIdMode || 'auto';
+  if (mode && mode !== 'auto' && /^\+?\d/.test(mode)) return mode;   // locked to a specific number
+  const ac = s => String(s || '').replace(/\D/g, '').slice(-10, -7);  // area code = first 3 of last 10 digits
+  const leadAC = ac(leadNumber);
+  const match = (window.myTwilioNumbers || []).map(n => n.phone || n).find(p => ac(p) === leadAC);
+  return match || primary || '';
+}
+
+function updateCallerIdIndicator() {
+  const el = document.getElementById('dialer-caller-id');
+  if (!el) return;
+  const num = (document.getElementById('dialer-number') || {}).value || '';
+  const cid = pickCallerId(num);
+  const primary = (window.userProfile && window.userProfile.twilio_phone_number) || '';
+  const auto = (window.callerIdMode || 'auto') === 'auto';
+  const isLocalMatch = auto && cid && cid !== primary;
+  el.innerHTML = cid ? ('📤 ' + fmtCid(cid) + (isLocalMatch ? ' <span style="color:var(--brand-mid);font-weight:700">· local</span>' : '')) : '';
 }
 
 async function makeCall() {
@@ -136,7 +193,7 @@ async function makeCall() {
 
   try {
     setStatus('Calling...');
-    currentCall = await twilioDevice.connect({ params: { To: number } });
+    currentCall = await twilioDevice.connect({ params: { To: number, Cid: pickCallerId(number) } });
     window.__callStartedAt = Date.now();
     // Pickup-rate tracking: one row per dial attempt; marked answered when
     // the recording-born call row appears (recordings only exist on answer)
