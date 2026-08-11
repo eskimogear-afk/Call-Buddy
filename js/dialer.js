@@ -88,6 +88,7 @@ async function initTwilioDevice() {
 
     await twilioDevice.register();
     loadMyNumbers();
+    loadNumberUsage();
   } catch (err) {
     console.error('Dialer init error:', err);
     setStatus('⚠️ ' + (err.message || 'Dialer unavailable'));
@@ -147,16 +148,58 @@ function setCallerIdMode(v) {
 const CID_REGIONS = [['305', '786'], ['754', '954'], ['239', '941'], ['561'], ['772'], ['407', '321', '689'], ['813', '727']];
 function _cidSameRegion(a, b) { return a === b || CID_REGIONS.some(g => g.includes(a) && g.includes(b)); }
 
+/* ── Number warm-up: ramp a new number's daily call volume so it builds
+   reputation without getting flagged. Each non-primary number gets a daily cap
+   that grows over ~2 weeks; once it hits the cap for the day, Auto mode routes
+   that area's calls to the mature primary instead (a hard stop on overuse). ── */
+const WARMUP_RAMP = [[3, 25], [7, 50], [11, 80], [14, 110]]; // [throughDay, dailyCap]; after day 14 = mature (no cap)
+window.numberUsageToday = window.numberUsageToday || {};
+
+function _warmupStart(num) {
+  const primary = (window.userProfile && window.userProfile.twilio_phone_number) || '';
+  if (!num || num === primary) return null; // primary is the mature workhorse — never capped
+  const key = 'warmup_' + num;
+  let s = null; try { s = localStorage.getItem(key); } catch (e) {}
+  if (!s) { s = new Date().toISOString(); try { localStorage.setItem(key, s); } catch (e) {} }
+  return s;
+}
+function warmupInfo(num) {
+  const used = (window.numberUsageToday || {})[num] || 0;
+  const start = _warmupStart(num);
+  if (!start) return { mature: true, cap: null, day: null, used };
+  const day = Math.floor((Date.now() - new Date(start).getTime()) / 86400000) + 1;
+  let cap = null;
+  for (const [through, c] of WARMUP_RAMP) { if (day <= through) { cap = c; break; } }
+  return { mature: cap === null, cap, day, used };
+}
+function numberCapped(num) {
+  const w = warmupInfo(num);
+  return !w.mature && w.cap != null && w.used >= w.cap;
+}
+async function loadNumberUsage() {
+  try {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const rows = (typeof fetchAllDials === 'function') ? await fetchAllDials(start.toISOString(), 'from_number') : [];
+    const counts = {};
+    rows.forEach(d => { if (d.from_number) counts[d.from_number] = (counts[d.from_number] || 0) + 1; });
+    window.numberUsageToday = counts;
+    if (typeof updateCallerIdIndicator === 'function') updateCallerIdIndicator();
+  } catch (e) { /* non-fatal */ }
+}
+
 function pickCallerId(leadNumber) {
   const primary = (window.userProfile && window.userProfile.twilio_phone_number) || '';
   const mode = window.callerIdMode || 'auto';
-  if (mode && mode !== 'auto' && /^\+?\d/.test(mode)) return mode;   // locked to a specific number
+  if (mode && mode !== 'auto' && /^\+?\d/.test(mode)) return mode;   // manual lock overrides warm-up
   const ac = s => String(s || '').replace(/\D/g, '').slice(-10, -7);  // area code = first 3 of last 10 digits
   const leadAC = ac(leadNumber);
   const owned = (window.myTwilioNumbers || []).map(n => n.phone || n);
-  return owned.find(p => ac(p) === leadAC)            // exact area code
-    || owned.find(p => _cidSameRegion(ac(p), leadAC)) // same metro (overlay)
-    || primary || '';
+  const local = owned.filter(p => ac(p) === leadAC)                                     // exact area code
+    .concat(owned.filter(p => _cidSameRegion(ac(p), leadAC) && ac(p) !== leadAC));      // then same metro (overlay)
+  const open = local.find(p => !numberCapped(p));   // a local number under its warm-up cap today
+  if (open) return open;
+  if (local.length && primary) return primary;       // local number(s) maxed → overflow to the mature primary
+  return local[0] || primary || '';
 }
 
 function updateCallerIdIndicator() {
@@ -164,10 +207,22 @@ function updateCallerIdIndicator() {
   if (!el) return;
   const num = (document.getElementById('dialer-number') || {}).value || '';
   const cid = pickCallerId(num);
+  if (!cid) { el.innerHTML = ''; return; }
   const primary = (window.userProfile && window.userProfile.twilio_phone_number) || '';
   const auto = (window.callerIdMode || 'auto') === 'auto';
-  const isLocalMatch = auto && cid && cid !== primary;
-  el.innerHTML = cid ? ('📤 ' + fmtCid(cid) + (isLocalMatch ? ' <span style="color:var(--brand-mid);font-weight:700">· local</span>' : '')) : '';
+  const ac = s => String(s || '').replace(/\D/g, '').slice(-10, -7);
+  const owned = (window.myTwilioNumbers || []).map(n => n.phone || n);
+  const localForLead = owned.find(p => ac(p) === ac(num)) || owned.find(p => _cidSameRegion(ac(p), ac(num)) && ac(p) !== ac(num));
+  const w = warmupInfo(cid);
+  let badge = '';
+  if (auto && localForLead && cid === primary && localForLead !== primary && numberCapped(localForLead)) {
+    badge = ' · (' + ac(localForLead) + ') maxed today';   // local number hit its warm-up cap → using primary
+  } else if (!w.mature && w.cap != null) {
+    badge = ` · warming ${w.used}/${w.cap} (day ${w.day})`;
+  } else if (auto && cid !== primary && localForLead === cid) {
+    badge = ' · local';
+  }
+  el.innerHTML = '📤 ' + fmtCid(cid) + (badge ? `<span style="color:var(--brand-mid);font-weight:600">${badge}</span>` : '');
 }
 
 async function makeCall() {
@@ -203,13 +258,15 @@ async function makeCall() {
 
   try {
     setStatus('Calling...');
-    currentCall = await twilioDevice.connect({ params: { To: number, Cid: pickCallerId(number) } });
+    const cid = pickCallerId(number);
+    currentCall = await twilioDevice.connect({ params: { To: number, Cid: cid } });
+    window.numberUsageToday[cid] = (window.numberUsageToday[cid] || 0) + 1;   // count toward today's warm-up usage
     window.__callStartedAt = Date.now();
     // Pickup-rate tracking: one row per dial attempt; marked answered when
     // the recording-born call row appears (recordings only exist on answer)
     try {
       const { data: dialRow } = await db.from('dials')
-        .insert({ user_id: window.currentUser?.id, phone: number, from_number: pickCallerId(number) }).select('id').single();
+        .insert({ user_id: window.currentUser?.id, phone: number, from_number: cid }).select('id').single();
       window.__lastDialId = dialRow?.id || null;
     } catch (e) { window.__lastDialId = null; }
 

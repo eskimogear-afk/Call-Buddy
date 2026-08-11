@@ -414,6 +414,7 @@ function renderNumberHealth(dials) {
         <div>Pickup, last 7d: <b style="color:var(--text)">${pct(rRate)}</b> <span style="color:var(--text3)">· ${recent.length} calls</span></div>
         <div>Baseline: <b style="color:var(--text)">${pct(bRate)}</b></div>
       </div>
+      ${(typeof warmupInfo === 'function' && !warmupInfo(num).mature) ? (() => { const wu = warmupInfo(num); return `<div style="font-size:11.5px;color:#f59e0b;font-weight:600;margin-top:8px">🔥 Warming up · day ${wu.day} · ${wu.used}/${wu.cap} calls today (cap grows over ~2 weeks)</div>`; })() : ''}
       <div style="font-size:12px;color:var(--text3);margin-top:8px;line-height:1.5">${msg}</div>
     </div>`;
   }).join('');
