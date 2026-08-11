@@ -77,16 +77,15 @@ export default async function handler(req, res) {
     }
 
     // Fallback: a callback to one of the LO's *additional* local-presence numbers
-    // won't match a profile by twilio_phone_number (only the primary is stored
-    // there). On a single-LO account, route any unmatched inbound to the loan
-    // officer so callbacks to the new numbers still ring the browser. Replace with
-    // a profiles.twilio_numbers lookup once DB schema access is restored.
+    // won't match by twilio_phone_number (that holds only the primary). Look it up
+    // in the profile's twilio_numbers list so callbacks to any owned number ring
+    // the right person's browser.
     if (!ownerId && supabase && To) {
       try {
         const { data: lo } = await supabase
           .from('profiles')
           .select('id, full_name, ai_receptionist, missed_call_text')
-          .not('twilio_phone_number', 'is', null)
+          .contains('twilio_numbers', [To])
           .limit(1);
         if (lo && lo.length) {
           ownerId = lo[0].id;

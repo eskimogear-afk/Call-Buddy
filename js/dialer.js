@@ -209,7 +209,7 @@ async function makeCall() {
     // the recording-born call row appears (recordings only exist on answer)
     try {
       const { data: dialRow } = await db.from('dials')
-        .insert({ user_id: window.currentUser?.id, phone: number }).select('id').single();
+        .insert({ user_id: window.currentUser?.id, phone: number, from_number: pickCallerId(number) }).select('id').single();
       window.__lastDialId = dialRow?.id || null;
     } catch (e) { window.__lastDialId = null; }
 
