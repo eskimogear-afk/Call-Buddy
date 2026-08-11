@@ -76,6 +76,29 @@ export default async function handler(req, res) {
       }
     }
 
+    // Fallback: a callback to one of the LO's *additional* local-presence numbers
+    // won't match a profile by twilio_phone_number (only the primary is stored
+    // there). On a single-LO account, route any unmatched inbound to the loan
+    // officer so callbacks to the new numbers still ring the browser. Replace with
+    // a profiles.twilio_numbers lookup once DB schema access is restored.
+    if (!ownerId && supabase && To) {
+      try {
+        const { data: lo } = await supabase
+          .from('profiles')
+          .select('id, full_name, ai_receptionist, missed_call_text')
+          .not('twilio_phone_number', 'is', null)
+          .limit(1);
+        if (lo && lo.length) {
+          ownerId = lo[0].id;
+          ownerName = lo[0].full_name || '';
+          ownerAgent = lo[0].ai_receptionist === true;
+          ownerMissedText = lo[0].missed_call_text === true;
+        }
+      } catch (e) {
+        console.error('Inbound fallback lookup error:', e);
+      }
+    }
+
     // Contact phone for the call log is the CALLER on inbound — pass it as "to"
     // so the recording pipeline upserts the right contact
     const cbParams = new URLSearchParams({
