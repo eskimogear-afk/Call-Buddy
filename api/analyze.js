@@ -413,7 +413,7 @@ Loan officer's question: ${q}
 
 Answer in plain text (no markdown headers), 2-5 short paragraphs or a tight bulleted list. Talk directly to the LO ("you").`;
     } else {
-      if (call.coaching && !force) return res.status(200).json({ cached: true, ...call.coaching });
+      if (call.coaching && call.coaching.generated_at && !force) return res.status(200).json({ cached: true, ...call.coaching });
       req._coachMode = 'coach';
       req._coachCallId = call.id;
       prompt = `You are an expert mortgage sales coach reviewing a loan officer's call. Be honest, specific, and constructive — like a great manager doing a call review. Base everything on the transcript; do not invent facts.
@@ -525,7 +525,7 @@ ${transcript}`;
         loan_programs: arr(j.loan_programs), next_move: String(j.next_move || '').slice(0, 300),
         generated_at: new Date().toISOString()
       };
-      if (req._coachCallId) await supabase.from('calls').update({ coaching: clean }).eq('id', req._coachCallId).eq('user_id', user.id);
+      if (req._coachCallId) await supabase.from('calls').update({ coaching: { ...(call.coaching || {}), ...clean } }).eq('id', req._coachCallId).eq('user_id', user.id);
       return res.status(200).json({ cached: false, ...clean });
     } else if (type === 'quote_params') {
       let qp;

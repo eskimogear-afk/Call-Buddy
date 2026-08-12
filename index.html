@@ -2475,6 +2475,19 @@ function badge(o) {
   return o ? `<span class="badge ${m[o]||'b-gray'}">${o}</span>` : '-';
 }
 
+// Per-call talk-speed label: "You 152 ✓ · Prospect 128 wpm". Ideal phone pace is
+// ~130-170 wpm; faster reads as rushed, slower as low-energy.
+function paceLabel(pace) {
+  if (!pace || !Array.isArray(pace.speakers) || !pace.speakers.length) return '';
+  const you = pace.speakers.find(s => s.speaker === pace.you) || pace.speakers[0];
+  const them = pace.speakers.find(s => s.speaker !== pace.you);
+  const hint = w => w == null ? '' : (w > 170 ? ' <span style="color:#f59e0b">⚡ fast</span>' : w < 130 ? ' <span style="color:#f59e0b">🐢 slow</span>' : ' <span style="color:#16a34a">✓</span>');
+  const parts = [];
+  if (you && you.wpm != null) parts.push(`You <b>${you.wpm}</b>${hint(you.wpm)}`);
+  if (them && them.wpm != null) parts.push(`Prospect ${them.wpm}`);
+  return parts.length ? parts.join(' · ') + ' wpm' : '';
+}
+
 function heatBadge(h) {
   const m = { Hot:'b-red', Warm:'b-amber', Cold:'b-blue' };
   return h ? `<span class="badge ${m[h]||'b-gray'}">${h}</span>` : '-';
@@ -2543,6 +2556,7 @@ function buildTable(recs) {
           ${summary ? `<div class="cc-field"><b>AI summary</b>${esc(summary)}</div>` : ''}
           ${next ? `<div class="cc-field"><b>Next step</b>${esc(next)}</div>` : ''}
           ${sentiment ? `<div class="cc-field"><b>Sentiment</b>${sentiment}</div>` : ''}
+          ${paceLabel(r.coaching && r.coaching.pace) ? `<div class="cc-field"><b>🗣️ Talk speed</b>${paceLabel(r.coaching.pace)}</div>` : ''}
           ${r.pain_points ? `<div class="cc-field"><b>Pain points</b>${esc(r.pain_points)}</div>` : ''}
         </div>
         ${r.recording_url ? `<div class="cc-field" style="margin-bottom:6px"><b>Recording</b></div>
@@ -5855,6 +5869,18 @@ async function renderCalendar() {
     (byDay[key] = byDay[key] || []).push(f);
   });
 
+  // Your average talk speed per day (from calls that have per-speaker WPM)
+  const paceByDay = {};
+  (Array.isArray(records) ? records : []).forEach(r => {
+    const p = r.coaching && r.coaching.pace;
+    if (!p || !Array.isArray(p.speakers)) return;
+    const you = p.speakers.find(s => s.speaker === p.you) || p.speakers[0];
+    if (!you || you.wpm == null) return;
+    const d = new Date(r.created_at);
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    (paceByDay[key] = paceByDay[key] || []).push(you.wpm);
+  });
+
   const first = new Date(calMonth);
   const startDow = first.getDay();
   const cells = [];
@@ -5867,8 +5893,10 @@ async function renderCalendar() {
     const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
     const evts = (byDay[key] || []).sort((a,b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
     const shown = evts.slice(0, 3);
+    const dayPace = paceByDay[key];
     cells.push(`<div class="cal-cell ${inMonth ? '' : 'other'} ${isToday ? 'today' : ''}">
       <div class="d num">${d.getDate()}</div>
+      ${dayPace && dayPace.length ? `<div style="font-size:10px;color:var(--brand-mid);font-weight:700;margin:1px 0" title="Your average talk speed across ${dayPace.length} call${dayPace.length > 1 ? 's' : ''} that day">🗣️ ${Math.round(dayPace.reduce((a, b) => a + b, 0) / dayPace.length)} wpm</div>` : ''}
       ${shown.map(f => {
         const t = new Date(f.scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(' ', '');
         const label = f.title || f.message || f.type;

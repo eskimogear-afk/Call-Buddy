@@ -58,15 +58,42 @@ export default async function handler(req, res) {
   // Resolve the transcript text + the target call from EITHER STT source.
   let transcriptText = '';
   let callRecord = null;
+  let pace = null;
+
+  // Per-speaker words-per-minute from Deepgram's diarized word list. Each word
+  // carries { speaker, start, end }. A speaker's talking time = the sum of their
+  // utterance durations (runs of their words with <2s gaps) so listening/pauses
+  // don't dilute the rate. The speaker with the most words is tagged "you" (the
+  // LO usually pitches most).
+  const computePace = (words) => {
+    const w = (Array.isArray(words) ? words : []).filter(x => x && x.speaker != null && typeof x.start === 'number' && typeof x.end === 'number');
+    if (w.length < 8) return null;
+    const speakers = [...new Set(w.map(x => x.speaker))];
+    const rows = speakers.map(spk => {
+      const ws = w.filter(x => x.speaker === spk);
+      let secs = 0, segStart = null, segEnd = null;
+      for (const x of ws) {
+        if (segStart == null) { segStart = x.start; segEnd = x.end; }
+        else if (x.start - segEnd < 2) { segEnd = x.end; }
+        else { secs += segEnd - segStart; segStart = x.start; segEnd = x.end; }
+      }
+      if (segStart != null) secs += segEnd - segStart;
+      return { speaker: spk, words: ws.length, seconds: Math.round(secs), wpm: secs > 3 ? Math.round(ws.length / (secs / 60)) : null };
+    }).filter(r => r.wpm != null);
+    if (!rows.length) return null;
+    rows.sort((a, b) => b.words - a.words);
+    return { speakers: rows, you: rows[0].speaker };
+  };
 
   if (req.query.dg === '1') {
     // Deepgram async callback: the POST body IS the transcription result.
     const alt = req.body?.results?.channels?.[0]?.alternatives?.[0] || {};
     transcriptText = String(alt.paragraphs?.transcript || alt.transcript || '').trim();
+    pace = computePace(alt.words);   // per-speaker WPM from diarized word timings
     const callSid = req.query.call_sid || '';
     if (callSid) {
       const { data } = await supabase.from('calls')
-        .select('id, to_number, from_number, user_id')
+        .select('id, to_number, from_number, user_id, coaching')
         .eq('call_sid', callSid).order('created_at', { ascending: false }).limit(1).maybeSingle();
       callRecord = data || null;
     }
@@ -234,7 +261,8 @@ ${transcriptText}`
         sentiment: analysis.sentiment || 'neutral',
         next_step: analysis.nextStep || '',
         outcome: VALID_OUTCOMES.includes(analysis.outcome) ? analysis.outcome : null,
-        contact_id: contact?.id || null
+        contact_id: contact?.id || null,
+        ...(pace ? { coaching: { ...(callRecord.coaching || {}), pace } } : {})
       })
       .eq('id', callRecord.id)
       .select('id');
