@@ -2174,6 +2174,7 @@ function toggleRec() {
 
 let copilotTimer = null, copilotLastLen = 0, copilotBusy = false;
 function startLiveAssist() {
+  return; // Live in-call coaching disabled by user preference — no real-time analytics during recording.
   copilotLastLen = 0;
   const card = document.getElementById('copilot-card');
   if (document.getElementById('copilot-toggle')?.checked) { card.classList.remove('hidden'); document.getElementById('copilot-say').textContent = 'Listening…'; }

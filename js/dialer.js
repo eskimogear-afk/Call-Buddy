@@ -399,6 +399,10 @@ function showOverageToast(u) {
 let dgStop = null, dgTranscript = '', dgAssistTimer = null, dgLastLen = 0, dgAssistBusy = false, dgLastFire = 0;
 
 async function startDialerCopilot(call) {
+  // Live in-call coaching disabled by user preference — no real-time audio capture,
+  // no Deepgram live streaming, no on-screen coaching during calls. Calls are still
+  // recorded and analyzed AFTER they end. (Re-enable by removing this return.)
+  return;
   try {
     const streams = [];
     try { const l = call.getLocalStream && call.getLocalStream(); if (l) streams.push(l); } catch (e) {}
