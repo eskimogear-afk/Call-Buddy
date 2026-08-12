@@ -2379,9 +2379,81 @@ async function setCallOutcome(id, outcome, btn) {
   const card = btn ? btn.closest('.call-card') : document.getElementById('cc-' + id);
   if (card) card.querySelectorAll('[data-oc]').forEach(b => { b.className = 'btn ' + (b.getAttribute('data-oc') === next ? 'btn-primary' : 'btn-outline'); });
   refreshDashboard();
+  // The #1 lever: the moment you mark a warm outcome, seed a one-tap follow-up
+  // inline — no waiting for the late AI popup, so hot leads never fall through.
+  if (next === 'Interested' || next === 'Callback') seedInlineFollowUp(id, next);
+  else { const s = document.getElementById('fu-inline-' + id); if (s) s.innerHTML = ''; }
   try {
     await db.from('calls').update({ outcome: next }).eq('id', id).eq('user_id', currentUser.id);
   } catch (e) { /* optimistic — local state already updated */ }
+}
+
+// Resolve (or lightly create) the contact for a call so a follow-up can target them.
+async function resolveCallContact(rec) {
+  if (!rec) return null;
+  if (rec.contact_id) return rec.contact_id;
+  const phone = rec.phone || rec.to_number || rec.from_number || '';
+  const last10 = String(phone).replace(/\D/g, '').slice(-10);
+  const nm = rec.prospect_name || (rec.contacts && isRealNameUi(rec.contacts.name) ? rec.contacts.name : '') || '';
+  if (!contactsCache.length) {
+    try { const { data: { session } } = await db.auth.getSession(); if (session) { const r = await fetch('/api/contacts', { headers: { Authorization: 'Bearer ' + session.access_token } }); if (r.ok) contactsCache = await r.json(); } } catch (e) {}
+  }
+  if (last10.length === 10) { const m = contactsCache.find(c => String(c.phone || '').replace(/\D/g, '').slice(-10) === last10); if (m) return m.id; }
+  if (phone) {
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      const r = await fetch('/api/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify({ name: (nm && nm !== fmtPhone(phone)) ? nm : '', phone }) });
+      if (r.ok) { const c = await r.json(); if (c && c.id) { if (!contactsCache.some(x => x.id === c.id)) contactsCache.push(c); return c.id; } }
+    } catch (e) {}
+  }
+  return null;
+}
+
+// Render the inline "lock in a follow-up" card seeded by outcome.
+function seedInlineFollowUp(callId, outcome) {
+  const slot = document.getElementById('fu-inline-' + callId);
+  if (!slot) return;
+  const rec = records.find(r => r.id === callId);
+  if (!rec) return;
+  const phone = rec.phone || rec.to_number || rec.from_number || '';
+  const nm = rec.prospect_name || (rec.contacts && isRealNameUi(rec.contacts.name) ? rec.contacts.name : '') || '';
+  const disp = displayName(nm, phone);
+  const first = (String(nm || disp).trim().split(/\s+/)[0]) || 'there';
+  const when = new Date();
+  let msg;
+  if (outcome === 'Callback') { when.setDate(when.getDate() + 1); when.setHours(10, 0, 0, 0); msg = `Hi ${first}, following up as promised — is now a good time to connect?`; }
+  else { when.setDate(when.getDate() + 2); when.setHours(10, 0, 0, 0); msg = `Hi ${first}, great talking! Following up on the loan options we discussed — happy to get you next steps whenever you're ready.`; }
+  slot.innerHTML = `<div style="margin-top:10px;border:1px solid var(--brand);background:var(--brand-light);border-radius:8px;padding:11px 13px">
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px">📌 Lock in a follow-up with ${esc(disp)}?</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="datetime-local" id="fu-inline-when-${callId}" value="${toLocalInput(when.toISOString())}" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12.5px;font-family:inherit">
+      <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="event.stopPropagation();lockInFollowUp('${callId}', this)">✓ Lock it in</button>
+      <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="event.stopPropagation();document.getElementById('fu-inline-${callId}').innerHTML=''">not now</button>
+    </div>
+    <textarea id="fu-inline-msg-${callId}" style="width:100%;margin-top:8px;height:46px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:12.5px;font-family:inherit;resize:vertical">${esc(msg)}</textarea>
+  </div>`;
+}
+
+async function lockInFollowUp(callId, btn) {
+  const rec = records.find(r => r.id === callId);
+  if (!rec) return;
+  const scheduled_at = (document.getElementById('fu-inline-when-' + callId) || {}).value;
+  const message = ((document.getElementById('fu-inline-msg-' + callId) || {}).value || '').trim();
+  if (!scheduled_at) { alert('Pick a date/time for the follow-up.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
+  const contact_id = await resolveCallContact(rec);
+  if (!contact_id) { if (btn) { btn.disabled = false; btn.textContent = '✓ Lock it in'; } alert("Couldn't attach a contact for this call — try Schedule follow-up instead."); return; }
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const r = await fetch('/api/follow-ups', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify({ contact_id, type: 'sms', message, scheduled_at: new Date(scheduled_at).toISOString() }) });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Save failed'); }
+    const slot = document.getElementById('fu-inline-' + callId);
+    if (slot) slot.innerHTML = `<div style="margin-top:10px;font-size:12.5px;color:#16a34a;font-weight:600">✓ Follow-up locked in for ${new Date(scheduled_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} — <span style="color:var(--brand-mid);cursor:pointer;text-decoration:underline" onclick="switchPanel('followups')">view</span></div>`;
+    if (typeof updateFollowUpsBadge === 'function') updateFollowUpsBadge();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Lock it in'; }
+    alert('Could not save the follow-up: ' + e.message);
+  }
 }
 
 async function clearAllRecords() {
@@ -2483,6 +2555,7 @@ function buildTable(recs) {
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             ${['No answer','Voicemail','Callback','Interested','Not interested'].map(o => `<button class="btn ${r.outcome===o?'btn-primary':'btn-outline'}" data-oc="${escAttr(o)}" style="font-size:11.5px;padding:4px 11px" onclick="event.stopPropagation();setCallOutcome('${r.id}','${escAttr(o)}',this)">${o}</button>`).join('')}
           </div>
+          <div id="fu-inline-${r.id}"></div>
         </div>
         <div class="cc-actions">
           ${phone && !isDNC(phone) ? `<button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="callAgain('${escAttr(phone)}')">📞 Call again</button>` : ''}
