@@ -2445,7 +2445,7 @@ async function lockInFollowUp(callId, btn) {
   if (!contact_id) { if (btn) { btn.disabled = false; btn.textContent = '✓ Lock it in'; } alert("Couldn't attach a contact for this call — try Schedule follow-up instead."); return; }
   try {
     const { data: { session } } = await db.auth.getSession();
-    const r = await fetch('/api/follow-ups', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify({ contact_id, type: 'sms', message, scheduled_at: new Date(scheduled_at).toISOString() }) });
+    const r = await fetch('/api/follow-ups', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify({ contact_id, type: 'task', message, scheduled_at: new Date(scheduled_at).toISOString() }) });
     if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Save failed'); }
     const slot = document.getElementById('fu-inline-' + callId);
     if (slot) slot.innerHTML = `<div style="margin-top:10px;font-size:12.5px;color:#16a34a;font-weight:600">✓ Follow-up locked in for ${new Date(scheduled_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} — <span style="color:var(--brand-mid);cursor:pointer;text-decoration:underline" onclick="switchPanel('followups')">view</span></div>`;
