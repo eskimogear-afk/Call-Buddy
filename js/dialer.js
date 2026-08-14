@@ -28,6 +28,15 @@ async function initTwilioDevice() {
       logLevel: 'error'
     });
 
+    // Clean up the mic before it goes out: echo cancellation, background-noise
+    // suppression, and auto gain. Cuts steady room noise and softens keyboard/
+    // mouse clicks (pair with macOS Voice Isolation for the sharpest keystroke removal).
+    try {
+      if (twilioDevice.audio && twilioDevice.audio.setAudioConstraints) {
+        await twilioDevice.audio.setAudioConstraints({ echoCancellation: true, noiseSuppression: true, autoGainControl: true });
+      }
+    } catch (e) { console.warn('audio constraints not applied:', e && e.message); }
+
     twilioDevice.on('registered', () => {
       setStatus('🟢 Ready to call');
       const retryBtn = document.getElementById('btn-dialer-retry');
