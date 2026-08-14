@@ -1052,6 +1052,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             <div id="dialer-status" style="font-size:12.5px;color:var(--text2);flex:1">Initializing...</div>
             <span id="compliance-badge" style="display:none;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--green);background:var(--green-bg);border:1px solid var(--green);border-radius:99px;padding:2px 9px">🛡️ COMPLIANCE MODE</span>
             <label style="font-size:11.5px;color:var(--text2);display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="compliance-toggle" style="width:auto" onchange="setComplianceMode(this.checked)"> Compliance mode</label>
+            <label title="Cleans up your mic before the call — reduces keyboard/mouse clicks and background noise" style="font-size:11.5px;color:var(--text2);display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="mic-clean-toggle" checked style="width:auto" onchange="window.setMicClean && window.setMicClean(this.checked)"> 🎧 Clean mic</label>
             <button id="btn-dialer-retry" onclick="retryDialer()" style="display:none;font-size:12px;padding:5px 12px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit">Retry</button>
           </div>
           <div id="consent-state-banner" class="hidden" style="margin-top:10px;padding:9px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12.5px;line-height:1.5"></div>
@@ -2120,6 +2121,8 @@ async function enterApp() {
   // that finished analyzing while the app was closed)
   setTimeout(() => checkSuggestedFollowUps(null), 2500);
   setComplianceMode(complianceOn());
+  const micTog = document.getElementById('mic-clean-toggle');
+  if (micTog && window.micCleanOn) micTog.checked = window.micCleanOn();
 }
 
 function setNavLoggedIn() {

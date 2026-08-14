@@ -1,11 +1,106 @@
 // Aevaa Browser Dialer — Twilio Voice SDK 2.x
 let twilioDevice = null;
 let currentCall = null;
+let micProcessor = null;
 
 function setStatus(msg) {
   const el = document.getElementById('dialer-status');
   if (el) el.textContent = msg;
 }
+
+// "Clean mic" preference — on by default. Reduces keyboard/mouse clicks and
+// background noise before your voice ever hits the call.
+function micCleanOn() {
+  const v = localStorage.getItem('mic_clean');
+  return v === null ? true : v === '1';
+}
+
+// A local audio processor Twilio runs on your mic before sending it to the
+// call. Chain: high-pass (kill desk rumble) -> low-pass (shave the sharpest
+// click "tick") -> fast de-click compressor (tame transient key/mouse peaks) ->
+// soft expander gate (quiet stray clicks in pauses). Every stage is wrapped so
+// any failure falls back to the raw mic — it can NEVER break a live call.
+function makeMicProcessor() {
+  let ctx = null, det = null, gateGain = null;
+  return {
+    async createProcessedStream(stream) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        ctx = new AC();
+        try { await ctx.resume(); } catch (e) {}
+        const src = ctx.createMediaStreamSource(stream);
+
+        const hp = ctx.createBiquadFilter();
+        hp.type = 'highpass'; hp.frequency.value = 85; hp.Q.value = 0.7;
+
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = 7800; lp.Q.value = 0.5;
+
+        // Fast attack tames the sharp amplitude spike of a click/keystroke
+        const comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -26; comp.knee.value = 8;
+        comp.ratio.value = 10; comp.attack.value = 0.002; comp.release.value = 0.14;
+
+        gateGain = ctx.createGain(); gateGain.gain.value = 1;
+
+        const dest = ctx.createMediaStreamDestination();
+        src.connect(hp); hp.connect(lp); lp.connect(comp); comp.connect(gateGain); gateGain.connect(dest);
+
+        // Envelope detector (parallel, muted) — softly ducks the mic in clear
+        // pauses so stray clicks between sentences don't transmit. Never full
+        // mute (floor -18dB) so a mis-trigger dips rather than chops your voice.
+        det = ctx.createScriptProcessor(1024, 1, 1);
+        const detMute = ctx.createGain(); detMute.gain.value = 0;
+        hp.connect(det); det.connect(detMute); detMute.connect(ctx.destination);
+        let env = 0, floor = 0.0025;
+        det.onaudioprocess = (e) => {
+          const buf = e.inputBuffer.getChannelData(0);
+          let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+          const rms = Math.sqrt(sum / buf.length);
+          env = rms > env ? rms * 0.5 + env * 0.5 : rms * 0.05 + env * 0.95;
+          floor = env < floor ? floor * 0.995 + env * 0.005 : floor * 0.9995 + env * 0.0005;
+          const open = Math.max(floor * 3.2, 0.004);
+          const target = env > open ? 1 : 0.12;
+          const tc = target < gateGain.gain.value ? 0.08 : 0.01; // slow close, fast open
+          try { gateGain.gain.setTargetAtTime(target, ctx.currentTime, tc); } catch (_) {}
+        };
+
+        return dest.stream;
+      } catch (err) {
+        console.warn('mic processor failed, using raw mic:', err && err.message);
+        try { if (ctx) ctx.close(); } catch (_) {}
+        ctx = det = gateGain = null;
+        return stream; // fail safe
+      }
+    },
+    async destroyProcessedStream() {
+      try { if (det) { det.onaudioprocess = null; det.disconnect(); } } catch (_) {}
+      try { if (ctx) await ctx.close(); } catch (_) {}
+      ctx = det = gateGain = null;
+    }
+  };
+}
+
+// Add/remove the mic processor live (also called by the "Clean mic" toggle)
+async function applyMicClean(on) {
+  if (!twilioDevice || !twilioDevice.audio) return;
+  try {
+    if (on) {
+      if (!micProcessor && twilioDevice.audio.addProcessor) {
+        micProcessor = makeMicProcessor();
+        await twilioDevice.audio.addProcessor(micProcessor);
+      }
+    } else if (micProcessor && twilioDevice.audio.removeProcessor) {
+      await twilioDevice.audio.removeProcessor(micProcessor);
+      micProcessor = null;
+    }
+  } catch (e) { console.warn('mic clean toggle failed:', e && e.message); }
+}
+window.micCleanOn = micCleanOn;
+window.setMicClean = async function (on) {
+  localStorage.setItem('mic_clean', on ? '1' : '0');
+  await applyMicClean(on);
+};
 
 async function initTwilioDevice() {
   try {
@@ -36,6 +131,9 @@ async function initTwilioDevice() {
         await twilioDevice.audio.setAudioConstraints({ echoCancellation: true, noiseSuppression: true, autoGainControl: true });
       }
     } catch (e) { console.warn('audio constraints not applied:', e && e.message); }
+
+    // Clean-mic DSP chain (de-click / de-noise) — respects the toggle, default on
+    try { await applyMicClean(micCleanOn()); } catch (e) { console.warn('mic clean not applied:', e && e.message); }
 
     twilioDevice.on('registered', () => {
       setStatus('🟢 Ready to call');
