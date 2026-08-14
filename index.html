@@ -943,6 +943,9 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       <button class="sidebar-item" id="nav-analytics" onclick="switchPanel('analytics')">
         <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Analytics
       </button>
+      <button class="sidebar-item" id="nav-numbers" onclick="switchPanel('numbers')">
+        <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z" fill="none"/><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.79 19.79 19.79 0 01.12 1.18 2 2 0 012.11 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>Spam Health
+      </button>
       <button class="sidebar-item" id="nav-inbox" onclick="switchPanel('inbox')">
         <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Inbox
         <span id="inbox-badge" style="display:none;background:#DC2626;color:#fff;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;margin-left:auto"></span>
@@ -1075,6 +1078,14 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       </div>
 
       <!-- Analytics -->
+      <div id="panel-numbers" class="hidden">
+        <div style="margin-bottom:24px">
+          <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">📡 Spam Health</h1>
+          <p style="font-size:14px;color:var(--text2);margin-top:4px">Are your numbers getting flagged? A sharp drop in pickup rate is the earliest sign a number is going bad.</p>
+        </div>
+        <div class="table-card" style="padding:16px 18px;margin-bottom:16px"><canvas id="chart-numbers" height="150"></canvas></div>
+        <div id="numbers-body"></div>
+      </div>
       <div id="panel-analytics" class="hidden">
         <div style="margin-bottom:24px">
           <h1 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-.4px">Analytics</h1>
@@ -2128,12 +2139,13 @@ function showView(v) {
 }
 
 function switchPanel(p) {
-  ['dashboard','callnext','analytics','recorder','log','settings','contacts','followups','power','inbox','calendar','pricing','partner'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
+  ['dashboard','callnext','analytics','numbers','recorder','log','settings','contacts','followups','power','inbox','calendar','pricing','partner'].forEach(id => document.getElementById('panel-' + id).classList.add('hidden'));
   document.getElementById('panel-' + p).classList.remove('hidden');
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
   document.getElementById('nav-' + p)?.classList.add('active');
   if (p === 'dashboard') refreshDashboard();
   if (p === 'analytics') renderAnalytics();
+  if (p === 'numbers') renderNumbersPanel();
   if (p === 'callnext') renderCallNext();
   if (p === 'log') { reconcileCalls(); renderLog(); }
   if (p === 'contacts') { if (!contactsSegNavPending) contactsSegment = null; contactsSegNavPending = false; loadContacts(); }

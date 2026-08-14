@@ -420,3 +420,58 @@ function renderNumberHealth(dials) {
   }).join('');
   el.innerHTML = `<div style="font-size:12px;font-weight:800;letter-spacing:.3px;color:var(--text2);margin-bottom:8px">📡 AM I FLAGGED AS SPAM? <span style="font-weight:600;color:var(--text3)">· number health</span></div>${cards}`;
 }
+
+// Full "Spam Health" tab: a bar chart of pickup rate by number + a status card per
+// number (all your numbers, even ones not dialed yet), pickup 7d vs baseline, and
+// warm-up progress.
+async function renderNumbersPanel() {
+  const body = document.getElementById('numbers-body');
+  if (!body) return;
+  body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3)">Loading…</div>';
+  const DAY = 86400000, now = Date.now();
+  const primary = (window.userProfile && window.userProfile.twilio_phone_number) || '';
+  const since = new Date(now - 30 * DAY).toISOString();
+  let dials = [];
+  try { dials = (typeof fetchAllDials === 'function') ? await fetchAllDials(since, 'created_at, answered, from_number') : []; } catch (e) {}
+  const owned = (window.myTwilioNumbers || []).map(n => n.phone || n);
+  const nums = [...new Set([...(primary ? [primary] : []), ...owned, ...dials.map(d => d.from_number || primary)])].filter(Boolean);
+  const REGION = { '754': 'Broward', '954': 'Broward', '561': 'Boca/PB', '786': 'Miami', '305': 'Miami', '772': 'Treasure Coast', '239': 'Naples' };
+  const labelFor = p => { const t = String(p).replace(/\D/g, '').slice(-10); return '(' + t.slice(0, 3) + ') ' + t.slice(3, 6) + '-' + t.slice(6); };
+  const regionFor = p => { const ac = String(p).replace(/\D/g, '').slice(-10, -7); return p === primary ? 'primary' : (REGION[ac] || ''); };
+  const rate = a => a.length ? a.filter(d => d.answered).length / a.length : null;
+  const stats = nums.map(num => {
+    const arr = dials.filter(d => (d.from_number || primary) === num);
+    const recent = arr.filter(d => now - new Date(d.created_at).getTime() < 7 * DAY);
+    const base = arr.filter(d => { const a = now - new Date(d.created_at).getTime(); return a >= 7 * DAY && a < 30 * DAY; });
+    const rr = rate(recent), br = rate(base);
+    let status, color;
+    if (recent.length < 15) { status = arr.length ? 'Gathering data' : 'Not in use yet'; color = '#6b7280'; }
+    else if ((rr || 0) * 100 < 8 || (br && rr < br * 0.55)) { status = '⚠️ Likely flagged'; color = '#dc2626'; }
+    else if (br && rr < br * 0.8) { status = '🟡 Watch'; color = '#f59e0b'; }
+    else { status = '🟢 Healthy'; color = '#16a34a'; }
+    return { num, recent, base, rr, br, status, color, total: arr.length };
+  });
+  const chartNums = stats.filter(s => s.recent.length > 0);
+  anChart('chart-numbers', {
+    type: 'bar',
+    data: { labels: chartNums.map(s => labelFor(s.num)), datasets: [{ data: chartNums.map(s => s.rr != null ? Math.round(s.rr * 100) : 0), backgroundColor: chartNums.map(s => s.color), borderRadius: 5 }] },
+    options: { plugins: { legend: { display: false }, title: { display: true, text: 'Pickup rate by number, last 7 days (a drop = spam risk)', color: anVar('--text2') } }, scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%', color: anVar('--text3') }, grid: { color: anVar('--border') } }, x: { ticks: { color: anVar('--text3') }, grid: { display: false } } } }
+  });
+  const pct = r => r == null ? '—' : Math.round(r * 100) + '%';
+  body.innerHTML = stats.map(s => {
+    const wu = (typeof warmupInfo === 'function') ? warmupInfo(s.num) : null;
+    const warm = wu && !wu.mature && wu.cap != null ? `<div style="font-size:11.5px;color:#f59e0b;font-weight:600;margin-top:6px">🔥 Warming up · day ${wu.day} · ${wu.used}/${wu.cap} calls today (cap grows over ~2 weeks)</div>` : '';
+    const rg = regionFor(s.num);
+    return `<div style="border:1px solid var(--border);border-left:4px solid ${s.color};border-radius:var(--radius-sm);padding:14px 16px;background:var(--bg2);margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="font-weight:700;font-size:14px">📞 ${labelFor(s.num)}${rg ? ` <span style="font-weight:500;color:var(--text3);font-size:12px">· ${rg}</span>` : ''}</div>
+        <div style="font-weight:700;font-size:13px;color:${s.color}">${s.status}</div>
+      </div>
+      <div style="display:flex;gap:22px;margin-top:8px;font-size:12.5px;color:var(--text2);flex-wrap:wrap">
+        <div>Pickup 7d: <b style="color:var(--text)">${pct(s.rr)}</b> <span style="color:var(--text3)">· ${s.recent.length} calls</span></div>
+        <div>Baseline: <b style="color:var(--text)">${pct(s.br)}</b></div>
+        <div>Total 30d: <b style="color:var(--text)">${s.total}</b></div>
+      </div>${warm}
+    </div>`;
+  }).join('');
+}
